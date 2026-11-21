@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="A clearer view of reported medicine shortages in Finland."><title>Shortage Radar — Finland</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<head><meta charset="utf-8"><style>html.i18n-pending body{visibility:hidden}</style><script>
+  (() => {
+    let saved;
+    try { saved = localStorage.getItem('language'); } catch (_) {}
+    document.documentElement.lang = ['en', 'fi'].includes(saved) ? saved : (navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en';
+    document.documentElement.classList.add('i18n-pending');
+  })();
+</script><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="A clearer view of reported medicine shortages in Finland."><title>Shortage Radar — Finland</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
 <body>
 <header><div class="wrap nav"><a href="#top" class="brand"><span data-i18n="brand">SHORTAGE RADAR</span> <span class="country" data-i18n="country">/ FINLAND</span></a><div class="nav-actions"><label for="language" class="sr-only" data-i18n="languageLabel">Language</label><select id="language"><option value="en">English</option><option value="fi">Suomi</option></select><a href="https://github.com/AlejandroRenalias/shortage-radar"><span data-i18n="aboutLink">About the data ↗</span></a></div></div></header>
 <main id="top" class="wrap">
