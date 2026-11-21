@@ -2,6 +2,8 @@ name: Build and deploy Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '55 4 * * *'
   workflow_dispatch:
   workflow_call:
 permissions:

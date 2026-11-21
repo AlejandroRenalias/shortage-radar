@@ -12,13 +12,13 @@ The dashboard searches names, substances, ATC codes, companies and package VNRs.
 
 The first capture has 751 rows, 743 matched product names and 8 unmatched VNRs: `422093`, `433660`, `522103`, `531797`, `541749`, `572154`, `583857`, `584836`. Names are joined to the current register and may not describe historical products as they were at the time. The basic register was chosen because Fimea publishes a direct, nightly updated XML download with package, product and substance references; no account or catalogue lookup is needed. It is large (about 200 MB), but is streamed during processing and not committed.
 
-Fimea also publishes a [machine-readable interchangeable-products list](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto). Its groups are included in the dataset as `listed_substitution_group`. They are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. A monthly update validates the current list and retains the next list when published. Builds select the list valid on the build date in Helsinki and verify its checksum against its metadata. If no matching list is valid, group codes are omitted and the dashboard shows a notice. The dashboard does not suggest alternatives.
+The dataset includes `substitution_group` from the current basic register, joined to packages through their product reference. These product-level groups are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. Groups may be missing when a VNR is absent from the register, and the current register may not describe historical products as they were at the time. The dashboard does not suggest alternatives.
 
 The 2025-09-27 Internet Archive capture was attempted using the raw `id_` URL and returned HTTP 404, so it was not imported.
 
 ## How it works
 
-The scheduled GitHub Action downloads and validates the Fimea file, saving a dated file only if its bytes changed. It rejects files with fewer than 100 rows or less than half the previous snapshot's row count. A run fails on an invalid file, network failure, or conflicting capture on the same date. Changed snapshots trigger the Pages workflow, which downloads the current basic register and builds `site/data.json` as a deployment artifact; the generated data is not committed. Pushes to main also build and deploy Pages. Enable GitHub Pages with **GitHub Actions** as the source after the repository becomes public. GitHub Actions must have permission to write repository contents, and scheduled workflows and Pages depend on repository settings and plan.
+The scheduled GitHub Action downloads and validates the Fimea file, saving a dated file only if its bytes changed. It rejects files with fewer than 100 rows or less than half the previous snapshot's row count. A run fails on an invalid file, network failure, or conflicting capture on the same date. Changed snapshots trigger the Pages workflow, which downloads the current basic register and builds `site/data.json` as a deployment artifact; the generated data is not committed. A daily Pages build refreshes the register even when the shortage file has not changed, and pushes to main also build and deploy Pages. Enable GitHub Pages with **GitHub Actions** as the source after the repository becomes public. GitHub Actions must have permission to write repository contents, and scheduled workflows and Pages depend on repository settings and plan.
 
 An event is identified by VNR, reported start date, notification date and company. Changes to these identifying fields can appear as a removal and a new event. The output records first and last seen dates, initial estimated end, changes in that estimate, and the first saved snapshot without the record. A missing record is an **observed removal**, not a medically confirmed real end. Since identical downloads are not saved, last seen is the last *saved* snapshot, not necessarily the last successful daily check; a removal may have occurred anywhere after that snapshot and on or before the next saved one. Gaps and failed runs widen the uncertainty. The chart shows saved snapshots rather than interpolating missing days. Fimea's feed excludes products without VNRs and some other shortages; consult Fimea for the full limitations.
 
@@ -35,7 +35,7 @@ python -m pytest -q
 python -m http.server 8000 --directory site
 ```
 
-Open `http://localhost:8000/`. The local HTTP server is only for preview: the site itself is static. The archive command downloads current public Fimea data and writes this repository's data files. The interchangeable list is updated monthly and can also be refreshed with `python scripts/update_interchangeable.py`.
+Open `http://localhost:8000/`. The local HTTP server is only for preview: the site itself is static. The archive command downloads current public Fimea data and writes this repository's data files.
 
 ## Attribution and licence
 
@@ -44,7 +44,6 @@ Data is provided by the **Finnish Medicines Agency Fimea**, under [CC BY 4.0](ht
 | Dataset | Source | Source last modified (UTC) | Changes |
 | --- | --- | --- | --- |
 | Supply shortages | [Shortages.txt](https://data.pilvi.fimea.fi/avoin-data/Shortages.txt) | 2026-11-20 23:20:01 | Archived, parsed, joined and aggregated |
-| Basic register of medicinal products | [XML and documentation](https://fimea.fi/en/databases_and_registers/basic-register-xml) | 2026-11-21 00:30:41 | Selected package, product and substance fields joined by VNR |
-| Interchangeable medicinal products | [Fimea list and documentation](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto) | [List metadata](data/source/interchangeable-metadata.json) | Selected group codes joined by VNR |
+| Basic register of medicinal products | [XML and documentation](https://fimea.fi/en/databases_and_registers/basic-register-xml) | 2026-11-21 00:30:41 | Selected package, product, substitution group and substance fields joined by VNR |
 
-The most recent snapshot's shortage timestamp is in [`data/source/metadata.json`](data/source/metadata.json); the basic-register timestamp is captured during each build. The dashboard displays both along with the selected interchangeable-list timestamp. Source release times beyond these HTTP timestamps were not available from the files.
+The most recent snapshot's shortage timestamp is in [`data/source/metadata.json`](data/source/metadata.json); the basic-register timestamp is captured during each build. The dashboard displays both timestamps. Source release times beyond these HTTP timestamps were not available from the files.
