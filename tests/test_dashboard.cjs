@@ -175,3 +175,36 @@ test('this week summary and how-we-count note state their window and counts', ()
   assert.match(get('how-count-text').textContent, /^Mukana on 156 listalta poistuneesta 1\s197 ilmoituksesta/);
   assert.match(get('how-count-text').textContent, /642 jo ensimmäisessä tilannekuvassa ollutta/);
 });
+
+test('strength is part of the main line, with a Finnish decimal comma', () => {
+  const apixaban = {name:'Apixaban Sandoz', strength:'2.5 mg', form:'tabletti, kalvopäällysteinen', pack_label:{en:'60 tablets', fi:'60 tablettia'}, UnavailableFrom:'2026-11-06', atc:'B01'};
+  vm.runInContext("language='en'", context);
+  assert.deepEqual(Array.from(context.formAndPack(apixaban)), ['2.5 mg', '60 tablets']);
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2\.5 mg · 60 tablets<\/p>/);
+  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', strength:'10 mg/ml', pack:'5 ml'})), ['Injection', '10 mg/ml', '5 ml']);
+  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', pack:'5 ml'})).filter(Boolean), ['Injection', '5 ml']);
+  vm.runInContext("language='fi'", context);
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2,5 mg · 60 tablettia<\/p>/);
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<dd>2\.5 mg<\/dd>/);
+  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2,5 mg');
+  vm.runInContext("language='en'", context);
+  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2.5 mg');
+  assert.equal(context.nameWithStrength({name:'Burana 400 mg', strength:'400 mg'}), 'Burana 400 mg');
+  assert.equal(context.nameWithStrength({name:'Burana'}), 'Burana');
+});
+
+test('search finds a package by strength with comma and point folded', () => {
+  const two = {name:'Apixaban Sandoz', strength:'2.5 mg', substances:'apixaban', Company:'Sandoz', NordicArticleNumber:'584836'};
+  const five = {name:'Apixaban Sandoz', strength:'5 mg', substances:'apixaban', Company:'Sandoz', NordicArticleNumber:'572154'};
+  const hits = query => [two, five].filter(e => context.searchMatches(e, query)).map(e => e.strength);
+  assert.deepEqual(hits('apixaban 5 mg'), ['5 mg']);
+  assert.deepEqual(hits('apixaban 5mg'), ['5 mg']);
+  assert.deepEqual(hits('apixaban 2,5'), ['2.5 mg']);
+  assert.deepEqual(hits('apixaban 2.5 mg'), ['2.5 mg']);
+  assert.deepEqual(hits('apiksabaani 2,5 mg'), ['2.5 mg']);
+  assert.deepEqual(hits('apixaban 2,'), ['2.5 mg']);
+  assert.deepEqual(hits('2,5 mg'), ['2.5 mg']);
+  assert.deepEqual(hits('apixaban sandoz'), ['2.5 mg', '5 mg']);
+  assert.deepEqual(hits('apixaban 50 mg'), []);
+  assert.deepEqual(hits('584836'), ['2.5 mg']);
+});

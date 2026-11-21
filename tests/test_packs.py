@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from packs import pack_label
+from packs import name_with_strength, pack_label, strength_label
 
 
 @pytest.mark.parametrize('text,unit,form,en,fi', [
@@ -34,3 +34,17 @@ def test_pack_label_common_cases(text, unit, form, en, fi):
 
 def test_register_text_with_a_unit_is_kept():
     assert pack_label('10 x 500 mg', 'kpl', 'injektiokuiva-aine')['fi'] == '10 x 500 mg'
+
+
+def test_strength_label_uses_a_decimal_comma_in_finnish():
+    assert strength_label('2.5 mg', 'fi') == '2,5 mg' and strength_label('2.5 mg', 'en') == '2.5 mg'
+    assert strength_label('0.02 mg / 3 mg', 'fi') == '0,02 mg / 3 mg'
+    assert strength_label('1.5 mg/ml + 5 mg/ml', 'fi') == '1,5 mg/ml + 5 mg/ml'
+    assert strength_label(None, 'fi') == ''
+
+
+def test_name_with_strength():
+    assert name_with_strength('Apixaban Sandoz', '5 mg', 'en') == 'Apixaban Sandoz 5 mg'
+    assert name_with_strength('Apixaban Sandoz', '2.5 mg', 'fi') == 'Apixaban Sandoz 2,5 mg'
+    assert name_with_strength('Burana 400 mg', '400 mg', 'en') == 'Burana 400 mg'
+    assert name_with_strength('Burana', '', 'en') == 'Burana'

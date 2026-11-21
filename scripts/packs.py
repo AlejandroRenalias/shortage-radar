@@ -53,3 +53,17 @@ def pack_label(text, unit='', form=''):
         return {'en': f'{text} pcs', 'fi': f'{text} kpl'}
     # Measured units such as ml, g or mg are the same in both languages.
     return {'en': f'{text} {unit}', 'fi': f'{text} {unit}'}
+
+
+def strength_label(strength, lang):
+    """A strength as written for a language: Finnish uses a decimal comma, as in "2,5 mg"."""
+    text = ' '.join((strength or '').split())
+    return re.sub(r'(?<=\d)\.(?=\d)', ',', text) if lang == 'fi' else text
+
+
+def name_with_strength(name, strength, lang):
+    """The medicine name followed by its strength, unless the name already carries it."""
+    label = strength_label(strength, lang)
+    if not label or label.lower() in (name or '').lower():
+        return name or ''
+    return f'{name} {label}' if name else label

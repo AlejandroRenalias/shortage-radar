@@ -148,7 +148,7 @@ def delay_stats(all_events):
             excluded[reason] += 1
             continue
         low, high = days_between(end, e['last_seen']), days_between(end, e['removed_on'])
-        sample.append({'vnr': e['NordicArticleNumber'], 'name': e.get('name', ''), 'first_estimated_end': end, 'last_seen': e['last_seen'], 'removed_on': e['removed_on'], 'overrun_min_days': low, 'overrun_max_days': high})
+        sample.append({'vnr': e['NordicArticleNumber'], 'name': e.get('name', ''), 'strength': e.get('strength', ''), 'first_estimated_end': end, 'last_seen': e['last_seen'], 'removed_on': e['removed_on'], 'overrun_min_days': low, 'overrun_max_days': high})
     past = [s for s in sample if s['overrun_min_days'] > 0]
     not_past = [s for s in sample if s['overrun_max_days'] <= 0]
     result = {'sample_size': len(sample), 'past_estimate': len(past), 'not_past_estimate': len(not_past), 'undetermined': len(sample) - len(past) - len(not_past), 'active_past_estimate': len(active_past), 'excluded': excluded, 'removed_total': len(sample) + sum(excluded.values()), 'min_sample': MIN_DELAY_SAMPLE, 'max_gap_days': MAX_GAP_DAYS, 'meaningful': len(sample) >= MIN_DELAY_SAMPLE, 'examples': sorted(past, key=lambda s: -s['overrun_min_days'])[:10]}
