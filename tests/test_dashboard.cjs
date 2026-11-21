@@ -6,6 +6,15 @@ const source = fs.readFileSync('site/app.js', 'utf8').split('function card(')[0]
 const context = vm.createContext({Intl, Date});
 vm.runInContext(source, context);
 
+test('translations have matching keys and nonempty Finnish values', () => {
+  const translations = vm.runInContext('copy', context);
+  assert.deepEqual(Object.keys(translations.fi).sort(), Object.keys(translations.en).sort());
+  for (const [key, value] of Object.entries(translations.fi)) {
+    const rendered = typeof value === 'function' ? value(2, 'x', '3') : value;
+    assert.ok(typeof rendered === 'string' && rendered.trim(), key);
+  }
+});
+
 test('veterinary and missing medicine groups have clear labels', () => {
   assert.equal(context.groupName('QN02', 'en'), 'Veterinary medicines');
   assert.equal(context.groupName('QN02', 'fi'), 'Eläinlääkkeet');
