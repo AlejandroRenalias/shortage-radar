@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
@@ -81,8 +82,17 @@ def parse_rows(content):
 
 
 def download(url):
-    with urlopen(Request(url, headers={'User-Agent': 'Mozilla/5.0 shortage-radar/1.0'}), timeout=90) as response:
-        return response.read(), response.headers.get('Last-Modified')
+    try:
+        with urlopen(Request(url, headers={'User-Agent': 'Mozilla/5.0 shortage-radar/1.0'}), timeout=90) as response:
+            return response.read(), response.headers.get('Last-Modified')
+    except HTTPError as error:
+        raise DownloadError(f'{error.url}: HTTP {error.code}') from error
+    except URLError as error:
+        raise DownloadError(f'{url}: {error.reason}') from error
+
+
+class DownloadError(Exception):
+    pass
 
 
 def update(folder, today, fetch=download):
@@ -141,5 +151,12 @@ def update(folder, today, fetch=download):
     print('Validation complete' if changed else 'No changes to interchangeable products')
 
 
+def main():
+    try:
+        update(ROOT / 'data/source', datetime.now(ZoneInfo('Europe/Helsinki')).date())
+    except DownloadError as error:
+        raise SystemExit(f'Download failed: {error}') from None
+
+
 if __name__ == '__main__':
-    update(ROOT / 'data/source', datetime.now(ZoneInfo('Europe/Helsinki')).date())
+    main()

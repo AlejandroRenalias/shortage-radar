@@ -4,10 +4,12 @@ from pathlib import Path
 import sys
 
 import pytest
+from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from build import interchangeable_source
 from update_interchangeable import PAGE, parse_links, parse_rows, update
+import update_interchangeable
 
 
 def csv_data(count):
@@ -111,3 +113,12 @@ def test_interrupted_replacement_is_not_used(tmp_path, monkeypatch):
         update(tmp_path, date(2026, 11, 1), changed_fetch)
     assert not interchangeable_source(tmp_path, '2026-11-01')[2]
     assert not list(tmp_path.glob('.interchangeable-*'))
+
+
+def test_download_failure_reports_url_and_status(monkeypatch):
+    def forbidden(request, timeout):
+        raise HTTPError(request.full_url, 403, 'Forbidden', {}, None)
+    monkeypatch.setattr(update_interchangeable, 'urlopen', forbidden)
+    with pytest.raises(SystemExit) as result:
+        update_interchangeable.main()
+    assert str(result.value) == f'Download failed: {PAGE}: HTTP 403'
