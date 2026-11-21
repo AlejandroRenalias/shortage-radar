@@ -1,0 +1,32 @@
+name: Report a data problem
+description: Something on the site looks wrong or does not match the Fimea source.
+title: "Data problem: "
+body:
+  - type: input
+    id: medicine
+    attributes:
+      label: Medicine
+      description: Name and strength, as shown on the site.
+    validations:
+      required: false
+  - type: input
+    id: vnr
+    attributes:
+      label: VNR
+      description: The six-digit package number, if you know it.
+    validations:
+      required: false
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: Say what the site shows and what you expected.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source link
+      description: A link to Fimea or another source that shows the right information.
+    validations:
+      required: false

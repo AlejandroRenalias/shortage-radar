@@ -157,7 +157,7 @@ test('this week summary and how-we-count note state their window and counts', ()
   assert.equal(get('week-left').textContent, '70');
   assert.equal(get('week-total').textContent, '758');
   assert.match(get('week-window').textContent, /capture of 13 Nov 2026, 8 days earlier/);
-  assert.match(get('week-total-note').textContent, /751 records in the capture of 13 Nov 2026/);
+  assert.equal(get('week-total-note').textContent, '758 now · 751 on 13 Nov 2026');
   assert.equal(get('week-new-note').textContent, 'New records listed since 13 Nov 2026, including any that left again.');
   assert.match(get('week-left-note').textContent, /^Records that left the list since 13 Nov 2026, including any that arrived in the same period\./);
   assert.equal(get('feed-link').href, 'feed.xml');
@@ -227,4 +227,50 @@ test('strength is not repeated, never breaks between number and unit, and transl
     assert.equal(context.strengthText({strength:raw}), raw.replace(/(\d) (?=[\p{L}%µ])/gu, '$1 '), raw);
   }
   vm.runInContext("language='en'", context);
+});
+
+test('the empty result does not read as "no problem", and the placeholder finds results', () => {
+  const copy = vm.runInContext('copy', context);
+  assert.equal(copy.en.empty, 'Not on the list. That does not guarantee your pharmacy has it. Try the active substance (for example paracetamol) or ask your pharmacy.');
+  assert.match(copy.fi.empty, /parasetamoli/);
+  assert.match(copy.en.placeholder, /Burana or ibuprofen/);
+  assert.match(copy.fi.placeholder, /Burana tai ibuprofeeni/);
+  assert.ok(context.searchMatches({name:'Buranagel', substances:'Ibuprofen'}, 'burana'));
+  assert.ok(context.searchMatches({name:'Buranagel', substances:'Ibuprofen'}, 'ibuprofeeni'));
+});
+
+test('cards carry a short pharmacy line and the delay headline leads with the count', () => {
+  vm.runInContext("language='en'", context);
+  assert.match(context.card({name:'T', atc:'N02'}, 0), /<p class="ask">Ask your pharmacy<\/p>/);
+  vm.runInContext("language='fi'", context);
+  assert.match(context.card({name:'T', atc:'N02'}, 0), /<p class="ask">Kysy apteekista<\/p>/);
+  vm.runInContext("language='en'", context);
+  const copy = vm.runInContext('copy', context);
+  assert.match(copy.en.delayHeadline('15', '156', '78', '10%', '60%'), /^15 of 156 observed shortages stayed listed past the estimate; for 78 we cannot tell yet\. .*10%–60%/);
+});
+
+test('the citation names the data date and the access date', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    const text = copy[lang].citation('21 Nov 2026', '22 Nov 2026');
+    assert.match(text, /alejandrorenalias\.github\.io\/shortage-radar\//);
+    assert.match(text, /21 Nov 2026/);
+    assert.match(text, /22 Nov 2026/);
+  }
+  assert.match(copy.en.citation('a', 'b'), /accessed b/);
+});
+
+test('page head: no hreflang on feeds, matching locale, image alt, one search, no numbered kickers', () => {
+  const html = fs.readFileSync('site/index.html', 'utf8');
+  assert.doesNotMatch(html, /hreflang/);
+  assert.match(html, /<html lang="en">/);
+  assert.match(html, /og:locale" content="en_GB"/);
+  assert.match(html, /og:image:alt/);
+  assert.equal((html.match(/id="search"/g) || []).length, 1);
+  assert.ok(html.indexOf('id="search"') < html.indexOf('id="week"'));
+  assert.doesNotMatch(html, /class="kicker"><span[^>]*>\d\d \//);
+  assert.match(html, /issues\/new\?template=data-problem\.yml/);
+  assert.match(html, /id="cite-box"/);
+  assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
+  assert.ok(fs.existsSync('site/sitemap.xml'));
 });
