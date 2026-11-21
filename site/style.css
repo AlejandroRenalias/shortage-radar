@@ -9,3 +9,6 @@ footer a{float:none}
 
 /* Keep medicine group names readable at every width. */
 #atc .barrow{grid-template-columns:minmax(0, 2fr) minmax(40px, 1fr) 35px}#atc .barrow>span:first-child{overflow:visible;white-space:normal}#chart:not(:has(svg)){color:#536b5e;line-height:1.6}
+
+.card-heading{justify-content:flex-start;flex-wrap:wrap;gap:8px 12px}.list-meta{text-transform:uppercase}
+@media(min-width:701px){.row{padding:16px}.row .status-sentence{margin-top:8px}.row details{margin-top:6px}.row p{margin:3px 0}}
