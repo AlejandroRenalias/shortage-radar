@@ -1,2 +1,4 @@
 # Preserve Fimea's byte-for-byte downloads across platforms.
 data/snapshots/*.txt -text whitespace=cr-at-eol
+
+data/snapshots/imported/*.txt -text whitespace=cr-at-eol

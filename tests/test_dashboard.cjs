@@ -59,3 +59,29 @@ test('Finnish counts, forms and shortage wording read naturally', () => {
   assert.match(html, /Arvioidaan olevan taas saatavilla noin 1\.12\.2026 \(yrityksen arvio\)/);
   assert.match(html, /Lääkeryhmä: Veren ja verenkierron lääkkeet/);
 });
+
+test('history and delay rendering uses translated dates and explains the sample', () => {
+  const elements = {};
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', value:'en', addEventListener(){}, setAttribute(){}};
+  const document = {getElementById:get, documentElement:{classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
+  const env = vm.createContext({Intl, Date, document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{})});
+  vm.runInContext(fs.readFileSync('site/app.js','utf8'), env);
+  const history = [{date:'2024-11-18',count:670,imported:true},{date:'2026-11-21',count:751,imported:false}];
+  const delays = {sample_size:1,active_past_estimate:24,max_gap_days:14,min_sample:30,meaningful:false,excluded:{listed_at_first_capture:0,no_estimate:0,wide_start_window:0,wide_removal_window:0,vnr_still_listed:0},examples:[]};
+  env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
+  assert.match(get('chart').innerHTML, /18 Nov 2024/);
+  assert.doesNotMatch(get('chart').innerHTML, /2024-11-18/);
+  assert.match(get('delay-note').textContent, /1 shortage entered/);
+  assert.match(get('delay-note').textContent, /does not prove the medicine is back/);
+  assert.match(get('delay-note').textContent, /24 shortages were still listed/);
+  assert.match(get('delay-note').textContent, /likely higher/);
+  assert.match(get('chart').innerHTML, /font-size="14"[^>]*>0<\/text>/);
+  vm.runInContext("language='fi'",env);
+  env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
+  assert.match(get('chart').innerHTML, /18\.11\.2024/);
+  assert.match(get('chart').innerHTML, /ei tilannekuvia/);
+  assert.match(get('delay-note').textContent, /ei todista, että lääkettä on taas saatavilla/);
+  delays.meaningful=true; delays.past_estimate=1; delays.not_past_estimate=0; delays.undetermined=0; delays.share_past_min=.1; delays.share_past_max=.6; delays.median_overrun_min_days=1; delays.median_overrun_max_days=2;
+  env.drawDelays(delays,'2026-11-21');
+  assert.match(get('delay-note').textContent, /10 %–60 %/);
+});

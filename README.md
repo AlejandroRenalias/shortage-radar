@@ -8,13 +8,28 @@ A daily archive and static dashboard of reported medicine shortages in Finland. 
 
 ## Dashboard and data
 
-The dashboard searches names, substances, ATC codes, companies and package VNRs. It counts records by ATC group and company and charts saved snapshots. History begins on **21 November 2026**: no earlier trend should be inferred. The delays section waits for at least 28 days and 10 observed removals with initial estimates; it compares estimates to removal from the list, not a confirmed return to supply.
+The dashboard searches names, substances, ATC codes, companies and package VNRs. It counts records by ATC group and company and charts captures. History begins on **18 November 2024**, but only with a few captures: there is one capture from 2024, then nothing until **15 September 2026**. No trend should be inferred for the gap. The delays section compares estimates to removal from the list, not a confirmed return to supply; see [Imported history](#imported-history).
 
-The first capture has 751 rows, 743 matched product names and 8 unmatched VNRs: `422093`, `433660`, `522103`, `531797`, `541749`, `572154`, `583857`, `584836`. Names are joined to the current register and may not describe historical products as they were at the time. The basic register was chosen because Fimea publishes a direct, nightly updated XML download with package, product and substance references; no account or catalogue lookup is needed. It is large (about 200 MB), but is streamed during processing and not committed.
+The project's snapshot from 21 November 2026 has 751 rows, 743 matched product names and 8 unmatched VNRs: `422093`, `433660`, `522103`, `531797`, `541749`, `572154`, `583857`, `584836`. Names are joined to the current register and may not describe historical products as they were at the time. The basic register was chosen because Fimea publishes a direct, nightly updated XML download with package, product and substance references; no account or catalogue lookup is needed. It is large (about 200 MB), but is streamed during processing and not committed.
 
 The dataset includes `substitution_group` from the current basic register, joined to packages through their product reference. These product-level groups are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. Groups may be missing when a VNR is absent from the register, and the current register may not describe historical products as they were at the time. The dashboard does not suggest alternatives.
 
-The 2025-09-27 Internet Archive capture was attempted using the raw `id_` URL and returned HTTP 404, so it was not imported.
+## Imported history
+
+Fimea does not publish past versions of the shortage file. Earlier copies were taken from the [Internet Archive](https://web.archive.org/), which holds captures of Fimea's Finnish-named copy of the file (`Saatavuushairiot.txt`, same data as `Shortages.txt`). `python scripts/import_history.py` lists the captures with HTTP status 200, downloads each one sequentially with a delay and retries, and writes it to `data/snapshots/imported/<date>.txt`.
+
+- The date is the capture time converted to Helsinki time. Dates already covered by a snapshot saved by this project, or by an earlier capture, are skipped, so this project's own snapshots are never replaced.
+- The Finnish header (`VNR`, `Voimassa`, `SaatavuushairioAlkupaiva`, ...) is replaced by the current header (`NordicArticleNumber`, `Valid`, `UnavailableFrom`, ...). Rows are kept byte for byte.
+- A capture must match the archive's content digest and pass the checks used for daily snapshots: valid header and rows, at least 100 rows, and no drop to less than half the previous row count. Failed captures are skipped and logged.
+- [`data/snapshots/imported/manifest.json`](data/snapshots/imported/manifest.json) records every capture considered: archive timestamp and URL, content digest, date, row count and SHA-256, or the reason it was skipped. Re-running the script downloads nothing that is already stored.
+
+Result: 23 captures imported (2024-11-18, then 2026-09-15 to 2026-11-17, every few days) and 3 skipped: the 2025 captures of `Shortages.txt` and `Restnoteringar.txt` return HTTP 404 from the archive, and the capture of 2026-11-20 23:44 UTC falls on 2026-11-21 in Helsinki, which this project's own snapshot covers.
+
+**What the timeline can show.** Captures are days apart, so a start or an end is a window, never a date. For each event the data keeps `first_seen_after` and `first_seen` (it began in between) and `last_seen` and `removed_on` (it left the list in between). Records present in the first capture are marked "already listed at first capture": their real start is earlier. Records first seen on 2026-09-15 began somewhere in the 666-day gap. The history chart does not draw a line across gaps longer than 14 days and does not interpolate days.
+
+**Delay finding.** The dashboard compares each event's first estimated end with the window in which it left the list. Only events whose first sighting is within 14 days of the previous capture and whose removal window is within 14 days are used; events listed at the first capture, events first seen after a long gap and events whose package is still listed under a changed record (for example a revised start date) are excluded. An event lasted past the estimate if it was still listed after the estimated end date, was gone by it if it was removed on or before that date, and is undetermined if the end date falls inside the removal window. The share that lasted past is therefore given as a range, and the median overrun for events that lasted past it as a lower and an upper bound. Shares and medians are shown only for samples of at least 30 events; smaller samples show the sample size only. Limits: estimates may already have been revised before the first capture that lists them, the window of about two weeks is wide next to typical delays, and removal from the list is not a confirmed end of the shortage. Counts for the current build are shown on the dashboard.
+
+**RSS feed.** Archived copies of Fimea's [shortage RSS feed](https://fimea.fi/c/laakehaut_ja_luettelot/saatavuushairio-uusi/rss) (4 usable captures: 2021-01-27, 2022-03-02, 2022-07-09, 2026-08-08; 2 skipped for a digest mismatch) list items with name, ATC, pack size, start and end dates, but no VNR. They can only show how many items were listed on those dates (summaries in [`rss-counts.json`](data/snapshots/imported/rss-counts.json)). They cannot be linked to packages, give no removal dates and are not comparable to package counts, so they are kept out of the timeline and delay calculations.
 
 ## How it works
 
@@ -29,6 +44,7 @@ Python 3.12 is recommended. On Windows, install `tzdata` for the Helsinki time z
 ```sh
 python -m pip install pytest tzdata
 python scripts/archive.py
+python scripts/import_history.py
 python scripts/fetch_register.py
 python scripts/build.py
 python -m pytest -q
@@ -39,7 +55,7 @@ Open `http://localhost:8000/`. The local HTTP server is only for preview: the si
 
 ## Attribution and licence
 
-Data is provided by the **Finnish Medicines Agency Fimea**, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Fimea's [open data page](https://fimea.fi/en/about_us/open-data) describes the datasets and licence. This project transforms and joins the source data, derives events and counts, and displays a subset; it is not endorsed by Fimea. Source modification timestamps below are the HTTP `Last-Modified` timestamps, not necessarily the publisher's release time. Latest observed timestamps for the first build:
+Data is provided by the **Finnish Medicines Agency Fimea**, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Earlier captures of the shortage file and RSS feed were retrieved from the [Internet Archive](https://web.archive.org/). Fimea's [open data page](https://fimea.fi/en/about_us/open-data) describes the datasets and licence. This project transforms and joins the source data, derives events and counts, and displays a subset; it is not endorsed by Fimea. Source modification timestamps below are the HTTP `Last-Modified` timestamps, not necessarily the publisher's release time. Latest observed timestamps for the first build:
 
 | Dataset | Source | Source last modified (UTC) | Changes |
 | --- | --- | --- | --- |
