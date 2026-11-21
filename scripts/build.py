@@ -7,6 +7,9 @@ import os
 from statistics import median
 from pathlib import Path
 
+from changes import feeds, week_summary
+from packs import pack_label
+
 ROOT = Path(__file__).resolve().parents[1]
 # Captures further apart than this are not joined into one continuous series,
 # and removal windows or first sightings wider than this are not used for delays.
@@ -46,7 +49,8 @@ def register(path, wanted):
     for _, el in ET.iterparse(path, events=('end',)):
         if el.tag == 'Pakkaus':
             vnr = el.findtext('VNR-numero')
-            package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '')
+            unit = el.find('Pakkauskokoyksikko')
+            package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '', unit.get('value', '') if unit is not None else '')
             if vnr in wanted:
                 packages[vnr] = package
                 exact.add(vnr)
@@ -64,9 +68,9 @@ def register(path, wanted):
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
             el.clear()
     result = {}
-    for vnr, (ref, refs, pack, current_vnr) in packages.items():
+    for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
-            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)))
+            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, products[ref]['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)))
     return result
 
 
@@ -207,6 +211,9 @@ def build():
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    for name, text in feeds(es, snapshots, history).items():
+        (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
 
 

@@ -6,3 +6,6 @@ site/history.json
 __pycache__/
 .pytest_cache/
 site/shortages.csv
+site/week.json
+site/feed.xml
+site/feed-fi.xml
