@@ -10,9 +10,13 @@ A daily archive and static dashboard of reported medicine shortages in Finland. 
 
 The dashboard searches names, substances, ATC codes, companies and package VNRs. It counts records by ATC group and company and charts captures. History begins on **18 November 2024**, but only with a few captures: there is one capture from 2024, then nothing until **15 September 2026**. No trend should be inferred for the gap. The delays section compares estimates to removal from the list, not a confirmed return to supply; see [Imported history](#imported-history).
 
-The project's snapshot from 21 November 2026 has 751 rows, 743 matched product names and 8 unmatched VNRs: `422093`, `433660`, `522103`, `531797`, `541749`, `572154`, `583857`, `584836`. Names are joined to the current register and may not describe historical products as they were at the time. The basic register was chosen because Fimea publishes a direct, nightly updated XML download with package, product and substance references; no account or catalogue lookup is needed. It is large (about 200 MB), but is streamed during processing and not committed.
+The snapshot from 21 November 2026 has 751 rows and 751 matched product names, including eight VNRs matched through previous package numbers. Names are joined to the current register and may not describe historical products as they were at the time. The basic register is a large nightly XML download streamed during processing and is not committed.
 
 The dataset includes `substitution_group` from the current basic register, joined to packages through their product reference. These product-level groups are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. Groups may be missing when a VNR is absent from the register, and the current register may not describe historical products as they were at the time. The dashboard does not suggest alternatives.
+
+The generated `shortages.csv` is UTF-8 with a BOM for Excel. Its columns are VNR, current VNR, name, strength, form, pack, active substances, ATC, company, start date, estimated end date, notification date, and veterinary (yes/no; blank when ATC is unavailable). The data source is Fimea open data, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); attribution: Finnish Medicines Agency Fimea.
+
+The workflows use Python 3.12. The scripts use the Python standard library; run the tests with `python -m pip install pytest`, `python -m pytest -q`, and `node --test tests/test_dashboard.cjs`. `generated_at` records the UTC build time; `last_checked` records the latest successful archive check date and can be empty before a successful workflow check.
 
 ## Imported history
 
@@ -20,7 +24,7 @@ Fimea does not publish past versions of the shortage file. Earlier copies were t
 
 - The date is the capture time converted to Helsinki time. Dates already covered by a snapshot saved by this project, or by an earlier capture, are skipped, so this project's own snapshots are never replaced.
 - The Finnish header (`VNR`, `Voimassa`, `SaatavuushairioAlkupaiva`, ...) is replaced by the current header (`NordicArticleNumber`, `Valid`, `UnavailableFrom`, ...). Rows are kept byte for byte.
-- A capture must match the archive's content digest and pass the checks used for daily snapshots: valid header and rows, at least 100 rows, and no drop to less than half the previous row count. Failed captures are skipped and logged.
+- A capture must match the archive's content digest and pass the checks used for daily snapshots: valid header and rows, at least 100 rows, and no drop to less than half the previous row count (the daily archive uses a stricter 15% limit). Failed captures are skipped and logged.
 - [`data/snapshots/imported/manifest.json`](data/snapshots/imported/manifest.json) records every capture considered: archive timestamp and URL, content digest, date, row count and SHA-256, or the reason it was skipped. Re-running the script downloads nothing that is already stored.
 
 Result: 23 captures imported (2024-11-18, then 2026-09-15 to 2026-11-17, every few days) and 3 skipped: the 2025 captures of `Shortages.txt` and `Restnoteringar.txt` return HTTP 404 from the archive, and the capture of 2026-11-20 23:44 UTC falls on 2026-11-21 in Helsinki, which this project's own snapshot covers.

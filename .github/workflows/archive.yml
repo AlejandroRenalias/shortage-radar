@@ -3,24 +3,49 @@ on:
   schedule:
     - cron: '35 4 * * *'
   workflow_dispatch:
+    inputs:
+      allow_large_drop:
+        description: Accept a reduction of more than 15% after checking the source
+        type: boolean
+        default: false
 concurrency:
   group: fimea-data-writes
   cancel-in-progress: false
 jobs:
   archive:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     outputs:
-      changed: ${{ steps.commit.outputs.changed }}
+      checked: ${{ steps.check.outputs.date }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: python scripts/archive.py
+      - name: Check and archive source
+        id: check
+        env:
+          ALLOW_LARGE_DROP: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_large_drop }}
+          TZ: Europe/Helsinki
+          REJECTED_DOWNLOAD: ${{ runner.temp }}/rejected-shortages.txt
+        run: |
+          if [ "$ALLOW_LARGE_DROP" = true ]; then
+            python scripts/archive.py --allow-large-drop
+          else
+            python scripts/archive.py
+          fi
+          echo "date=$(date +%F)" >> "$GITHUB_OUTPUT"
+      - name: Preserve rejected download
+        if: failure() && steps.check.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rejected-shortages
+          path: ${{ runner.temp }}/rejected-shortages.txt
+          retention-days: 30
+          if-no-files-found: ignore
       - name: Commit changes
-        id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -32,13 +57,34 @@ jobs:
               if git push origin "HEAD:$GITHUB_REF_NAME"; then break; fi
               if [ "$attempt" = 3 ]; then exit 1; fi
             done
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
   deploy:
-    if: needs.archive.outputs.changed == 'true' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     needs: archive
     uses: ./.github/workflows/pages.yml
+    with:
+      last_checked: ${{ needs.archive.outputs.checked }}
     permissions:
       contents: read
       pages: write
       id-token: write
+      actions: read
+      issues: write
+  alert:
+    if: always() && github.event_name == 'schedule'
+    needs: [archive, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: pipeline-alert
+      queue: max
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PIPELINE: archive
+          RESULT: ${{ needs.archive.result == 'success' && needs.deploy.result == 'success' && 'success' || 'failure' }}
+        run: python scripts/pipeline_alert.py
