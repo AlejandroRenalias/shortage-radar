@@ -6,31 +6,71 @@ on:
     - cron: '55 4 * * *'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      last_checked:
+        type: string
+        required: false
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
+  issues: write
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Determine last successful archive check
+        id: freshness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKED: ${{ inputs.last_checked }}
+        run: |
+          if [ -z "$CHECKED" ]; then
+            CHECKED=$(python scripts/latest_check.py)
+          fi
+          echo "date=$CHECKED" >> "$GITHUB_OUTPUT"
+      - run: python scripts/fetch_register.py
+      - run: python scripts/build.py
+        env:
+          LAST_CHECKED: ${{ steps.freshness.outputs.date }}
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+          retention-days: 7
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python scripts/fetch_register.py
-      - run: python scripts/build.py
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+  alert:
+    if: always() && github.event_name == 'schedule'
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: pipeline-alert
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PIPELINE: pages
+          RESULT: ${{ needs.build.result == 'success' && needs.deploy.result == 'success' && 'success' || 'failure' }}
+        run: python scripts/pipeline_alert.py

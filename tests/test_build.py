@@ -28,7 +28,7 @@ def test_duplicate_identity_rejected():
 
 def test_bad_file_rejected(tmp_path):
     p = tmp_path / 'bad.txt'
-    p.write_text('error page', encoding='utf-8')
+    p.write_text('error page\n', encoding='utf-8')
     with pytest.raises(ValueError, match='header'):
         read_snapshot(p)
 
@@ -92,7 +92,7 @@ def test_imported_dates_yield_to_own_snapshots(tmp_path, monkeypatch):
     for folder, day in (('', '2026-11-21'), ('imported', '2026-11-21'), ('imported', '2026-11-17')):
         target = tmp_path / 'data/snapshots' / folder
         target.mkdir(parents=True, exist_ok=True)
-        (target / f'{day}.txt').write_text(';'.join(f'"{c}"' for c in HEADER) + '\n"012345";"K";"2026-11-01";"";"2026-10-01";"2026-11-01";"' + (folder or 'own') + '"\n', encoding='utf-8')
+        (target / f'{day}.txt').write_text(';'.join(f'"{c}"' for c in HEADER) + '\n"012345";"K";"2026-11-01";"2026-12-01";"2026-10-01";"2026-11-01";"' + (folder or 'own') + '"\n', encoding='utf-8')
     monkeypatch.setattr(build, 'ROOT', tmp_path)
     snapshots, imported = build.load_snapshots()
     assert [d for d, _ in snapshots] == ['2026-11-17', '2026-11-21']
@@ -112,3 +112,35 @@ def test_active_past_estimate_requires_known_narrow_first_window():
     ])
     assert stats['active_past_estimate'] == 1
     assert stats['sample_size'] == 0
+
+
+def test_old_vnr_keeps_identity_and_maps_current(tmp_path):
+    path = tmp_path / 'register.xml'
+    path.write_text('<Perusrekisteri><Pakkaus Laakevalmiste-ref="p"><VNR-numero>158928</VNR-numero><VanhaVNR>422093</VanhaVNR></Pakkaus><Laakevalmiste id="p"><Kauppanimi>Example</Kauppanimi></Laakevalmiste></Perusrekisteri>')
+    result = register(path, {'422093', '158928'})
+    assert result['422093']['name'] == 'Example'
+    assert result['422093']['current_vnr'] == '158928'
+
+
+def test_build_gate_and_csv(tmp_path, monkeypatch):
+    import csv
+    import json
+    import build
+    (tmp_path / 'site').mkdir()
+    monkeypatch.setattr(build, 'ROOT', tmp_path)
+    monkeypatch.setattr(build, 'load_snapshots', lambda: ([('2026-11-01', [row()])], set()))
+    monkeypatch.setattr(build, 'read_rss_counts', lambda: [])
+    monkeypatch.setattr(build, 'register', lambda *args: {})
+    with pytest.raises(ValueError, match='Register matched'):
+        build.build()
+    assert not (tmp_path / 'site/data.json').exists()
+    monkeypatch.setattr(build, 'register', lambda *args: {'012345': {'name': 'Example', 'current_vnr': '222222', 'atc': 'QN01'}})
+    monkeypatch.setenv('LAST_CHECKED', '2026-11-02')
+    build.build()
+    data = json.loads((tmp_path / 'site/data.json').read_text(encoding='utf-8'))
+    assert data['last_checked'] == '2026-11-02' and data['generated_at'].endswith('+00:00')
+    raw = (tmp_path / 'site/shortages.csv').read_bytes()
+    assert raw.startswith(b'\xef\xbb\xbf')
+    records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
+    assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary']
+    assert records[0]['current VNR'] == '222222' and records[0]['veterinary'] == 'yes'

@@ -2,7 +2,8 @@
 import csv
 import json
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date, datetime, timezone
+import os
 from statistics import median
 from pathlib import Path
 
@@ -15,6 +16,8 @@ HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'Date
 
 
 def read_snapshot(path):
+    if not path.read_bytes().endswith(b'\n'):
+        raise ValueError(f'{path}: missing final newline')
     with path.open(encoding='utf-8-sig', newline='') as f:
         reader = csv.DictReader(f, delimiter=';', strict=True)
         if reader.fieldnames != HEADER:
@@ -22,9 +25,16 @@ def read_snapshot(path):
         rows = list(reader)
     if not rows:
         raise ValueError(f'{path}: no rows')
+    seen = set()
     for row in rows:
         if None in row or any(row[k] is None for k in HEADER) or not row['NordicArticleNumber'].isdigit() or len(row['NordicArticleNumber']) != 6:
             raise ValueError(f'{path}: malformed row {row}')
+        if any(not row[k].strip() for k in HEADER):
+            raise ValueError(f'{path}: empty required field')
+        key = tuple(row[k] for k in ('NordicArticleNumber', 'UnavailableFrom', 'DateOfTheNotification', 'Company'))
+        if key in seen:
+            raise ValueError(f'{path}: duplicate event identity {key}')
+        seen.add(key)
         for k in ('UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated'):
             if row[k]:
                 date.fromisoformat(row[k])
@@ -36,8 +46,10 @@ def register(path, wanted):
     for _, el in ET.iterparse(path, events=('end',)):
         if el.tag == 'Pakkaus':
             vnr = el.findtext('VNR-numero')
-            if vnr in wanted:
-                packages[vnr] = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''))
+            package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '')
+            for number in [vnr] + [x.text for x in el.findall('VanhaVNR')]:
+                if number in wanted:
+                    packages[number] = package
             el.clear()
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
@@ -47,9 +59,9 @@ def register(path, wanted):
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
             el.clear()
     result = {}
-    for vnr, (ref, refs, pack) in packages.items():
+    for vnr, (ref, refs, pack, current_vnr) in packages.items():
         if ref in products:
-            result[vnr] = dict(products[ref], pack=pack, substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)))
+            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)))
     return result
 
 
@@ -166,12 +178,23 @@ def build():
         e.update(products.get(e['NordicArticleNumber'], {}))
     current = [e for e in es if e['removed_on'] is None]
     unmatched = sorted({e['NordicArticleNumber'] for e in current if not e.get('name')})
+    matched = sum(bool(e.get('name')) for e in current)
+    if matched * 100 < len(current) * 95:
+        raise ValueError(f'Register matched only {matched} of {len(current)} current rows')
     metadata_path = ROOT / 'data/source/metadata.json'
     metadata = json.loads(metadata_path.read_text(encoding='utf-8')) if metadata_path.exists() else {}
     register_metadata = ROOT / 'data/source/register-metadata.json'
     if register_metadata.exists():
         metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata}
+    output['generated_at'] = datetime.now(timezone.utc).isoformat()
+    output['last_checked'] = os.environ.get('LAST_CHECKED') or None
+    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary']
+    with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(csv_columns)
+        for e in current:
+            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else ''])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
 
