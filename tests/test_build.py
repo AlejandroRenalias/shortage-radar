@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from build import HEADER, events, read_snapshot
+from build import HEADER, events, read_snapshot, register
 
 
 def row(end='2026-12-01', vnr='012345'):
@@ -31,3 +31,21 @@ def test_bad_file_rejected(tmp_path):
     p.write_text('error page', encoding='utf-8')
     with pytest.raises(ValueError, match='header'):
         read_snapshot(p)
+
+
+def test_register_groups_follow_product_references(tmp_path):
+    path = tmp_path / 'register.xml'
+    path.write_text('''<Perusrekisteri>
+      <Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012345</VNR-numero></Pakkaus>
+      <Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012346</VNR-numero></Pakkaus>
+      <Pakkaus Laakevalmiste-ref="p2"><VNR-numero>012347</VNR-numero></Pakkaus>
+      <Laakevalmiste id="p1"><Kauppanimi>Example</Kauppanimi>
+        <Substituutioryhma listname="Substitution Group" id="0042" value="0042"/>
+      </Laakevalmiste>
+      <Laakevalmiste id="p2"><Substituutioryhma/></Laakevalmiste>
+    </Perusrekisteri>''', encoding='utf-8')
+    products = register(path, {'012345', '012346', '012347', '999999'})
+    assert products['012345']['substitution_group'] == '0042'
+    assert products['012346']['substitution_group'] == '0042'
+    assert products['012347']['substitution_group'] == ''
+    assert '999999' not in products
