@@ -68,6 +68,19 @@ test('Finnish substance aliases and diacritics match English records', () => {
   assert.ok(vm.runInContext('Object.keys(aliases).length >= 60', context));
 });
 
+test('freshness uses the successful check date and distinguishes a build-only fallback', () => {
+  vm.runInContext("language='en'", context);
+  const today = Date.UTC(2026, 10, 21);
+  const recent = context.freshnessInfo({last_checked:'2026-11-18', generated_at:'2026-11-21T12:00:00Z'}, today, today);
+  assert.equal(recent.text, 'Checked 18 Nov 2026');
+  assert.equal(recent.stale, false);
+  assert.equal(context.freshnessInfo({last_checked:'2026-11-17'}, today, today).stale, true);
+  const fallback = context.freshnessInfo({last_checked:null, generated_at:'2026-11-17T00:00:00Z'}, today, today);
+  assert.match(fallback.text, /Build time; the last source check is unknown/);
+  assert.equal(fallback.stale, true);
+  assert.equal(context.freshnessInfo({}, today, today).text, '');
+});
+
 test('history and delay rendering uses translated dates and explains the sample', () => {
   const elements = {};
   const get = id => elements[id] ||= {textContent:'', innerHTML:'', value:'en', addEventListener(){}, setAttribute(){}};

@@ -14,6 +14,8 @@ Shortage Radar is a searchable view and archive of reported medicine shortages i
 
 A scheduled job downloads and validates Fimea's shortage file and saves a dated snapshot when its contents change. The site joins package records to the current basic register by VNR and builds a static dashboard. It can be searched by medicine, substance, ATC, company or VNR; it includes veterinary products. Earlier copies from the Internet Archive extend the timeline. The download links on the site provide the current dataset.
 
+The CSV uses UTF-8 with a BOM and contains package, medicine, company, date and veterinary fields. The JSON records the UTC build time as `generated_at` and the most recent successful archive check date as `last_checked`, which can be empty. When that date is unavailable, the site labels the build-time fallback and does not imply that the source was checked at build time.
+
 The history shows saved captures, not daily observations. Capture gaps can be long: the first is from 18 November 2024, followed by a gap until September 2026. The chart does not interpolate across long gaps. An event is identified by VNR, reported start, notification date and company; changes to those fields can appear as a removal and a new event.
 
 The comparison with estimated end dates uses only events with sufficiently close captures at both ends. It describes when a record was last seen or removed from the list, not when supply actually returned. Estimates may already have changed before the first available capture, and ongoing shortages are excluded from the comparison.
