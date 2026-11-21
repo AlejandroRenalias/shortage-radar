@@ -20,6 +20,8 @@ A scheduled job downloads and validates Fimea's shortage file and saves a dated 
 
 The dashboard first loads `current.json` for the list, then loads `history.json` for the chart and analysis. The downloadable `data.json` retains the complete event history. `week.json` holds the counts for the "This week" summary, and `feed.xml` (English) and `feed-fi.xml` (Finnish) are Atom feeds of the shortages that appeared or left the list in the last 14 days, with at most 200 entries.
 
+The current dataset counts other packages in the same substitution group whose register entries say they are on the market and not in shortage, excluding packages listed in the current shortage file. This is not a pharmacy stock check, and a group does not establish that a particular package is suitable.
+
 The CSV uses UTF-8 with a BOM and contains package, medicine, company, date and veterinary fields. The JSON records the UTC build time as `generated_at` and the most recent successful archive check date as `last_checked`, which can be empty. When that date is unavailable, the site labels the build-time fallback and does not imply that the source was checked at build time.
 
 The history shows saved captures, not daily observations. Capture gaps can be long: the first is from 18 November 2024, followed by a gap until September 2026. The chart does not interpolate across long gaps. An event is identified by VNR, reported start, notification date and company; changes to those fields can appear as a removal and a new event.

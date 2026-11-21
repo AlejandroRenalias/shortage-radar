@@ -274,3 +274,15 @@ test('page head: no hreflang on feeds, matching locale, image alt, one search, n
   assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
   assert.ok(fs.existsSync('site/sitemap.xml'));
 });
+
+
+test('other packages line appears only for positive counts in both languages', () => {
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language = '${lang}'`, context);
+    const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01'};
+    const message = vm.runInContext(`copy.${lang}.otherPackages`, context);
+    assert.ok(context.card({...record, other_packages_count:1}, Date.UTC(2026,10,21)).includes(message));
+    assert.ok(!context.card({...record, other_packages_count:0}, Date.UTC(2026,10,21)).includes(message));
+    assert.ok(!context.card(record, Date.UTC(2026,10,21)).includes(message));
+  }
+});

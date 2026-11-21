@@ -147,7 +147,7 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     raw = (tmp_path / 'site/shortages.csv').read_bytes()
     assert raw.startswith(b'\xef\xbb\xbf')
     records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
-    assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary']
+    assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market']
     assert records[0]['current VNR'] == '222222' and records[0]['veterinary'] == 'yes'
 
 
@@ -176,3 +176,19 @@ def test_old_vnr_prefers_nonempty_current_number(tmp_path, reverse):
     path.write_text('<Perusrekisteri>' + ''.join(packages) + '<Laakevalmiste id="empty"><Kauppanimi>Empty</Kauppanimi></Laakevalmiste><Laakevalmiste id="filled"><Kauppanimi>Filled</Kauppanimi></Laakevalmiste></Perusrekisteri>')
     product = register(path, {'550343'})['550343']
     assert (product['name'], product['current_vnr']) == ('Filled', '123456')
+
+
+def test_available_packages_exclude_shortages_and_old_vnrs(tmp_path):
+    path = tmp_path / 'register.xml'
+    def pack(vnr, ref, market='1', short='0', old=''):
+        return f'<Pakkaus Laakevalmiste-ref="{ref}"><VNR-numero>{vnr}</VNR-numero><VanhaVNR>{old}</VanhaVNR><Kaupanolo><Kaupan>{market}</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>{short}</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>'
+    packages = [pack('000001','none'), pack('000002','short'), pack('000003','short',short='1'),
+                pack('000004','available'), pack('000005','available'), pack('000006','available',market='0'),
+                pack('000007','available',short='1'), pack('000008','available',old='999999'),
+                pack('000009','available',short=''), pack('000010','available')]
+    products = '<Laakevalmiste id="none"/><Laakevalmiste id="short"><Substituutioryhma value="s"/></Laakevalmiste><Laakevalmiste id="available"><Substituutioryhma value="a"/></Laakevalmiste>'
+    path.write_text('<Perusrekisteri>' + ''.join(packages) + products + '</Perusrekisteri>', encoding='utf-8')
+    result = register(path, {'000001','000002','000004'}, {'000001','000002','000004','999999','000010'})
+    assert result['000001']['substitution_group'] == '' and result['000001']['other_packages_count'] == 0
+    assert result['000002']['other_packages_count'] == 0
+    assert result['000004']['other_packages_count'] == 1
