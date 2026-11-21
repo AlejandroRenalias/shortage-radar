@@ -102,10 +102,14 @@ def delay_stats(all_events):
     MAX_GAP_DAYS of the previous capture (so the first estimate is close to the
     original one) and removed within MAX_GAP_DAYS of the last capture listing it.
     """
-    sample, excluded = [], {'listed_at_first_capture': 0, 'no_estimate': 0, 'wide_start_window': 0, 'wide_removal_window': 0, 'vnr_still_listed': 0}
+    sample, active_past, excluded = [], [], {'listed_at_first_capture': 0, 'no_estimate': 0, 'wide_start_window': 0, 'wide_removal_window': 0, 'vnr_still_listed': 0}
     for e in all_events:
         end = e.get('first_estimated_end')
         if not e['removed_on']:
+            if (end and not e['listed_at_first_capture'] and e['first_seen_after']
+                    and days_between(e['first_seen_after'], e['first_seen']) <= MAX_GAP_DAYS
+                    and days_between(end, e['last_seen']) > 0):
+                active_past.append(days_between(end, e['last_seen']))
             continue
         if e['listed_at_first_capture']:
             reason = 'listed_at_first_capture'
@@ -126,7 +130,7 @@ def delay_stats(all_events):
         sample.append({'vnr': e['NordicArticleNumber'], 'name': e.get('name', ''), 'first_estimated_end': end, 'last_seen': e['last_seen'], 'removed_on': e['removed_on'], 'overrun_min_days': low, 'overrun_max_days': high})
     past = [s for s in sample if s['overrun_min_days'] > 0]
     not_past = [s for s in sample if s['overrun_max_days'] <= 0]
-    result = {'sample_size': len(sample), 'past_estimate': len(past), 'not_past_estimate': len(not_past), 'undetermined': len(sample) - len(past) - len(not_past), 'excluded': excluded, 'removed_total': len(sample) + sum(excluded.values()), 'min_sample': MIN_DELAY_SAMPLE, 'max_gap_days': MAX_GAP_DAYS, 'meaningful': len(sample) >= MIN_DELAY_SAMPLE, 'examples': sorted(past, key=lambda s: -s['overrun_min_days'])[:10]}
+    result = {'sample_size': len(sample), 'past_estimate': len(past), 'not_past_estimate': len(not_past), 'undetermined': len(sample) - len(past) - len(not_past), 'active_past_estimate': len(active_past), 'excluded': excluded, 'removed_total': len(sample) + sum(excluded.values()), 'min_sample': MIN_DELAY_SAMPLE, 'max_gap_days': MAX_GAP_DAYS, 'meaningful': len(sample) >= MIN_DELAY_SAMPLE, 'examples': sorted(past, key=lambda s: -s['overrun_min_days'])[:10]}
     if result['meaningful']:
         result['share_past_min'] = len(past) / len(sample)
         result['share_past_max'] = (len(sample) - len(not_past)) / len(sample)

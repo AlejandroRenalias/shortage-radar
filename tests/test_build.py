@@ -97,3 +97,18 @@ def test_imported_dates_yield_to_own_snapshots(tmp_path, monkeypatch):
     snapshots, imported = build.load_snapshots()
     assert [d for d, _ in snapshots] == ['2026-11-17', '2026-11-21']
     assert snapshots[1][1][0]['Company'] == 'own' and imported == {'2026-11-17'}
+
+
+def test_active_past_estimate_requires_known_narrow_first_window():
+    def active(first_after, first, estimate, last='2026-11-21', first_capture=False):
+        return dict(removed_on=None, first_seen_after=first_after, first_seen=first,
+                    first_estimated_end=estimate, last_seen=last, listed_at_first_capture=first_capture)
+    stats = delay_stats([
+        active('2026-10-01', '2026-10-15', '2026-11-20'),
+        active('2026-10-01', '2026-10-16', '2026-11-01'),
+        active(None, '2026-10-01', '2026-11-01', first_capture=True),
+        active('2026-10-01', '2026-10-15', '2026-11-21'),
+        active('2026-10-01', '2026-10-15', ''),
+    ])
+    assert stats['active_past_estimate'] == 1
+    assert stats['sample_size'] == 0
