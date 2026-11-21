@@ -14,6 +14,10 @@ function parsedDate(s) { if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return null; 
 function dateText(s) { const d=parsedDate(s); return d ? new Intl.DateTimeFormat(language === 'fi' ? 'fi-FI' : 'en-GB',{day:'numeric',month:language === 'fi' ? 'numeric' : 'short',year:'numeric',timeZone:'UTC'}).format(d) : '—'; }
 function todayUTC() { const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()); const get = type => parts.find(p=>p.type===type).value; return Date.UTC(+get('year'),+get('month')-1,+get('day')); }
 function formText(form) { const found=forms.find(row => (form || '').toLocaleLowerCase().startsWith(row[0])); return found ? found[language === 'fi' ? 2 : 1] : form || ''; }
+function groupName(atc, lang = language) {
+  const eyeEar = atc?.startsWith('S01') ? ['Eye medicines','Silmälääkkeet'] : atc?.startsWith('S02') ? ['Ear medicines','Korvalääkkeet'] : null;
+  return (eyeEar || groups[(atc || '')[0]])?.[lang === 'fi' ? 1 : 0] || copy[lang].noGroup;
+}
 function card(e, now) {
   const t=copy[language], start=parsedDate(e.UnavailableFrom), end=parsedDate(e.EndingDate), upcoming=start && start.valueOf()>now;
   const days=start ? Math.floor((now-start.valueOf())/86400000) : null;
@@ -21,8 +25,7 @@ function card(e, now) {
   const sentence=start ? `${upcoming ? t.starts : t.since} ${dateText(e.UnavailableFrom)}${!upcoming ? ` (${t.days(days)})` : ''}.` : (language === 'fi' ? 'Alkamispäivä ei ole tiedossa.' : 'Start date not known.');
   const late=end && end.valueOf()<now;
   const expectation=end ? `${t.expected} ${dateText(e.EndingDate)} (${t.estimate}).` : t.unknown;
-  const eyeEar = e.atc?.startsWith('S01') ? ['Eye medicines','Silmälääkkeet'] : e.atc?.startsWith('S02') ? ['Ear medicines','Korvalääkkeet'] : null;
-  const group=(eyeEar || groups[(e.atc || '')[0]])?.[language === 'fi' ? 1 : 0] || t.noGroup;
+  const group=groupName(e.atc);
   const details=[[t.strength,e.strength],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
   return `<article class="row"><div class="card-heading"><h3>${esc(e.name || t.unavailable)}</h3><span class="status ${upcoming ? 'upcoming' : ''}">${esc(status)}</span></div><p class="form">${esc([formText(e.form),e.pack].filter(Boolean).join(' · '))}</p><p class="group">${esc(t.group)}: ${esc(group)}</p><p class="status-sentence">${esc(sentence)}</p><p>${esc(expectation)} ${late ? `<strong class="late">${esc(t.late)}.</strong>` : ''}</p><details><summary>${esc(t.details)}</summary><dl>${details.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value || '—')}</dd></div>`).join('')}</dl></details></article>`;
 }
@@ -45,6 +48,7 @@ function bars(id, counts, limit) {
   $(id).innerHTML = entries.map(([name,n]) => `<div class="barrow"><span title="${esc(name)}">${esc(name)}</span><span class="track"><i style="width:${n/max*100}%"></i></span><strong>${n}</strong></div>`).join('');
 }
 function drawChart(history) {
+  if (history.length < 2) { $('chart').textContent = 'A chart will appear when at least two snapshots are available.'; return; }
   const max = Math.max(...history.map(h => h.count),1), first = Date.parse(history[0].date), last = Date.parse(history[history.length-1].date), span = Math.max(last-first, 1);
   const points = history.map(h => `${10 + 380*(Date.parse(h.date)-first)/span},${155 - 140*h.count/max}`).join(' ');
   $('chart').innerHTML = `<svg viewBox="0 0 400 170" role="img" aria-label="Saved snapshot counts from ${esc(history[0].date)} to ${esc(history[history.length-1].date)}, latest ${history[history.length-1].count}"><polyline points="${points}" fill="none" stroke="#16806d" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${last === first ? 10 : 390}" cy="${155 - 140*history[history.length-1].count/max}" r="4" fill="#16806d"/></svg><div class="chart-labels"><span>${esc(history[0].date)}</span><span>${history[history.length-1].count} · ${esc(history[history.length-1].date)}</span></div>`;
@@ -52,8 +56,11 @@ function drawChart(history) {
 fetch('data.json').then(r => {if (!r.ok) throw Error('Data unavailable'); return r.json()}).then(d => {
   data = d; const current = d.events.filter(e => !e.removed_on), companies = {}, atc = {};
   const meta = d.source_metadata;
-  $('source-times').textContent = `Data updated (Fimea shortage file): ${meta.shortages_last_modified || 'unknown'}; Basic register: ${meta.register_last_modified || 'unknown'}.`;
-  current.forEach(e => {companies[e.Company || 'Unknown'] = (companies[e.Company || 'Unknown'] || 0)+1; const group = e.atc?.[0] || 'Unknown'; atc[group] = (atc[group] || 0)+1});
+  const sourceTimes = [];
+  if (meta.shortages_last_modified) sourceTimes.push(`Fimea shortage file: ${meta.shortages_last_modified}`);
+  if (meta.register_last_modified) sourceTimes.push(`Basic register: ${meta.register_last_modified}`);
+  $('source-times').textContent = sourceTimes.join('; ');
+  current.forEach(e => {companies[e.Company || 'Unknown'] = (companies[e.Company || 'Unknown'] || 0)+1; const group = groupName(e.atc, 'en'); atc[group] = (atc[group] || 0)+1});
   $('updated').textContent = `LATEST SNAPSHOT ${dateText(d.snapshot_date)}`; $('start').textContent = dateText(d.archive_start); $('total').textContent = current.length; $('companies').textContent = Object.keys(companies).length;
   bars('atc', atc, 30); bars('company', companies, 10); drawList();
   $('history-note').textContent = `History starts on ${d.archive_start}. Earlier shortages are not included.`;
