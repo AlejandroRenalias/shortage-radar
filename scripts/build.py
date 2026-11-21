@@ -2,8 +2,9 @@
 import csv
 import json
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
@@ -74,6 +75,18 @@ def events(snapshots):
     return all_events, history
 
 
+def interchangeable_source(folder, today):
+    for name in ('interchangeable-upcoming', 'interchangeable'):
+        metadata_path = folder / f'{name}-metadata.json'
+        if not metadata_path.exists():
+            continue
+        metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+        if metadata['valid_from'] <= today <= metadata['valid_until']:
+            return folder / f'{name}.txt', metadata, True
+    metadata = json.loads((folder / 'interchangeable-metadata.json').read_text(encoding='utf-8'))
+    return folder / 'interchangeable.txt', metadata, False
+
+
 def build():
     paths = sorted((ROOT / 'data/snapshots').glob('????-??-??.txt'))
     if not paths:
@@ -82,10 +95,9 @@ def build():
     es, history = events(snapshots)
     products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es})
     # The published quarterly list is product-level; never infer pack substitution.
-    with (ROOT / 'data/source/interchangeable.txt').open(encoding='cp1252', newline='') as f:
+    group_path, group_meta, group_valid = interchangeable_source(ROOT / 'data/source', datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat())
+    with group_path.open(encoding='cp1252', newline='') as f:
         groups = {r['VNRNRO']: r['SUBSTITUUTIORYHMA'] for r in csv.DictReader(f, delimiter=';') if r['VNRNRO']}
-    group_meta = json.loads((ROOT / 'data/source/interchangeable-metadata.json').read_text(encoding='utf-8'))
-    group_valid = group_meta['valid_from'] <= history[-1]['date'] <= group_meta['valid_until'] and group_meta['valid_from'] <= date.today().isoformat() <= group_meta['valid_until']
     if not group_valid:
         print('WARNING: interchangeable list outside its validity period; group codes omitted')
     for e in es:
