@@ -4,6 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 import os
+import unicodedata
 from statistics import median
 from pathlib import Path
 
@@ -44,6 +45,14 @@ def read_snapshot(path):
     return rows
 
 
+def match_key(product):
+    """Require known group, strength and form; normalise text without guessing equivalence."""
+    def normalise(value):
+        return ' '.join(unicodedata.normalize('NFKC', value).casefold().split())
+    key = tuple(normalise(product.get(field, '')) for field in ('substitution_group', 'strength', 'form'))
+    return key if all(key) else None
+
+
 def register(path, wanted, current_shortages=()):
     packages, exact, products, substances = {}, set(), {}, {}
     candidates = []
@@ -73,14 +82,14 @@ def register(path, wanted, current_shortages=()):
             el.clear()
     available = {}
     for ref, vnr, old_vnrs, market, shortage in candidates:
-        group = products.get(ref, {}).get('substitution_group', '')
-        if group and vnr and market == '1' and shortage == '0' and not ({vnr} | old_vnrs) & current_shortages:
-            available.setdefault(group, set()).add(vnr)
+        key = match_key(products.get(ref, {}))
+        if key and vnr and market == '1' and shortage == '0' and not ({vnr} | old_vnrs) & current_shortages:
+            available.setdefault(key, set()).add(vnr)
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
-            group = products[ref]['substitution_group']
-            count = len(available.get(group, set()) - {vnr, current_vnr}) if group else 0
+            key = match_key(products[ref])
+            count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
             result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, products[ref]['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
     return result
 
@@ -219,7 +228,7 @@ def build():
         writer = csv.writer(f)
         writer.writerow(csv_columns)
         for e in current:
-            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0)])
+            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else ''])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current

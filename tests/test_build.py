@@ -149,6 +149,11 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
     assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market']
     assert records[0]['current VNR'] == '222222' and records[0]['veterinary'] == 'yes'
+    assert records[0]['other packages on market'] == ''
+    monkeypatch.setattr(build, 'register', lambda *args: {'012345': {'name': 'Example', 'substitution_group': '42', 'other_packages_count': 0}})
+    build.build()
+    records = list(csv.DictReader((tmp_path / 'site/shortages.csv').read_text(encoding='utf-8-sig').splitlines()))
+    assert records[0]['other packages on market'] == '0'
 
 
 @pytest.mark.parametrize('reverse', [False, True])
@@ -186,9 +191,23 @@ def test_available_packages_exclude_shortages_and_old_vnrs(tmp_path):
                 pack('000004','available'), pack('000005','available'), pack('000006','available',market='0'),
                 pack('000007','available',short='1'), pack('000008','available',old='999999'),
                 pack('000009','available',short=''), pack('000010','available')]
-    products = '<Laakevalmiste id="none"/><Laakevalmiste id="short"><Substituutioryhma value="s"/></Laakevalmiste><Laakevalmiste id="available"><Substituutioryhma value="a"/></Laakevalmiste>'
+    products = '<Laakevalmiste id="none"/><Laakevalmiste id="short"><Vahvuus>10 mg</Vahvuus><Laakemuoto value="tabletti"/><Substituutioryhma value="s"/></Laakevalmiste><Laakevalmiste id="available"><Vahvuus>10 mg</Vahvuus><Laakemuoto value="tabletti"/><Substituutioryhma value="a"/></Laakevalmiste>'
     path.write_text('<Perusrekisteri>' + ''.join(packages) + products + '</Perusrekisteri>', encoding='utf-8')
     result = register(path, {'000001','000002','000004'}, {'000001','000002','000004','999999','000010'})
     assert result['000001']['substitution_group'] == '' and result['000001']['other_packages_count'] == 0
     assert result['000002']['other_packages_count'] == 0
     assert result['000004']['other_packages_count'] == 1
+
+
+def test_matching_requires_known_equal_strength_and_form(tmp_path):
+    path = tmp_path / 'register.xml'
+    def product(id, strength, form):
+        return f'<Laakevalmiste id="{id}"><Substituutioryhma value="42"/><Vahvuus>{strength}</Vahvuus><Laakemuoto value="{form}"/></Laakevalmiste>'
+    def pack(vnr, ref):
+        return f'<Pakkaus Laakevalmiste-ref="{ref}"><VNR-numero>{vnr}</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>0</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>'
+    specs = [('a','10 mg','Tabletti'), ('b',' 10  MG ','tabletti'), ('c','20 mg','Tabletti'), ('d','10 mg','Kapseli'), ('e','','Tabletti'), ('f','10 mg','')]
+    path.write_text('<Perusrekisteri>' + ''.join(pack(f'{i:06}', x[0]) for i,x in enumerate(specs,1)) + ''.join(product(*x) for x in specs) + '</Perusrekisteri>', encoding='utf-8')
+    found = register(path, {'000001','000005','000006'}, {'000001','000005','000006'})
+    assert found['000001']['other_packages_count'] == 1
+    assert found['000005']['other_packages_count'] == 0
+    assert found['000006']['other_packages_count'] == 0
