@@ -1,9 +1,7 @@
 """Build a static dataset from Fimea snapshots and its basic register."""
 import csv
 import json
-import sys
 import xml.etree.ElementTree as ET
-from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -86,13 +84,21 @@ def build():
     # The published quarterly list is product-level; never infer pack substitution.
     with (ROOT / 'data/source/interchangeable.txt').open(encoding='cp1252', newline='') as f:
         groups = {r['VNRNRO']: r['SUBSTITUUTIORYHMA'] for r in csv.DictReader(f, delimiter=';') if r['VNRNRO']}
+    group_meta = json.loads((ROOT / 'data/source/interchangeable-metadata.json').read_text(encoding='utf-8'))
+    group_valid = group_meta['valid_from'] <= history[-1]['date'] <= group_meta['valid_until'] and group_meta['valid_from'] <= date.today().isoformat() <= group_meta['valid_until']
+    if not group_valid:
+        print('WARNING: interchangeable list outside its validity period; group codes omitted')
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
-        e['listed_substitution_group'] = groups.get(e['NordicArticleNumber'], '') if '2026-10-01' <= history[-1]['date'] <= '2026-12-31' else ''
+        e['listed_substitution_group'] = groups.get(e['NordicArticleNumber'], '') if group_valid else ''
     current = [e for e in es if e['removed_on'] is None]
     unmatched = sorted({e['NordicArticleNumber'] for e in current if not e.get('name')})
     metadata_path = ROOT / 'data/source/metadata.json'
     metadata = json.loads(metadata_path.read_text(encoding='utf-8')) if metadata_path.exists() else {}
+    register_metadata = ROOT / 'data/source/register-metadata.json'
+    if register_metadata.exists():
+        metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
+    metadata['interchangeable'] = group_meta
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'source_metadata': metadata}
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")

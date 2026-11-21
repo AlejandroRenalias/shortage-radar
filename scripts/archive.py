@@ -1,16 +1,13 @@
 """Download, validate and capture changed Fimea data."""
-import hashlib
 import json
 import time
 import urllib.request
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from build import ROOT, read_snapshot
 
 URL = 'https://data.pilvi.fimea.fi/avoin-data/Shortages.txt'
-REGISTER = 'https://data.pilvi.fimea.fi/avoin-data/Perusrekisteri.xml'
 
 
 def download(url):
@@ -24,9 +21,9 @@ def download(url):
             time.sleep(2 ** attempt)
 
 
-def main():
+def main(day=None):
     content, modified = download(URL)
-    day = datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
+    day = day or datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
     folder = ROOT / 'data/snapshots'
     folder.mkdir(parents=True, exist_ok=True)
     temporary = folder / '.candidate'
@@ -36,19 +33,19 @@ def main():
         if len(rows) < 100:
             raise ValueError(f'Unexpectedly small shortage file: {len(rows)} rows')
         previous = sorted(folder.glob('????-??-??.txt'))
+        if previous:
+            previous_count = len(read_snapshot(previous[-1]))
+            if len(rows) * 2 < previous_count:
+                raise ValueError(f'Unexpected drop from {previous_count} to {len(rows)} rows; refusing snapshot')
         target = folder / f'{day}.txt'
         if target.exists() and target.read_bytes() != content:
             raise ValueError(f'{target} already exists with different content')
         if not previous or previous[-1].read_bytes() != content:
             temporary.replace(target)
+            metadata = {'shortages_last_modified': modified, 'snapshot_date': day}
+            (ROOT / 'data/source/metadata.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
     finally:
         temporary.unlink(missing_ok=True)
-    data, register_modified = download(REGISTER)
-    dest = ROOT / 'data/source/register.xml'
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
-    metadata = {'shortages_last_modified': modified, 'register_last_modified': register_modified, 'retrieved_utc': datetime.now(timezone.utc).isoformat(), 'shortages_sha256': hashlib.sha256(content).hexdigest()}
-    (ROOT / 'data/source/metadata.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':
