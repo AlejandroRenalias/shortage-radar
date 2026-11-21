@@ -88,7 +88,9 @@ def download(url):
     except HTTPError as error:
         raise DownloadError(f'{error.url}: HTTP {error.code}') from error
     except URLError as error:
-        raise DownloadError(f'{url}: {error.reason}') from error
+        raise DownloadError(f'{url}: {" ".join(str(error.reason).split())}') from error
+    except OSError as error:
+        raise DownloadError(f'{url}: {" ".join(str(error).split())}') from error
 
 
 class DownloadError(Exception):
