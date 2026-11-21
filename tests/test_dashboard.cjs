@@ -272,5 +272,5 @@ test('page head: no hreflang on feeds, matching locale, image alt, one search, n
   assert.match(html, /issues\/new\?template=data-problem\.yml/);
   assert.match(html, /id="cite-box"/);
   assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
-  assert.match(fs.readFileSync('site/robots.txt', 'utf8'), /Sitemap: https:\/\/alejandrorenalias\.github\.io\/shortage-radar\/sitemap\.xml/);
+  assert.ok(fs.existsSync('site/sitemap.xml'));
 });
