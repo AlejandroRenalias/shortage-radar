@@ -79,3 +79,35 @@ def test_half_previous_count_is_accepted(tmp_path):
         return (PAGE_DATA, None) if url == PAGE else (csv_data(5), MODIFIED)
     update(tmp_path, date(2026, 11, 1), fetch)
     assert parse_rows((tmp_path / 'interchangeable-upcoming.txt').read_bytes()) == 5
+
+
+def test_missing_or_mismatched_upcoming_list_is_not_used(tmp_path):
+    (tmp_path / 'interchangeable.txt').write_bytes(csv_data(4))
+    def fetch(url):
+        return (PAGE_DATA, None) if url == PAGE else (csv_data(4), MODIFIED)
+    update(tmp_path, date(2026, 11, 1), fetch)
+    upcoming = tmp_path / 'interchangeable-upcoming.txt'
+    upcoming.unlink()
+    assert interchangeable_source(tmp_path, '2026-12-01')[0].name == 'interchangeable.txt'
+    assert not interchangeable_source(tmp_path, '2027-01-01')[2]
+    upcoming.write_bytes(csv_data(3))
+    assert not interchangeable_source(tmp_path, '2027-01-01')[2]
+
+
+def test_interrupted_replacement_is_not_used(tmp_path, monkeypatch):
+    (tmp_path / 'interchangeable.txt').write_bytes(csv_data(4))
+    def original_fetch(url):
+        return (PAGE_DATA, None) if url == PAGE else (csv_data(4), MODIFIED)
+    update(tmp_path, date(2026, 11, 1), original_fetch)
+    def changed_fetch(url):
+        return (PAGE_DATA, None) if url == PAGE else (csv_data(5), MODIFIED)
+    replace = Path.replace
+    def interrupt(self, target):
+        if target.name == 'interchangeable-metadata.json':
+            raise OSError('interrupted')
+        return replace(self, target)
+    monkeypatch.setattr(Path, 'replace', interrupt)
+    with pytest.raises(OSError, match='interrupted'):
+        update(tmp_path, date(2026, 11, 1), changed_fetch)
+    assert not interchangeable_source(tmp_path, '2026-11-01')[2]
+    assert not list(tmp_path.glob('.interchangeable-*'))

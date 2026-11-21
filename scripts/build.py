@@ -1,5 +1,6 @@
 """Build a static dataset from Fimea snapshots and its basic register."""
 import csv
+import hashlib
 import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
@@ -78,11 +79,13 @@ def events(snapshots):
 def interchangeable_source(folder, today):
     for name in ('interchangeable-upcoming', 'interchangeable'):
         metadata_path = folder / f'{name}-metadata.json'
-        if not metadata_path.exists():
+        data_path = folder / f'{name}.txt'
+        if not metadata_path.exists() or not data_path.exists():
             continue
         metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
-        if metadata['valid_from'] <= today <= metadata['valid_until']:
-            return folder / f'{name}.txt', metadata, True
+        if (metadata['valid_from'] <= today <= metadata['valid_until']
+                and hashlib.sha256(data_path.read_bytes()).hexdigest() == metadata.get('sha256')):
+            return data_path, metadata, True
     metadata = json.loads((folder / 'interchangeable-metadata.json').read_text(encoding='utf-8'))
     return folder / 'interchangeable.txt', metadata, False
 
@@ -96,10 +99,12 @@ def build():
     products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es})
     # The published quarterly list is product-level; never infer pack substitution.
     group_path, group_meta, group_valid = interchangeable_source(ROOT / 'data/source', datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat())
-    with group_path.open(encoding='cp1252', newline='') as f:
-        groups = {r['VNRNRO']: r['SUBSTITUUTIORYHMA'] for r in csv.DictReader(f, delimiter=';') if r['VNRNRO']}
+    groups = {}
+    if group_valid:
+        with group_path.open(encoding='cp1252', newline='') as f:
+            groups = {r['VNRNRO']: r['SUBSTITUUTIORYHMA'] for r in csv.DictReader(f, delimiter=';') if r['VNRNRO']}
     if not group_valid:
-        print('WARNING: interchangeable list outside its validity period; group codes omitted')
+        print('WARNING: no valid, matching interchangeable list; group codes omitted')
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
         e['listed_substitution_group'] = groups.get(e['NordicArticleNumber'], '') if group_valid else ''
@@ -111,6 +116,7 @@ def build():
     if register_metadata.exists():
         metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
     metadata['interchangeable'] = group_meta
+    metadata['interchangeable_available'] = group_valid
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'source_metadata': metadata}
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")

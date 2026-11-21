@@ -1,8 +1,11 @@
 """Download and validate Fimea's current and upcoming substitution lists."""
 import csv
+import hashlib
 import io
 import json
+import os
 import re
+import tempfile
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
@@ -108,15 +111,26 @@ def update(folder, today, fetch=download):
         if timestamp.tzinfo is None:
             raise ValueError('Last-Modified has no timezone')
         metadata = {'valid_from': start.isoformat(), 'valid_until': end.isoformat(),
-                    'last_modified_utc': timestamp.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'), 'dataset': title}
+                    'last_modified_utc': timestamp.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    'dataset': title, 'sha256': hashlib.sha256(content).hexdigest()}
         changes[folder / f'{name}.txt'] = content
         changes[folder / f'{name}-metadata.json'] = (json.dumps(metadata, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
-    changed = False
-    for path, content in changes.items():
-        if not path.exists() or path.read_bytes() != content:
-            path.write_bytes(content)
-            changed = True
+    pending = {path: content for path, content in changes.items() if not path.exists() or path.read_bytes() != content}
+    staged = {}
+    try:
+        for path, content in pending.items():
+            with tempfile.NamedTemporaryFile(dir=folder, prefix='.interchangeable-', delete=False) as file:
+                staged[path] = Path(file.name)
+                file.write(content)
+                file.flush()
+                os.fsync(file.fileno())
+        for path, temporary in staged.items():
+            temporary.replace(path)
             print(f'Updated {path.name}')
+    finally:
+        for temporary in staged.values():
+            temporary.unlink(missing_ok=True)
+    changed = bool(pending)
     if len(selected) == 1:
         for suffix in ('.txt', '-metadata.json'):
             path = folder / f'interchangeable-upcoming{suffix}'
