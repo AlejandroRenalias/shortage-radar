@@ -6,16 +6,16 @@ const source = fs.readFileSync('site/app.js', 'utf8').split('function drawList('
 const context = vm.createContext({Intl, Date});
 vm.runInContext(source, context);
 
-test('initial language is selected and content hidden before translation', () => {
+test('initial language is selected without inline scripts', () => {
   const html = fs.readFileSync('site/index.html', 'utf8');
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-  assert.match(html, /html\.i18n-pending body\{visibility:hidden\}/);
+  const script = fs.readFileSync('site/language.js', 'utf8');
+  assert.doesNotMatch(html, /<script>/);
   for (const [browser, saved, expected] of [['fi-FI', null, 'fi'], ['en-US', 'fi', 'fi'], ['fi-FI', 'en', 'en']]) {
     const classes = new Set();
     const document = {documentElement: {lang:'en', classList: {add: name => classes.add(name)}}};
     vm.runInNewContext(script, {document, navigator:{language:browser}, localStorage:{getItem:() => saved}});
     assert.equal(document.documentElement.lang, expected);
-    assert.ok(classes.has('i18n-pending'));
+    assert.equal(classes.has('i18n-pending'), expected === 'fi');
   }
 });
 
@@ -44,7 +44,7 @@ test('dates use fixed abbreviations and Finnish numeric format', () => {
   assert.equal(context.dateText('2026-09-21'), '21 Sep 2026');
   vm.runInContext("language = 'fi'", context);
   assert.equal(context.dateText('2026-09-21'), '21.9.2026');
-  assert.equal(context.timestampText('2026-11-21T00:30:00Z'), '21.11.2026 klo 00.30 UTC');
+  assert.equal(context.timestampText('2026-11-21T00:30:00Z'), '21.11.2026 klo 02.30 UTC+2');
 });
 
 test('Finnish counts, forms and shortage wording read naturally', () => {
@@ -55,9 +55,17 @@ test('Finnish counts, forms and shortage wording read naturally', () => {
   assert.equal(context.formText('peräruiskeliuos'), 'Peräruiske');
   assert.equal(context.groupName('B01', 'fi'), 'Veren ja verenkierron lääkkeet');
   const html = context.card({name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'B01'}, Date.UTC(2026,10,21));
-  assert.match(html, /Saatavuushäiriö alkanut 6\.11\.2026 \(15 päivää\)/);
+  assert.match(html, /Saatavuushäiriö ilmoitettu alkavaksi 6\.11\.2026 \(15 päivää\)/);
   assert.match(html, /Arvioidaan olevan taas saatavilla noin 1\.12\.2026 \(yrityksen arvio\)/);
   assert.match(html, /Lääkeryhmä: Veren ja verenkierron lääkkeet/);
+});
+
+test('Finnish substance aliases and diacritics match English records', () => {
+  for (const [query, substance] of [['parasetamoli','paracetamol'], ['ibuprofeeni','ibuprofen'], ['insuliini','insulin']]) {
+    assert.ok(context.searchMatches({substances: substance}, query));
+  }
+  assert.ok(context.searchMatches({name:'Äänekoski'}, 'aanekoski'));
+  assert.ok(vm.runInContext('Object.keys(aliases).length >= 60', context));
 });
 
 test('history and delay rendering uses translated dates and explains the sample', () => {
