@@ -3,3 +3,4 @@ data/source/register-metadata.json
 site/data.json
 __pycache__/
 .pytest_cache/
+site/shortages.csv

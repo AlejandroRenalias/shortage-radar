@@ -13,14 +13,14 @@ def api(path):
 def main():
     repo = os.environ['GITHUB_REPOSITORY']
     runs = api(f'repos/{repo}/actions/workflows/archive.yml/runs?branch=main&per_page=100')['workflow_runs']
-    dates = []
     for run in runs:
         jobs = api(f"repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")['jobs']
         for job in jobs:
             if job['name'] == 'archive' and job['conclusion'] == 'success' and job['completed_at']:
-                dates.append(datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00')))
-    if dates:
-        print(max(dates).astimezone(ZoneInfo('Europe/Helsinki')).date().isoformat())
+                completed = datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00'))
+                print(completed.astimezone(ZoneInfo('Europe/Helsinki')).date().isoformat())
+                return
+
 
 
 if __name__ == '__main__':

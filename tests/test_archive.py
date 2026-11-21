@@ -98,3 +98,28 @@ def test_download_checks_length_and_digest(monkeypatch):
     digest = base64.b64encode(hashlib.md5(b'abc').digest()).decode()
     monkeypatch.setattr(archive.urllib.request, 'urlopen', lambda *a, **k: Response({'Content-Length': '3', 'Content-MD5': digest}))
     assert archive.download('https://example.com')[0] == b'abc'
+
+
+def test_rejected_snapshot_is_saved_for_diagnosis(repository, monkeypatch, tmp_path):
+    target = tmp_path / 'rejected.txt'
+    monkeypatch.setenv('REJECTED_DOWNLOAD', str(target))
+    bad = content(413)
+    monkeypatch.setattr(archive, 'download', lambda _: (bad, None))
+    with pytest.raises(ValueError, match='Unexpected drop'):
+        archive.main('2026-11-02')
+    assert target.read_bytes() == bad
+
+
+def test_rejected_truncated_response_is_saved(monkeypatch, tmp_path):
+    import http.client
+    target = tmp_path / 'rejected.txt'
+    monkeypatch.setenv('REJECTED_DOWNLOAD', str(target))
+    class Response:
+        headers = {}
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self): raise http.client.IncompleteRead(b'partial', 10)
+    monkeypatch.setattr(archive.urllib.request, 'urlopen', lambda *a, **k: Response())
+    monkeypatch.setattr(archive.time, 'sleep', lambda _: None)
+    with pytest.raises(http.client.IncompleteRead): archive.download('https://example.com')
+    assert target.read_bytes() == b'partial'

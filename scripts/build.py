@@ -42,14 +42,19 @@ def read_snapshot(path):
 
 
 def register(path, wanted):
-    packages, products, substances = {}, {}, {}
+    packages, exact, products, substances = {}, set(), {}, {}
     for _, el in ET.iterparse(path, events=('end',)):
         if el.tag == 'Pakkaus':
             vnr = el.findtext('VNR-numero')
             package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '')
-            for number in [vnr] + [x.text for x in el.findall('VanhaVNR')]:
-                if number in wanted:
-                    packages[number] = package
+            if vnr in wanted:
+                packages[vnr] = package
+                exact.add(vnr)
+            for old in (x.text for x in el.findall('VanhaVNR')):
+                if old in wanted and old not in exact:
+                    previous = packages.get(old)
+                    if previous is None or (not previous[3] and vnr):
+                        packages[old] = package
             el.clear()
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')

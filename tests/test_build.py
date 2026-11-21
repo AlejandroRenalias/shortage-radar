@@ -144,3 +144,30 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
     assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary']
     assert records[0]['current VNR'] == '222222' and records[0]['veterinary'] == 'yes'
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_exact_vnr_takes_priority_over_old_vnr(tmp_path, reverse):
+    path = tmp_path / 'register.xml'
+    packages = [
+        '<Pakkaus Laakevalmiste-ref="a"><VNR-numero>196862</VNR-numero><VanhaVNR>551292</VanhaVNR></Pakkaus>',
+        '<Pakkaus Laakevalmiste-ref="b"><VNR-numero>551292</VNR-numero><VanhaVNR>196862</VanhaVNR></Pakkaus>',
+    ]
+    if reverse: packages.reverse()
+    path.write_text('<Perusrekisteri>' + ''.join(packages) + '<Laakevalmiste id="a"><Kauppanimi>First</Kauppanimi></Laakevalmiste><Laakevalmiste id="b"><Kauppanimi>Second</Kauppanimi></Laakevalmiste></Perusrekisteri>')
+    products = register(path, {'196862', '551292'})
+    assert (products['196862']['name'], products['196862']['current_vnr']) == ('First', '196862')
+    assert (products['551292']['name'], products['551292']['current_vnr']) == ('Second', '551292')
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_old_vnr_prefers_nonempty_current_number(tmp_path, reverse):
+    path = tmp_path / 'register.xml'
+    packages = [
+        '<Pakkaus Laakevalmiste-ref="empty"><VanhaVNR>550343</VanhaVNR></Pakkaus>',
+        '<Pakkaus Laakevalmiste-ref="filled"><VNR-numero>123456</VNR-numero><VanhaVNR>550343</VanhaVNR></Pakkaus>',
+    ]
+    if reverse: packages.reverse()
+    path.write_text('<Perusrekisteri>' + ''.join(packages) + '<Laakevalmiste id="empty"><Kauppanimi>Empty</Kauppanimi></Laakevalmiste><Laakevalmiste id="filled"><Kauppanimi>Filled</Kauppanimi></Laakevalmiste></Perusrekisteri>')
+    product = register(path, {'550343'})['550343']
+    assert (product['name'], product['current_vnr']) == ('Filled', '123456')

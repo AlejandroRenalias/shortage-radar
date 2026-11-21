@@ -10,17 +10,14 @@ on:
       last_checked:
         type: string
         required: false
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-  actions: read
-  issues: write
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
   build:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,6 +47,9 @@ jobs:
           path: site
           retention-days: 7
   deploy:
+    permissions:
+      pages: write
+      id-token: write
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -60,13 +60,16 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v5
   alert:
+    permissions:
+      contents: read
+      issues: write
     if: always() && github.event_name == 'schedule'
     needs: [build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
       group: pipeline-alert
-      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v7
       - env:
