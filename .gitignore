@@ -1,6 +1,8 @@
 data/source/register.xml
 data/source/register-metadata.json
 site/data.json
+site/current.json
+site/history.json
 __pycache__/
 .pytest_cache/
 site/shortages.csv

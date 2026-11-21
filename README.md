@@ -8,11 +8,17 @@ Shortage Radar is a searchable view and archive of reported medicine shortages i
 
 ![Finnish dashboard](docs/screenshot-fi.png)
 
+![English shortage list](docs/list-en.png)
+
+![Finnish shortage list](docs/list-fi.png)
+
 **This is not medical advice.** A listing does not establish whether a medicine is available at a particular pharmacy. Ask a pharmacist or doctor about your medicines.
 
 ## How it works
 
 A scheduled job downloads and validates Fimea's shortage file and saves a dated snapshot when its contents change. The site joins package records to the current basic register by VNR and builds a static dashboard. It can be searched by medicine, substance, ATC, company or VNR; it includes veterinary products. Earlier copies from the Internet Archive extend the timeline. The download links on the site provide the current dataset.
+
+The dashboard first loads `current.json` for the list, then loads `history.json` for the chart and analysis. The downloadable `data.json` retains the complete event history.
 
 The CSV uses UTF-8 with a BOM and contains package, medicine, company, date and veterinary fields. The JSON records the UTC build time as `generated_at` and the most recent successful archive check date as `last_checked`, which can be empty. When that date is unavailable, the site labels the build-time fallback and does not imply that the source was checked at build time.
 

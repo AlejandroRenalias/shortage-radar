@@ -139,6 +139,11 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     build.build()
     data = json.loads((tmp_path / 'site/data.json').read_text(encoding='utf-8'))
     assert data['last_checked'] == '2026-11-02' and data['generated_at'].endswith('+00:00')
+    current = json.loads((tmp_path / 'site/current.json').read_text(encoding='utf-8'))
+    history = json.loads((tmp_path / 'site/history.json').read_text(encoding='utf-8'))
+    assert len(current['events']) == 1 and 'history' not in current
+    assert history['first_capture_count'] == 1 and 'events' not in history
+    assert len(data['events']) == 1 and data['history'] == history['history']
     raw = (tmp_path / 'site/shortages.csv').read_bytes()
     assert raw.startswith(b'\xef\xbb\xbf')
     records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))

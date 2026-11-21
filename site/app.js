@@ -1,4 +1,4 @@
-let data, visible = 50;
+let data, historyData, historyFailed=false, visible = 50;
 const $ = id => document.getElementById(id);
 const esc = value => String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const copy = {
@@ -41,9 +41,13 @@ Object.assign(copy.en, {skip:'Skip to shortages', sortLabel:'Sort by', sortNewes
 Object.assign(copy.fi, {skip:'Siirry saatavuushäiriöihin', sortLabel:'Järjestä', sortNewest:'Uusimmat', sortName:'Nimi', sortLongest:'Pisimpään jatkuneet', longestTitle:'Pisimpään jatkuneet saatavuushäiriöt', longestNote:'Aika ilmoitetusta alkamispäivästä.', veterinary:'Eläinlääke', download:'Lataa aineisto:', checked:d=>`Tarkistettu ${d}`, stale:'Aineisto on tarkistettu yli 3 päivää sitten.'});
 Object.assign(copy.en, {buildOnly:'Build time; the last source check is unknown.', staleBuild:'The build is more than 3 days old.'});
 Object.assign(copy.fi, {buildOnly:'Koostamisaika; viimeisin lähteen tarkistus ei ole tiedossa.', staleBuild:'Koostamisesta on yli 3 päivää.'});
+Object.assign(copy.en, {aboutShort:'About ↗', form:'Form on the package (Finnish)', latest:d=>`Latest snapshot ${d}`, updated:d=>`Updated ${d}`, sourceError:'Fimea open data', historyError:'History could not be loaded.', delayHeadline:(a,b)=>`${a}–${b} of the observed shortages were still listed after the first estimated end date.`, delayBy:'Left by the estimate', delayPast:'Listed after the estimate', delayUncertain:'Timing uncertain', delayActive:n=>`${n} other shortages were still listed past the estimate.`, delayMethod:(n,g)=>`Among ${n} shortages that entered and left the list, captures were at most ${g} days apart at both ends. Removal from the list does not prove supply returned. The uncertain cases set the range; ongoing shortages are not included in it.`});
+Object.assign(copy.fi, {aboutShort:'Tietoa ↗', latest:d=>`Viimeisin tilannekuva ${d}`, updated:d=>`Päivitetty ${d}`, sourceError:'Fimean avoin data', historyError:'Historiaa ei voitu ladata.', delayHeadline:(a,b)=>`${a}–${b} havaituista saatavuushäiriöistä oli yhä listalla ensimmäisen arvioidun päättymispäivän jälkeen.`, delayBy:'Poistui arvioon mennessä', delayPast:'Listalla arvion jälkeen', delayUncertain:'Ajankohta epävarma', delayActive:n=>`${n} muuta saatavuushäiriötä oli edelleen listalla arvion jälkeen.`, delayMethod:(n,g)=>`Mukana on ${n} listalle tullutta ja siltä poistunutta häiriötä, joiden molemmissa päissä tilannekuvien väli oli enintään ${g} päivää. Listalta poistuminen ei todista saatavuuden palautumista. Epävarmat tapaukset määrittävät vaihteluvälin; jatkuvat häiriöt eivät sisälly siihen.`});
+copy.en.delayMethod=(n,g)=>`Among ${n} shortages that entered and left the list, captures were at most ${g} days apart at both ends. The first observed estimate may already have been revised. Removal does not prove supply returned; uncertain cases set the range and ongoing shortages are excluded.`;
+copy.fi.delayMethod=(n,g)=>`Mukana on ${n} listalle tullutta ja siltä poistunutta häiriötä, joiden molemmissa päissä tilannekuvien väli oli enintään ${g} päivää. Ensimmäistä havaittua arviota on voitu muuttaa jo aiemmin. Poistuminen ei todista saatavuuden palautumista; epävarmat tapaukset määrittävät vaihteluvälin ja jatkuvat häiriöt eivät sisälly siihen.`;
 const aliases = {parasetamoli:'paracetamol', ibuprofeeni:'ibuprofen', insuliini:'insulin', asetyylisalisyylihappo:'acetylsalicylic acid', amoksisilliini:'amoxicillin', atsitromysiini:'azithromycin', doksisykliini:'doxycycline', metformiini:'metformin', atorvastatiini:'atorvastatin', simvastatiini:'simvastatin', rosuvastatiini:'rosuvastatin', amlodipiini:'amlodipine', bisoprololi:'bisoprolol', metoprololi:'metoprolol', propranololi:'propranolol', losartaani:'losartan', kandesartaani:'candesartan', enalapriili:'enalapril', ramipriili:'ramipril', furosemidi:'furosemide', spironolaktoni:'spironolactone', varfariini:'warfarin', apiksabaani:'apixaban', rivaroksabaani:'rivaroxaban', klopidogreeli:'clopidogrel', omepratsoli:'omeprazole', pantopratsoli:'pantoprazole', esomepratsoli:'esomeprazole', levotyroksiini:'levothyroxine', prednisoloni:'prednisolone', hydrokortisoni:'hydrocortisone', deksametasoni:'dexamethasone', salbutamoli:'salbutamol', budesonidi:'budesonide', formoteroli:'formoterol', setiritsiini:'cetirizine', loratadiini:'loratadine', desloratadiini:'desloratadine', sertraliini:'sertraline', sitalopraami:'citalopram', essitalopraami:'escitalopram', fluoksetiini:'fluoxetine', venlafaksiini:'venlafaxine', duloksetiini:'duloxetine', mirtatsapiini:'mirtazapine', amitriptyliini:'amitriptyline', diatsepaami:'diazepam', oksatsepaami:'oxazepam', tematsepaami:'temazepam', tsolpideemi:'zolpidem', melatoniini:'melatonin', tramadoli:'tramadol', kodeiini:'codeine', morfiini:'morphine', oksikodoni:'oxycodone', gabapentiini:'gabapentin', pregabaliini:'pregabalin', levetirasetaami:'levetiracetam', lamotrigiini:'lamotrigine', karbamatsepiini:'carbamazepine', metotreksaatti:'methotrexate', allopurinoli:'allopurinol', diklofenaakki:'diclofenac', naprokseeni:'naproxen', ketoprofeeni:'ketoprofen', finasteridi:'finasteride', tamsulosiini:'tamsulosin', metronidatsoli:'metronidazole', flukonatsoli:'fluconazole', nitrofurantoiini:'nitrofurantoin', siprofloksasiini:'ciprofloxacin', klindamysiini:'clindamycin', fenoksimetyylipenisilliini:'phenoxymethylpenicillin', asikloviiri:'aciclovir', valasikloviiri:'valaciclovir', ondansetroni:'ondansetron', metoklopramidi:'metoclopramide'};
 const fold = s => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-function searchMatches(e, query) { const q=fold(query.trim()); const terms=[q, ...Object.entries(aliases).filter(([fi])=>fold(fi)===q).map(([,en])=>fold(en))]; return [e.name,e.substances,e.atc,e.Company,e.NordicArticleNumber].some(x=>terms.some(term=>fold(x).includes(term))); }
+function searchMatches(e, query) { const q=fold(query.trim()); const terms=[q, ...Object.entries(aliases).filter(([fi])=>{const key=fold(fi); return q.length>=3 && (key.startsWith(q) || q.startsWith(key.slice(0,-1)));}).map(([,en])=>fold(en))]; return [e.name,e.substances,e.atc,e.Company,e.NordicArticleNumber].some(x=>terms.some(term=>fold(x).includes(term))); }
 let language = 'en';
 try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : ((navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en'); } catch (_) { language = (typeof navigator !== 'undefined' && (navigator.language || '').toLowerCase().startsWith('fi')) ? 'fi' : 'en'; }
 const numberText = n => new Intl.NumberFormat(language === 'fi' ? 'fi-FI' : 'en-GB').format(n);
@@ -53,7 +57,7 @@ function parsedDate(s) { if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return null; 
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function formatDate(d) { return language === 'fi' ? `${d.getUTCDate()}.${d.getUTCMonth()+1}.${d.getUTCFullYear()}` : `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
 function dateText(s) { const d=parsedDate(s); return d ? formatDate(d) : '—'; }
-function timestampText(s) { const d=new Date(s); if (Number.isNaN(d.valueOf())) return ''; return new Intl.DateTimeFormat(language === 'fi' ? 'fi-FI' : 'en-GB', {timeZone:'Europe/Helsinki', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', timeZoneName:'short'}).format(d); }
+function timestampText(s) { const d=new Date(s); if (Number.isNaN(d.valueOf())) return ''; const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d); const get=k=>parts.find(p=>p.type===k).value; const local=new Date(Date.UTC(+get('year'),+get('month')-1,+get('day'))); return language==='fi' ? `${formatDate(local)} klo ${+get('hour')}.${get('minute')} Suomen aikaa` : `${formatDate(local)}, ${get('hour')}:${get('minute')} Helsinki time`; }
 function todayUTC() { const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()); const get = type => parts.find(p=>p.type===type).value; return Date.UTC(+get('year'),+get('month')-1,+get('day')); }
 function freshnessInfo(d, now = Date.now(), today = todayUTC()) {
   const t=copy[language], checked=parsedDate(d.last_checked);
@@ -104,7 +108,7 @@ function setLanguage() {
   document.querySelectorAll('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label',t[el.dataset.i18nAria]));
   $('help-title').textContent=t.helpTitle; $('help-text').textContent=t.help; $('list-title').textContent=t.title; $('search-hint').textContent=t.hint; $('search').placeholder=t.placeholder; $('search').setAttribute('aria-label',t.searchLabel);
   try { localStorage.setItem('language',language); } catch (_) {}
-  if(data) renderData(); else if (loadFailed) { $('updated').textContent=t.loadError; $('list').textContent=t.listError; } else { $('updated').textContent=t.loadingData; $('list').textContent=t.loading; $('delay-note').textContent=t.delayEmpty; }
+  if(data) renderData(); else if (loadFailed) { $('updated').textContent=t.loadError; $('list').innerHTML=`<p class="list-state">${esc(t.listError)} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceError)}</a></p>`; } else { $('updated').textContent=t.loadingData; $('list').textContent=t.loading; $('delay-note').textContent=t.delayEmpty; }
 }
 let loadFailed=false;
 $('language').value=language;
@@ -134,14 +138,12 @@ function drawChart(history, maxGap) {
   $('chart').innerHTML=`<svg viewBox="0 0 400 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)} · ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
 }
 function drawDelays(d, snapshotDate) {
-  const t=copy[language]; if(!d) { $('delay-note').textContent=t.delayEmpty; $('delay-list').innerHTML=''; return; }
-  const n=numberText, ex=d.excluded, pct=s=>`${Math.round(s*100)}${language === 'fi' ? ' ' : ''}%`;
-  let text=t.delaySample(n(d.sample_size),n(d.max_gap_days));
-  if(d.meaningful) { text+=t.delayResult(n(d.past_estimate),n(d.not_past_estimate),n(d.undetermined),pct(d.share_past_min),pct(d.share_past_max)); if(d.past_estimate) text+=t.delayMedian(t.dayRange(n(d.median_overrun_min_days),n(d.median_overrun_max_days))); }
-  else text+=t.delaySmall(n(d.min_sample));
-  text+=t.delayBias+t.activePast(n(d.active_past_estimate),dateText(snapshotDate),n(d.max_gap_days));
-  text+=t.delayExcluded(n(ex.listed_at_first_capture),n(ex.no_estimate),n(ex.wide_start_window),n(ex.wide_removal_window),n(ex.vnr_still_listed));
-  $('delay-note').textContent=text;
+  const t=copy[language]; if(!d) { $('delay-headline').textContent=''; $('delay-visual').innerHTML=''; $('delay-note').textContent=t.delayEmpty; $('delay-list').innerHTML=''; return; }
+  const n=numberText, pct=s=>`${Math.round(s*100)}${language === 'fi' ? ' ' : ''}%`;
+  $('delay-headline').textContent=d.meaningful ? t.delayHeadline(pct(d.share_past_min),pct(d.share_past_max)) : t.delaySample(n(d.sample_size),n(d.max_gap_days))+t.delaySmall(n(d.min_sample));
+  const values=[[t.delayBy,d.not_past_estimate],[t.delayPast,d.past_estimate],[t.delayUncertain,d.undetermined]], max=Math.max(...values.map(([,v])=>v),1);
+  $('delay-visual').innerHTML=(d.meaningful ? `<div class="delay-bars">${values.map(([label,value])=>`<div class="delay-row"><span>${esc(label)}</span><svg viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="1" fill="#e3ece4"/><rect width="${value/max*100}" height="1" fill="#157965"/></svg><strong>${n(value)}</strong></div>`).join('')}</div>` : '')+`<p>${esc(t.activePast(n(d.active_past_estimate),dateText(snapshotDate),n(d.max_gap_days)))}</p>`;
+  $('delay-note').textContent=t.delayMethod(n(d.sample_size),n(d.max_gap_days))+t.delayBias;
   $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3>`+d.examples.map(e=>`<p>${esc(e.name || e.vnr)} · ${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))} · ${esc(t.lastListed)} ${esc(dateText(e.last_seen))} · ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</p>`).join('') : '';
 }
 function drawDates(d) {
@@ -149,23 +151,27 @@ function drawDates(d) {
   if (meta.shortages_last_modified && timestampText(meta.shortages_last_modified)) sourceTimes.push(`${copy[language].shortageFile}: ${timestampText(meta.shortages_last_modified)}`);
   if (meta.register_last_modified && timestampText(meta.register_last_modified)) sourceTimes.push(`${copy[language].register}: ${timestampText(meta.register_last_modified)}`);
   $('source-times').textContent = sourceTimes.join('; ');
-  const freshness=freshnessInfo(d); $('freshness').textContent=freshness.text+(freshness.stale ? ` · ${freshness.warning}` : ''); $('freshness').className=freshness.stale ? 'fresh-warning' : '';
-  $('updated').textContent = copy[language].latest(dateText(d.snapshot_date)); $('start').textContent = dateText(d.archive_start);
-  const t=copy[language], own=d.history.filter(h=>!h.imported).length, imported=d.history.length-own;
-  const gaps=d.history.filter(h=>h.gap_days>d.max_gap_days).map(h=>t.gapBefore(numberText(h.gap_days),dateText(h.date)));
-  $('history-note').textContent=t.historySummary(numberText(d.history.length),dateText(d.archive_start),numberText(imported),numberText(own),gaps.join('; '),numberText(d.events.filter(e=>e.listed_at_first_capture).length));
-  const rss=(d.rss_counts || []).filter(c=>c.items);
+  const newer=parsedDate(d.last_checked) && parsedDate(d.snapshot_date) && d.snapshot_date>d.last_checked;
+  const freshness=freshnessInfo(d); $('freshness').textContent=newer ? '' : freshness.text+(freshness.stale ? ` · ${freshness.warning}` : ''); $('freshness').className=!newer && freshness.stale ? 'fresh-warning' : '';
+  $('updated').textContent = newer ? copy[language].updated(dateText(d.snapshot_date)) : copy[language].latest(dateText(d.snapshot_date)); $('start').textContent = dateText(d.archive_start);
+  if (!historyData) { if(historyFailed) { $('history-note').innerHTML=`${esc(copy[language].historyError)} <a href="https://fimea.fi/en/about_us/open-data">${esc(copy[language].sourceError)}</a>`; $('delay-note').textContent=copy[language].historyError; } return; }
+  const h=historyData, t=copy[language], own=h.history.filter(x=>!x.imported).length, imported=h.history.length-own;
+  const gaps=h.history.filter(x=>x.gap_days>h.max_gap_days).map(x=>t.gapBefore(numberText(x.gap_days),dateText(x.date)));
+  $('history-note').textContent=t.historySummary(numberText(h.history.length),dateText(d.archive_start),numberText(imported),numberText(own),gaps.join('; '),numberText(h.first_capture_count));
+  const rss=(h.rss_counts || []).filter(c=>c.items);
   $('rss-note').textContent=rss.length ? t.rssSummary(rss.map(c=>t.rssItem(dateText(c.date),numberText(c.items))).join('; ')) : '';
-  drawChart(d.history,d.max_gap_days); drawDelays(d.delays,d.snapshot_date);
+  drawChart(h.history,h.max_gap_days); drawDelays(h.delays,d.snapshot_date);
 }
 function renderData() {
   const d=data, t=copy[language], current=d.events.filter(e => !e.removed_on), companies={}, atc={};
   current.forEach(e => {const company=e.Company || t.unknownCompany; companies[company]=(companies[company] || 0)+1; const group=e.atc && groupName(e.atc); if(group) atc[group]=(atc[group] || 0)+1;});
   drawDates(d); $('total').textContent=numberText(current.length); $('companies').textContent=numberText(Object.keys(companies).length);
-  const now=todayUTC(); const longest=current.filter(e=>parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf()<=now).sort((a,b)=>a.UnavailableFrom.localeCompare(b.UnavailableFrom)).slice(0,5); $('longest-list').innerHTML=longest.map(e=>`<li>${esc(e.name || t.unavailable)}<small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))} · ${esc(t.days(Math.floor((now-parsedDate(e.UnavailableFrom).valueOf())/86400000)))}</small></li>`).join('');
+  const now=todayUTC(); const longest=current.filter(e=>parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf()<=now).sort((a,b)=>a.UnavailableFrom.localeCompare(b.UnavailableFrom)).slice(0,5);
+  $('longest-list').innerHTML=longest.map(e=>{const duration=t.days(Math.floor((now-parsedDate(e.UnavailableFrom).valueOf())/86400000)).replace(/ /g,'\u00a0'); return `<li><div><strong>${esc(e.name || t.unavailable)}</strong><small>${esc([e.pack,e.Company].filter(Boolean).join(' · '))}</small><small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))}</small></div><span class="duration">${esc(duration)}</span></li>`;}).join('');
   bars('atc',atc,30); bars('company',companies,10); drawList();
 }
-fetch('data.json').then(r => {if (!r.ok) throw Error(); return r.json()}).then(d => {data=d; renderData();}).catch(() => {loadFailed=true; setLanguage();});
+fetch('current.json').then(r => {if (!r.ok) throw Error(); return r.json()}).then(d => {data=d; renderData(); requestAnimationFrame(()=>fetch('history.json').then(r=>{if(!r.ok) throw Error(); return r.json()}).then(h=>{historyData=h; renderData();}).catch(()=>{historyFailed=true; renderData();}));}).catch(() => {data=undefined; loadFailed=true; setLanguage();});
 $('search').addEventListener('input', () => {visible=50; if(data) drawList()}); $('more').addEventListener('click', () => {visible+=50; drawList()});
 
 $('sort').addEventListener('change', () => {visible=50; if(data) drawList();});
+document.documentElement.dataset.appReady='true';
