@@ -79,7 +79,7 @@ def week_summary(es, snapshots, history):
 def _entry_text(e, lang, kind):
     t = TEXT[lang]
     pack = (e.get('pack_label') or {}).get(lang) or e.get('pack', '')
-    name = name_with_strength(e.get('name'), e.get('strength'), lang) if e.get('name') else f"VNR {e['NordicArticleNumber']}"
+    name = name_with_strength(e.get('name'), e.get('strength'), lang, pack) if e.get('name') else f"VNR {e['NordicArticleNumber']}"
     d = lambda value: date_text(value, lang)
     when = t['first_seen'](d(e['first_seen']), d(e['first_seen_after'])) if kind == 'new' else t['last_seen'](d(e['last_seen']), d(e['removed_on']))
     lines = [when, f"{t['since']}: {d(e['UnavailableFrom']) or t['none']}", f"{t['end']}: {d(e['EndingDate']) or t['none']}", f"{t['notified']}: {d(e['DateOfTheNotification']) or t['none']}", f"{t['company']}: {e['Company']}", f"VNR: {e['NordicArticleNumber']}"]

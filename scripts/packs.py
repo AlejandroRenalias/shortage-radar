@@ -55,15 +55,24 @@ def pack_label(text, unit='', form=''):
     return {'en': f'{text} {unit}', 'fi': f'{text} {unit}'}
 
 
+# Finnish unit words in a register strength, for English readers.
+STRENGTH_WORDS = {'tuntia': 'hours', 'tunti': 'hour', 'annosta': 'dose', 'annos': 'dose', 'mikrog': 'microg', 'yksikköä': 'units', 'yksikkö': 'unit', 'vuorokautta': 'day', 'vuorokausi': 'day'}
+STRENGTH_WORD = re.compile(r'(?<![^\W\d_])(' + '|'.join(STRENGTH_WORDS) + r')(?![^\W\d_])', re.IGNORECASE)
+
+
 def strength_label(strength, lang):
-    """A strength as written for a language: Finnish uses a decimal comma, as in "2,5 mg"."""
+    """A strength as written for a language: Finnish keeps the register wording with a decimal comma ("2,5 mg"); English translates common unit words."""
     text = ' '.join((strength or '').split())
-    return re.sub(r'(?<=\d)\.(?=\d)', ',', text) if lang == 'fi' else text
+    if lang == 'fi':
+        return re.sub(r'(?<=\d)\.(?=\d)', ',', text)
+    text = re.sub(r'(?<=\d )h(?![^\W\d_])', 'hours', text)
+    return STRENGTH_WORD.sub(lambda m: STRENGTH_WORDS[m.group(1).lower()], text)
 
 
-def name_with_strength(name, strength, lang):
-    """The medicine name followed by its strength, unless the name already carries it."""
+def name_with_strength(name, strength, lang, pack=''):
+    """The medicine name followed by its strength, unless the name or the pack label already starts with it."""
     label = strength_label(strength, lang)
-    if not label or label.lower() in (name or '').lower():
+    pack, own = (pack or '').lower(), label.lower()
+    if not label or (pack.startswith(own) and not re.match(r'[^\W_]|[.,]', pack[len(own):len(own) + 1])) or own in (name or '').lower():
         return name or ''
     return f'{name} {label}' if name else label

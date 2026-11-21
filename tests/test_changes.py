@@ -144,3 +144,21 @@ def test_feed_titles_name_the_strength_and_keep_the_entry_ids():
     plain = feeds(es, snapshots, history)
     assert before == {lang: [x.findtext(ATOM + 'id') for x in ET.fromstring(plain[lang].encode('utf-8')).findall(ATOM + 'entry')] for lang in ('feed.xml', 'feed-fi.xml')}
     assert 'Apixaban Sandoz, 60 tablets' in plain['feed.xml']
+
+
+def test_feed_title_translates_strength_words_for_english_only_and_skips_a_strength_the_pack_has():
+    snapshots = [('2026-11-01', [row('111111')]), ('2026-11-20', [row('111111'), row('222222'), row('333333')])]
+    es, history = events(snapshots)
+    for e in es:
+        e['name'] = 'Patch'
+        if e['NordicArticleNumber'] == '222222':
+            e['strength'], e['pack_label'] = '20 mikrog / 24 tuntia', {'en': '24 patches', 'fi': '24 laastaria'}
+        if e['NordicArticleNumber'] == '333333':
+            e['strength'], e['pack_label'] = '10 mg', {'en': '10 mg + 2 ml', 'fi': '10 mg + 2 ml'}
+    files = feeds(es, snapshots, history)
+    for name in ('feed.xml', 'feed-fi.xml'):
+        titles = sorted(x.findtext(ATOM + 'title') for x in ET.fromstring(files[name].encode('utf-8')).findall(ATOM + 'entry'))
+        if name == 'feed.xml':
+            assert titles == ['New on the list: Patch 20 microg / 24 hours, 24 patches', 'New on the list: Patch, 10 mg + 2 ml']
+        else:
+            assert titles == ['Uusi listalla: Patch 20 mikrog / 24 tuntia, 24 laastaria', 'Uusi listalla: Patch, 10 mg + 2 ml']

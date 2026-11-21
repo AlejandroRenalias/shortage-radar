@@ -77,8 +77,20 @@ const queryFromUrl = search => { try { return (new URLSearchParams(search).get('
 const aliases = {parasetamoli:'paracetamol', ibuprofeeni:'ibuprofen', insuliini:'insulin', asetyylisalisyylihappo:'acetylsalicylic acid', amoksisilliini:'amoxicillin', atsitromysiini:'azithromycin', doksisykliini:'doxycycline', metformiini:'metformin', atorvastatiini:'atorvastatin', simvastatiini:'simvastatin', rosuvastatiini:'rosuvastatin', amlodipiini:'amlodipine', bisoprololi:'bisoprolol', metoprololi:'metoprolol', propranololi:'propranolol', losartaani:'losartan', kandesartaani:'candesartan', enalapriili:'enalapril', ramipriili:'ramipril', furosemidi:'furosemide', spironolaktoni:'spironolactone', varfariini:'warfarin', apiksabaani:'apixaban', rivaroksabaani:'rivaroxaban', klopidogreeli:'clopidogrel', omepratsoli:'omeprazole', pantopratsoli:'pantoprazole', esomepratsoli:'esomeprazole', levotyroksiini:'levothyroxine', prednisoloni:'prednisolone', hydrokortisoni:'hydrocortisone', deksametasoni:'dexamethasone', salbutamoli:'salbutamol', budesonidi:'budesonide', formoteroli:'formoterol', setiritsiini:'cetirizine', loratadiini:'loratadine', desloratadiini:'desloratadine', sertraliini:'sertraline', sitalopraami:'citalopram', essitalopraami:'escitalopram', fluoksetiini:'fluoxetine', venlafaksiini:'venlafaxine', duloksetiini:'duloxetine', mirtatsapiini:'mirtazapine', amitriptyliini:'amitriptyline', diatsepaami:'diazepam', oksatsepaami:'oxazepam', tematsepaami:'temazepam', tsolpideemi:'zolpidem', melatoniini:'melatonin', tramadoli:'tramadol', kodeiini:'codeine', morfiini:'morphine', oksikodoni:'oxycodone', gabapentiini:'gabapentin', pregabaliini:'pregabalin', levetirasetaami:'levetiracetam', lamotrigiini:'lamotrigine', karbamatsepiini:'carbamazepine', metotreksaatti:'methotrexate', allopurinoli:'allopurinol', diklofenaakki:'diclofenac', naprokseeni:'naproxen', ketoprofeeni:'ketoprofen', finasteridi:'finasteride', tamsulosiini:'tamsulosin', metronidatsoli:'metronidazole', flukonatsoli:'fluconazole', nitrofurantoiini:'nitrofurantoin', siprofloksasiini:'ciprofloxacin', klindamysiini:'clindamycin', fenoksimetyylipenisilliini:'phenoxymethylpenicillin', asikloviiri:'aciclovir', valasikloviiri:'valaciclovir', ondansetroni:'ondansetron', metoklopramidi:'metoclopramide'};
 const fold = s => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 // Strengths are stored with decimal points; Finnish readers write and search "2,5".
-function strengthText(e) { const text=String(e.strength || '').replace(/\s+/g,' ').trim(); return language === 'fi' ? text.replace(/(\d)\.(?=\d)/g,'$1,') : text; }
-function nameWithStrength(e) { const name=e.name || '', strength=strengthText(e); return !strength || name.toLocaleLowerCase().includes(strength.toLocaleLowerCase()) ? name : `${name} ${strength}`.trim(); }
+// Strengths are raw register wording. Finnish readers get a decimal comma; English readers get common Finnish unit words translated. A number and its unit never break apart.
+const strengthWords = {tuntia:'hours', tunti:'hour', annosta:'dose', annos:'dose', mikrog:'microg', 'yksikköä':'units', 'yksikkö':'unit', vuorokautta:'day', vuorokausi:'day'};
+function strengthText(e) {
+  let text=String(e.strength || '').replace(/\s+/g,' ').trim();
+  text = language === 'fi' ? text.replace(/(\d)\.(?=\d)/g,'$1,') : text.replace(/(?<=\d )h(?![\p{L}])/gu,'hours').replace(/(?<![\p{L}])(tuntia|tunti|annosta|annos|mikrog|yksikköä|yksikkö|vuorokautta|vuorokausi)(?![\p{L}])/giu, w => strengthWords[w.toLocaleLowerCase()]);
+  return text.replace(/(\d) (?=[\p{L}%µ])/gu,'$1\u00a0');
+}
+const plainText = s => String(s || '').replace(/\u00a0/g,' ').toLocaleLowerCase();
+// The strength to show next to a name or pack: nothing when the pack label already starts with it ("10 mg + 2 ml").
+function strengthShown(e) {
+  const strength=strengthText(e), pack=plainText(packText(e)), own=plainText(strength);
+  return !strength || (pack.startsWith(own) && !/^[\p{L}\d.,]/u.test(pack.slice(own.length))) ? '' : strength;
+}
+function nameWithStrength(e) { const name=e.name || '', strength=strengthShown(e); return !strength || plainText(name).includes(plainText(strength)) ? name : `${name} ${strength}`.trim(); }
 const foldNumbers = s => s.replace(/(\d),(?=\d)/g,'$1.');
 const NUMBER = /^\d+(?:\.\d*)?$/;
 function searchMatches(e, query) {
@@ -125,7 +137,7 @@ function packText(e) { return (e.pack_label && e.pack_label[language]) || e.pack
 function formAndPack(e) {
   const form=formText(e.form), pack=packText(e);
   // A pack such as "98 tablets" already names the form, so the form is not repeated.
-  return form.length > 3 && pack.toLocaleLowerCase().includes(form.toLocaleLowerCase().slice(0,-1)) ? [strengthText(e),pack] : [form,strengthText(e),pack];
+  return form.length > 3 && pack.toLocaleLowerCase().includes(form.toLocaleLowerCase().slice(0,-1)) ? [strengthShown(e),pack] : [form,strengthShown(e),pack];
 }
 function groupName(atc, lang = language) {
   const key = atc?.startsWith('S01') ? 'eye' : atc?.startsWith('S02') ? 'ear' : (atc || '')[0];
@@ -139,7 +151,7 @@ function card(e, now) {
   const late=end && end.valueOf()<now;
   const expectation=end ? `${t.expected} ${dateText(e.EndingDate)} (${t.estimate}).` : t.unknown;
   const group=groupName(e.atc);
-  const details=[[t.form,e.form],[t.strength,e.strength],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
+  const details=[[t.form,e.form],[t.strength,strengthText(e)],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
   return `<article class="row"><div class="card-heading"><h3>${esc(e.name || t.unavailable)}</h3><span class="status ${upcoming ? 'upcoming' : ''}">${esc(status)}</span>${(e.atc || '').startsWith('Q') ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</div><p class="form">${esc(formAndPack(e).filter(Boolean).join(' · '))}</p><p class="group">${esc(t.group)}: ${esc(group)}</p><p class="status-sentence">${esc(sentence)}</p><p>${esc(expectation)} ${late ? `<strong class="late">${esc(t.late)}.</strong>` : ''}</p><details><summary>${esc(t.details)}</summary><dl>${details.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value || '—')}</dd></div>`).join('')}</dl><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${t.moreInfoUrl}">${esc(t.moreInfoLink)} ↗</a></p></details></article>`;
 }
 function drawList() {

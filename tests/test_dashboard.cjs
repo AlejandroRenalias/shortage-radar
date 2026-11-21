@@ -179,16 +179,16 @@ test('this week summary and how-we-count note state their window and counts', ()
 test('strength is part of the main line, with a Finnish decimal comma', () => {
   const apixaban = {name:'Apixaban Sandoz', strength:'2.5 mg', form:'tabletti, kalvopäällysteinen', pack_label:{en:'60 tablets', fi:'60 tablettia'}, UnavailableFrom:'2026-11-06', atc:'B01'};
   vm.runInContext("language='en'", context);
-  assert.deepEqual(Array.from(context.formAndPack(apixaban)), ['2.5 mg', '60 tablets']);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2\.5 mg · 60 tablets<\/p>/);
-  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', strength:'10 mg/ml', pack:'5 ml'})), ['Injection', '10 mg/ml', '5 ml']);
+  assert.deepEqual(Array.from(context.formAndPack(apixaban)), ['2.5 mg', '60 tablets']);
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2\.5 mg · 60 tablets<\/p>/);
+  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', strength:'10 mg/ml', pack:'5 ml'})), ['Injection', '10 mg/ml', '5 ml']);
   assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', pack:'5 ml'})).filter(Boolean), ['Injection', '5 ml']);
   vm.runInContext("language='fi'", context);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2,5 mg · 60 tablettia<\/p>/);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<dd>2\.5 mg<\/dd>/);
-  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2,5 mg');
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2,5 mg · 60 tablettia<\/p>/);
+  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<dd>2,5 mg<\/dd>/);
+  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2,5 mg');
   vm.runInContext("language='en'", context);
-  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2.5 mg');
+  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2.5 mg');
   assert.equal(context.nameWithStrength({name:'Burana 400 mg', strength:'400 mg'}), 'Burana 400 mg');
   assert.equal(context.nameWithStrength({name:'Burana'}), 'Burana');
 });
@@ -207,4 +207,24 @@ test('search finds a package by strength with comma and point folded', () => {
   assert.deepEqual(hits('apixaban sandoz'), ['2.5 mg', '5 mg']);
   assert.deepEqual(hits('apixaban 50 mg'), []);
   assert.deepEqual(hits('584836'), ['2.5 mg']);
+});
+
+test('strength is not repeated, never breaks between number and unit, and translates unit words in English only', () => {
+  const octreotide = {name:'Octreotide ratiopharm', strength:'10 mg', form:'injektiokuiva-aine', pack:'10 mg + 2 ml', pack_label:{en:'10 mg + 2 ml', fi:'10 mg + 2 ml'}, UnavailableFrom:'2026-11-06', atc:'H01'};
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'`, context);
+    assert.deepEqual(Array.from(context.formAndPack(octreotide)).filter(Boolean), [context.formText(octreotide.form), '10 mg + 2 ml']);
+    assert.equal(context.nameWithStrength(octreotide), 'Octreotide ratiopharm');
+  }
+  assert.equal(context.nameWithStrength({name:'X', strength:'10 mg', pack_label:{en:'100 mg'}}), 'X 10 mg');
+  vm.runInContext("language='en'", context);
+  assert.equal(context.nameWithStrength({name:'Octreotide ratiopharm', strength:'30 mg'}), 'Octreotide ratiopharm 30 mg');
+  assert.doesNotMatch(context.nameWithStrength({name:'Octreotide ratiopharm', strength:'30 mg'}), /30 mg/);
+  for (const [raw, en] of [['20 mikrog / 24 tuntia', '20 microg / 24 hours'], ['5 mikrog/tunti', '5 microg/hour'], ['24 h', '24 hours'], ['20 mikrog/annos', '20 microg/dose'], ['200 Speywood-yksikköä/ml', '200 Speywood-units/ml'], ['3 mg / vuorokausi', '3 mg / day']]) {
+    vm.runInContext("language='en'", context);
+    assert.equal(context.strengthText({strength:raw}), en, raw);
+    vm.runInContext("language='fi'", context);
+    assert.equal(context.strengthText({strength:raw}), raw.replace(/(\d) (?=[\p{L}%µ])/gu, '$1 '), raw);
+  }
+  vm.runInContext("language='en'", context);
 });

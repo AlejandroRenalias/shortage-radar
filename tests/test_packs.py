@@ -48,3 +48,24 @@ def test_name_with_strength():
     assert name_with_strength('Apixaban Sandoz', '2.5 mg', 'fi') == 'Apixaban Sandoz 2,5 mg'
     assert name_with_strength('Burana 400 mg', '400 mg', 'en') == 'Burana 400 mg'
     assert name_with_strength('Burana', '', 'en') == 'Burana'
+
+
+@pytest.mark.parametrize('raw,en', [
+    ('20 mikrog / 24 tuntia', '20 microg / 24 hours'),
+    ('5 mikrog/tunti', '5 microg/hour'),
+    ('24 h', '24 hours'),
+    ('20 mikrog/annos', '20 microg/dose'),
+    ('200 Speywood-yksikköä/ml', '200 Speywood-units/ml'),
+    ('3 mg / vuorokausi', '3 mg / day'),
+    ('10 mg', '10 mg'),
+])
+def test_english_strength_translates_common_finnish_unit_words(raw, en):
+    assert strength_label(raw, 'en') == en
+    assert strength_label(raw, 'fi') == raw
+
+
+def test_strength_is_not_repeated_when_the_pack_label_starts_with_it():
+    assert name_with_strength('Octreotide ratiopharm', '10 mg', 'en', '10 mg + 2 ml') == 'Octreotide ratiopharm'
+    assert name_with_strength('Octreotide ratiopharm', '10 mg', 'en', '100 mg') == 'Octreotide ratiopharm 10 mg'
+    assert name_with_strength('Octreotide ratiopharm', '22.5 mg', 'fi', '22,5 mg + 2 ml') == 'Octreotide ratiopharm'
+    assert name_with_strength('Apixaban Sandoz', '5 mg', 'en', '60 tablets') == 'Apixaban Sandoz 5 mg'
