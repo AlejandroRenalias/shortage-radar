@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from build import HEADER, events, read_snapshot, register
+from build import HEADER, delay_stats, events, read_snapshot, register
 
 
 def row(end='2026-12-01', vnr='012345'):
@@ -49,3 +49,51 @@ def test_register_groups_follow_product_references(tmp_path):
     assert products['012346']['substitution_group'] == '0042'
     assert products['012347']['substitution_group'] == ''
     assert '999999' not in products
+
+
+
+def test_first_capture_is_marked_and_windows_are_kept():
+    result, history = events([('2024-11-18', [row()]), ('2026-09-15', [row(vnr='222222')]), ('2026-09-20', [])])
+    first, second = result
+    assert first['listed_at_first_capture'] and first['first_seen_after'] is None
+    assert first['last_seen'] == '2024-11-18' and first['removed_on'] == '2026-09-15'
+    assert not second['listed_at_first_capture'] and second['first_seen_after'] == '2024-11-18'
+    assert second['removed_on'] == '2026-09-20'
+    assert [h['gap_days'] for h in history] == [None, 666, 5]
+
+
+def test_package_still_listed_is_flagged_on_removal():
+    changed = dict(row(), UnavailableFrom='2026-11-05')
+    result, _ = events([('2026-11-01', [row()]), ('2026-11-04', [changed])])
+    assert result[0]['removed_on'] == '2026-11-04' and result[0]['vnr_listed_at_removal']
+
+
+def test_delay_stats_bounds_and_exclusions():
+    def ev(vnr, first_after, first, last, removed, end, **extra):
+        return dict(dict(NordicArticleNumber=vnr, first_seen_after=first_after, first_seen=first, last_seen=last, removed_on=removed, first_estimated_end=end, listed_at_first_capture=False), **extra)
+    all_events = [
+        ev('1', '2026-10-01', '2026-10-03', '2026-10-20', '2026-10-24', '2026-10-10'),   # past the estimate
+        ev('2', '2026-10-01', '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10'),   # gone by it
+        ev('3', '2026-10-01', '2026-10-03', '2026-10-08', '2026-10-12', '2026-10-10'),   # cannot be told
+        ev('4', None, '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10', listed_at_first_capture=True),
+        ev('5', '2024-11-18', '2026-09-15', '2026-10-05', '2026-10-08', '2026-10-10'),   # first seen after a long gap
+        ev('6', '2026-10-01', '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10', vnr_listed_at_removal=True),
+        ev('7', '2026-10-01', '2026-10-03', '2026-10-05', None, '2026-10-10'),            # still listed
+    ]
+    stats = delay_stats(all_events)
+    assert (stats['sample_size'], stats['past_estimate'], stats['not_past_estimate'], stats['undetermined']) == (3, 1, 1, 1)
+    assert stats['excluded'] == {'listed_at_first_capture': 1, 'no_estimate': 0, 'wide_start_window': 1, 'wide_removal_window': 0, 'vnr_still_listed': 1}
+    assert (stats['median_overrun_min_days'], stats['median_overrun_max_days']) == (10, 14)
+    assert not stats['meaningful'] and 'share_past_min' not in stats
+
+
+def test_imported_dates_yield_to_own_snapshots(tmp_path, monkeypatch):
+    import build
+    for folder, day in (('', '2026-11-21'), ('imported', '2026-11-21'), ('imported', '2026-11-17')):
+        target = tmp_path / 'data/snapshots' / folder
+        target.mkdir(parents=True, exist_ok=True)
+        (target / f'{day}.txt').write_text(';'.join(f'"{c}"' for c in HEADER) + '\n"012345";"K";"2026-11-01";"";"2026-10-01";"2026-11-01";"' + (folder or 'own') + '"\n', encoding='utf-8')
+    monkeypatch.setattr(build, 'ROOT', tmp_path)
+    snapshots, imported = build.load_snapshots()
+    assert [d for d, _ in snapshots] == ['2026-11-17', '2026-11-21']
+    assert snapshots[1][1][0]['Company'] == 'own' and imported == {'2026-11-17'}
