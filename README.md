@@ -12,7 +12,7 @@ The dashboard searches names, substances, ATC codes, companies and package VNRs.
 
 The first capture has 751 rows, 743 matched product names and 8 unmatched VNRs: `422093`, `433660`, `522103`, `531797`, `541749`, `572154`, `583857`, `584836`. Names are joined to the current register and may not describe historical products as they were at the time. The basic register was chosen because Fimea publishes a direct, nightly updated XML download with package, product and substance references; no account or catalogue lookup is needed. It is large (about 200 MB), but is streamed during processing and not committed.
 
-Fimea also publishes a [machine-readable interchangeable-products list](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto). Its Q4 2026 groups are included in the dataset as `listed_substitution_group` (590 current records match). They are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. Update the quarterly source and its `interchangeable-metadata.json` validity dates and attribution together. Builds warn and omit the group codes outside the configured validity period. The dashboard does not suggest alternatives.
+Fimea also publishes a [machine-readable interchangeable-products list](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto). Its groups are included in the dataset as `listed_substitution_group`. They are not recommendations: Fimea states that the group alone does not establish package-size interchangeability. A monthly update validates the current list and retains the next list when published. Builds select the list valid on the build date in Helsinki and verify its checksum against its metadata. If no matching list is valid, group codes are omitted and the dashboard shows a notice. The dashboard does not suggest alternatives.
 
 The 2025-09-27 Internet Archive capture was attempted using the raw `id_` URL and returned HTTP 404, so it was not imported.
 
@@ -35,7 +35,7 @@ python -m pytest -q
 python -m http.server 8000 --directory site
 ```
 
-Open `http://localhost:8000/`. The local HTTP server is only for preview: the site itself is static. The archive command downloads current public Fimea data and writes this repository's data files. Update the quarterly interchangeable list deliberately from Fimea when its period changes.
+Open `http://localhost:8000/`. The local HTTP server is only for preview: the site itself is static. The archive command downloads current public Fimea data and writes this repository's data files. The interchangeable list is updated monthly and can also be refreshed with `python scripts/update_interchangeable.py`.
 
 ## Attribution and licence
 
@@ -45,6 +45,6 @@ Data is provided by the **Finnish Medicines Agency Fimea**, under [CC BY 4.0](ht
 | --- | --- | --- | --- |
 | Supply shortages | [Shortages.txt](https://data.pilvi.fimea.fi/avoin-data/Shortages.txt) | 2026-11-20 23:20:01 | Archived, parsed, joined and aggregated |
 | Basic register of medicinal products | [XML and documentation](https://fimea.fi/en/databases_and_registers/basic-register-xml) | 2026-11-21 00:30:41 | Selected package, product and substance fields joined by VNR |
-| Interchangeable medicinal products, 1 October–31 December 2026 | [Fimea list and documentation](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto) | 2026-08-24 11:55:28 | Selected group codes joined by VNR |
+| Interchangeable medicinal products | [Fimea list and documentation](https://fimea.fi/laakehaut_ja_luettelot/laakevaihto/tietokantaan_ladattava_tiedosto) | [List metadata](data/source/interchangeable-metadata.json) | Selected group codes joined by VNR |
 
-The most recent snapshot's shortage timestamp is in [`data/source/metadata.json`](data/source/metadata.json); the basic-register timestamp is captured during each build. The dashboard displays both along with the interchangeable-list timestamp. The interchangeable list is the dated Q4 copy described above. Source release times beyond these HTTP timestamps were not available from the files.
+The most recent snapshot's shortage timestamp is in [`data/source/metadata.json`](data/source/metadata.json); the basic-register timestamp is captured during each build. The dashboard displays both along with the selected interchangeable-list timestamp. Source release times beyond these HTTP timestamps were not available from the files.

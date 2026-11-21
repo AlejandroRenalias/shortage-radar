@@ -20,7 +20,13 @@ function drawChart(history) {
 fetch('data.json').then(r => {if (!r.ok) throw Error('Data unavailable'); return r.json()}).then(d => {
   data = d; const current = d.events.filter(e => !e.removed_on), companies = {}, atc = {};
   const meta = d.source_metadata;
-  $('source-times').textContent = `Supply shortages: ${meta.shortages_last_modified || 'unknown'}; Basic register of medicinal products: ${meta.register_last_modified || 'unknown'}; ${meta.interchangeable.dataset}: ${meta.interchangeable.last_modified_utc}.`;
+  const list = meta.interchangeable;
+  $('source-times').textContent = `Supply shortages: ${meta.shortages_last_modified || 'unknown'}; Basic register of medicinal products: ${meta.register_last_modified || 'unknown'}; Interchangeable medicinal products (${list.valid_from}–${list.valid_until}): ${list.last_modified_utc}.`;
+  const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'Europe/Helsinki', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+  if (!meta.interchangeable_available || today < list.valid_from || today > list.valid_until) {
+    $('interchangeable-note').textContent = today > list.valid_until ? `Interchangeable groups unavailable: list expired on ${list.valid_until}.` : 'Interchangeable groups unavailable for today.';
+    $('interchangeable-note').hidden = false;
+  }
   current.forEach(e => {companies[e.Company || 'Unknown'] = (companies[e.Company || 'Unknown'] || 0)+1; const group = e.atc?.[0] || 'Unknown'; atc[group] = (atc[group] || 0)+1});
   $('updated').textContent = `LATEST SNAPSHOT ${d.snapshot_date}`; $('start').textContent = d.archive_start; $('total').textContent = current.length; $('companies').textContent = Object.keys(companies).length;
   bars('atc', atc, 30); bars('company', companies, 10); drawList();
