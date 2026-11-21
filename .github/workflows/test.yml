@@ -10,5 +10,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check Fimea source endpoints
+        run: |
+          python - <<'PY'
+          import urllib.request, urllib.error
+          urls = [
+              'https://fimea.fi/documents/147152901/279215234/GS-ladattava.txt/46149fb4-abd5-9ebb-812f-266e455d7fe4?t=1794817260947',
+              'https://data.pilvi.fimea.fi/avoin-data/GS-ladattava.txt',
+              'https://data.pilvi.fimea.fi/avoin-data/?restype=container&comp=list',
+          ]
+          for url in urls:
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 shortage-radar/1.0'}), timeout=30) as response:
+                      print(f'{url}: HTTP {response.status}, {len(response.read())} bytes')
+              except urllib.error.HTTPError as error:
+                  print(f'{url}: HTTP {error.code}')
+          PY
       - run: python -m pip install pytest
       - run: python -m pytest -q
