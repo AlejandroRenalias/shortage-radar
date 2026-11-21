@@ -1,0 +1,3 @@
+# Preserve Fimea's byte-for-byte downloads across platforms.
+data/snapshots/*.txt -text whitespace=cr-at-eol
+data/source/interchangeable.txt -text whitespace=cr-at-eol
