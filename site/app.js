@@ -76,7 +76,35 @@ Object.assign(copy.fi, {
 const queryFromUrl = search => { try { return (new URLSearchParams(search).get('q') || '').trim().slice(0,100); } catch (_) { return ''; } };
 const aliases = {parasetamoli:'paracetamol', ibuprofeeni:'ibuprofen', insuliini:'insulin', asetyylisalisyylihappo:'acetylsalicylic acid', amoksisilliini:'amoxicillin', atsitromysiini:'azithromycin', doksisykliini:'doxycycline', metformiini:'metformin', atorvastatiini:'atorvastatin', simvastatiini:'simvastatin', rosuvastatiini:'rosuvastatin', amlodipiini:'amlodipine', bisoprololi:'bisoprolol', metoprololi:'metoprolol', propranololi:'propranolol', losartaani:'losartan', kandesartaani:'candesartan', enalapriili:'enalapril', ramipriili:'ramipril', furosemidi:'furosemide', spironolaktoni:'spironolactone', varfariini:'warfarin', apiksabaani:'apixaban', rivaroksabaani:'rivaroxaban', klopidogreeli:'clopidogrel', omepratsoli:'omeprazole', pantopratsoli:'pantoprazole', esomepratsoli:'esomeprazole', levotyroksiini:'levothyroxine', prednisoloni:'prednisolone', hydrokortisoni:'hydrocortisone', deksametasoni:'dexamethasone', salbutamoli:'salbutamol', budesonidi:'budesonide', formoteroli:'formoterol', setiritsiini:'cetirizine', loratadiini:'loratadine', desloratadiini:'desloratadine', sertraliini:'sertraline', sitalopraami:'citalopram', essitalopraami:'escitalopram', fluoksetiini:'fluoxetine', venlafaksiini:'venlafaxine', duloksetiini:'duloxetine', mirtatsapiini:'mirtazapine', amitriptyliini:'amitriptyline', diatsepaami:'diazepam', oksatsepaami:'oxazepam', tematsepaami:'temazepam', tsolpideemi:'zolpidem', melatoniini:'melatonin', tramadoli:'tramadol', kodeiini:'codeine', morfiini:'morphine', oksikodoni:'oxycodone', gabapentiini:'gabapentin', pregabaliini:'pregabalin', levetirasetaami:'levetiracetam', lamotrigiini:'lamotrigine', karbamatsepiini:'carbamazepine', metotreksaatti:'methotrexate', allopurinoli:'allopurinol', diklofenaakki:'diclofenac', naprokseeni:'naproxen', ketoprofeeni:'ketoprofen', finasteridi:'finasteride', tamsulosiini:'tamsulosin', metronidatsoli:'metronidazole', flukonatsoli:'fluconazole', nitrofurantoiini:'nitrofurantoin', siprofloksasiini:'ciprofloxacin', klindamysiini:'clindamycin', fenoksimetyylipenisilliini:'phenoxymethylpenicillin', asikloviiri:'aciclovir', valasikloviiri:'valaciclovir', ondansetroni:'ondansetron', metoklopramidi:'metoclopramide'};
 const fold = s => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-function searchMatches(e, query) { const q=fold(query.trim()); const terms=[q, ...Object.entries(aliases).filter(([fi])=>{const key=fold(fi); return q.length>=3 && (key.startsWith(q) || q.startsWith(key.slice(0,-1)));}).map(([,en])=>fold(en))]; return [e.name,e.substances,e.atc,e.Company,e.NordicArticleNumber].some(x=>terms.some(term=>fold(x).includes(term))); }
+// Strengths are stored with decimal points; Finnish readers write and search "2,5".
+// Strengths are raw register wording. Finnish readers get a decimal comma; English readers get common Finnish unit words translated. A number and its unit never break apart.
+const strengthWords = {tuntia:'hours', tunti:'hour', annosta:'dose', annos:'dose', mikrog:'microg', 'yksikköä':'units', 'yksikkö':'unit', vuorokautta:'day', vuorokausi:'day'};
+function strengthText(e) {
+  let text=String(e.strength || '').replace(/\s+/g,' ').trim();
+  text = language === 'fi' ? text.replace(/(\d)\.(?=\d)/g,'$1,') : text.replace(/(?<=\d )h(?![\p{L}])/gu,'hours').replace(/(?<![\p{L}])(tuntia|tunti|annosta|annos|mikrog|yksikköä|yksikkö|vuorokautta|vuorokausi)(?![\p{L}])/giu, w => strengthWords[w.toLocaleLowerCase()]);
+  return text.replace(/(\d) (?=[\p{L}%µ])/gu,'$1\u00a0');
+}
+const plainText = s => String(s || '').replace(/\u00a0/g,' ').toLocaleLowerCase();
+// The strength to show next to a name or pack: nothing when the pack label already starts with it ("10 mg + 2 ml").
+function strengthShown(e) {
+  const strength=strengthText(e), pack=plainText(packText(e)), own=plainText(strength);
+  return !strength || (pack.startsWith(own) && !/^[\p{L}\d.,]/u.test(pack.slice(own.length))) ? '' : strength;
+}
+function nameWithStrength(e) { const name=e.name || '', strength=strengthShown(e); return !strength || plainText(name).includes(plainText(strength)) ? name : `${name} ${strength}`.trim(); }
+const foldNumbers = s => s.replace(/(\d),(?=\d)/g,'$1.');
+const NUMBER = /^\d+(?:\.\d*)?$/;
+function searchMatches(e, query) {
+  const q=foldNumbers(fold(query.trim()));
+  const termsFor=word=>[word, ...Object.entries(aliases).filter(([fi])=>{const key=fold(fi); return word.length>=3 && !word.includes(' ') && (key.startsWith(word) || word.startsWith(key.slice(0,-1)));}).map(([,en])=>fold(en))];
+  const fields=[e.name,e.strength,e.substances,e.atc,e.Company,e.NordicArticleNumber].map(x=>foldNumbers(fold(x)));
+  if (fields.some(x=>termsFor(q).some(term=>x.includes(term)))) return true;
+  // Several words match across fields, so "apixaban 5 mg" finds the 5 mg packs of Apixaban Sandoz.
+  const words=q.replace(/(^|\s)(\d+(?:\.\d+)?)(mg|g|ml|mikrog|mcg|iu|%)(?=\s|$)/g,'$1$2 $3').split(/\s+/).filter(Boolean).map(word=>word.replace(/^(\d+),$/,'$1.'));
+  if (words.length < 2) return false;
+  const text=fields.join('\n');
+  // A number matches whole numbers only, so "5" does not match "2.5" or "50"; a trailing point allows "2," while typing.
+  return words.every(word=>NUMBER.test(word) ? new RegExp(String.raw`(?<![\d.])` + word.replace('.', String.raw`\.`) + (word.endsWith('.') ? '' : String.raw`(?!\d|\.\d)`)).test(text) : termsFor(word).some(term=>text.includes(term)));
+}
 let language = 'en';
 try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : ((navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en'); } catch (_) { language = (typeof navigator !== 'undefined' && (navigator.language || '').toLowerCase().startsWith('fi')) ? 'fi' : 'en'; }
 const numberText = n => new Intl.NumberFormat(language === 'fi' ? 'fi-FI' : 'en-GB').format(n);
@@ -109,7 +137,7 @@ function packText(e) { return (e.pack_label && e.pack_label[language]) || e.pack
 function formAndPack(e) {
   const form=formText(e.form), pack=packText(e);
   // A pack such as "98 tablets" already names the form, so the form is not repeated.
-  return form.length > 3 && pack.toLocaleLowerCase().includes(form.toLocaleLowerCase().slice(0,-1)) ? [pack] : [form,pack];
+  return form.length > 3 && pack.toLocaleLowerCase().includes(form.toLocaleLowerCase().slice(0,-1)) ? [strengthShown(e),pack] : [form,strengthShown(e),pack];
 }
 function groupName(atc, lang = language) {
   const key = atc?.startsWith('S01') ? 'eye' : atc?.startsWith('S02') ? 'ear' : (atc || '')[0];
@@ -123,7 +151,7 @@ function card(e, now) {
   const late=end && end.valueOf()<now;
   const expectation=end ? `${t.expected} ${dateText(e.EndingDate)} (${t.estimate}).` : t.unknown;
   const group=groupName(e.atc);
-  const details=[[t.form,e.form],[t.strength,e.strength],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
+  const details=[[t.form,e.form],[t.strength,strengthText(e)],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
   return `<article class="row"><div class="card-heading"><h3>${esc(e.name || t.unavailable)}</h3><span class="status ${upcoming ? 'upcoming' : ''}">${esc(status)}</span>${(e.atc || '').startsWith('Q') ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</div><p class="form">${esc(formAndPack(e).filter(Boolean).join(' · '))}</p><p class="group">${esc(t.group)}: ${esc(group)}</p><p class="status-sentence">${esc(sentence)}</p><p>${esc(expectation)} ${late ? `<strong class="late">${esc(t.late)}.</strong>` : ''}</p><details><summary>${esc(t.details)}</summary><dl>${details.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value || '—')}</dd></div>`).join('')}</dl><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${t.moreInfoUrl}">${esc(t.moreInfoLink)} ↗</a></p></details></article>`;
 }
 function drawList() {
@@ -192,7 +220,7 @@ function drawDelays(d, snapshotDate) {
   const x=d.excluded || {}; $('how-count').hidden=false;
   const skipped=[['listed_at_first_capture',t.howFirst],['no_estimate',t.howNoEstimate],['wide_start_window',t.howStart],['wide_removal_window',t.howEnd],['vnr_still_listed',t.howChanged]].filter(([k])=>x[k]).map(([k,f])=>f(n(x[k]))).join(', ');
   $('how-count-text').textContent=t.howText(n(d.sample_size),n(d.removed_total),n(d.max_gap_days),skipped);
-  $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3>`+d.examples.map(e=>`<p>${esc(e.name || e.vnr)} · ${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))} · ${esc(t.lastListed)} ${esc(dateText(e.last_seen))} · ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</p>`).join('') : '';
+  $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3>`+d.examples.map(e=>`<p>${esc(nameWithStrength(e) || e.vnr)} · ${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))} · ${esc(t.lastListed)} ${esc(dateText(e.last_seen))} · ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</p>`).join('') : '';
 }
 function drawDates(d) {
   const meta = d.source_metadata || {}, sourceTimes = [];
@@ -215,7 +243,7 @@ function renderData() {
   current.forEach(e => {const company=e.Company || t.unknownCompany; companies[company]=(companies[company] || 0)+1; const group=e.atc && groupName(e.atc); if(group) atc[group]=(atc[group] || 0)+1;});
   drawDates(d); $('total').textContent=numberText(current.length); $('companies').textContent=numberText(Object.keys(companies).length);
   const now=todayUTC(); const longest=current.filter(e=>parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf()<=now).sort((a,b)=>a.UnavailableFrom.localeCompare(b.UnavailableFrom)).slice(0,5);
-  $('longest-list').innerHTML=longest.map(e=>{const duration=t.days(Math.floor((now-parsedDate(e.UnavailableFrom).valueOf())/86400000)).replace(/ /g,'\u00a0'); return `<li><div><strong>${esc(e.name || t.unavailable)}</strong><small>${esc([packText(e),e.Company].filter(Boolean).join(' · '))}</small><small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))}</small></div><span class="duration">${esc(duration)}</span></li>`;}).join('');
+  $('longest-list').innerHTML=longest.map(e=>{const duration=t.days(Math.floor((now-parsedDate(e.UnavailableFrom).valueOf())/86400000)).replace(/ /g,'\u00a0'); return `<li><div><strong>${esc(nameWithStrength(e) || t.unavailable)}</strong><small>${esc([packText(e),e.Company].filter(Boolean).join(' · '))}</small><small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))}</small></div><span class="duration">${esc(duration)}</span></li>`;}).join('');
   drawWeek(weekData,current.length); bars('atc',atc,30); bars('company',companies,10); drawList();
 }
 fetch('current.json').then(r => {if (!r.ok) throw Error(); return r.json()}).then(d => {data=d; renderData(); requestAnimationFrame(()=>{fetch('history.json').then(r=>{if(!r.ok) throw Error(); return r.json()}).then(h=>{historyData=h; renderData();}).catch(()=>{historyFailed=true; renderData();}); fetch('week.json').then(r=>{if(!r.ok) throw Error(); return r.json()}).then(w=>{weekData=w; renderData();}).catch(()=>{});});}).catch(() => {data=undefined; loadFailed=true; setLanguage();});
