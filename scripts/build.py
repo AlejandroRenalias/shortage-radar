@@ -201,6 +201,12 @@ def build():
         for e in current:
             writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else ''])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
+    current_data['events'] = current
+    history_data = {k: output[k] for k in ('history', 'delays', 'rss_counts', 'max_gap_days')}
+    history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
+    for name, value in [('current.json', current_data), ('history.json', history_data)]:
+        (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
 
 
