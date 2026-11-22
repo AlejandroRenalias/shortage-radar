@@ -46,11 +46,28 @@ function labelMarkup(e, status) {
     + `<p class="pkg-kind">${[formText(e.form), groupName(e.atc)].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<p class="status-line">${esc(line)}</p></article>`;
 }
-// "Ask your pharmacy" is said once: by the substitution line when it applies, else by the opening sentence of the advice.
+// The other packages of the group, from the register: name and strength, pack and company.
+function altList(items, limit) {
+  const t = copy[language], li = p => `<li><strong>${esc(nameWithStrength(p) || p.name)}</strong>${packText(p) ? `<span>${esc(packText(p))}</span>` : ''}${p.company ? `<span>${esc(p.company)}</span>` : ''}${p.listed === false ? `<span class="alt-flag">${esc(t.altRegister)}</span>` : ''}</li>`;
+  const shown = items.slice(0, limit), rest = items.slice(limit);
+  return `<ul class="alts">${shown.map(li).join('')}</ul>` + (rest.length ? `<details class="alts-more"><summary>${esc(t.altAll(items.length))}</summary><ul class="alts">${rest.map(li).join('')}</ul></details>` : '');
+}
+// Can the pharmacy give a substitute? The label, its reason and the packages that make it checkable.
+function impactMarkup(e, groups) {
+  const t = copy[language], level = impactOf(e), code = e.substitution_group, group = (code && groups && groups[code]) || {available: [], short: []};
+  const others = list => (list || []).filter(p => p.vnr !== e.NordicArticleNumber && p.vnr !== e.current_vnr);
+  const available = others(group.available), short = others(group.short);
+  const text = t['impactText_' + level];
+  const reason = level === 'critical' ? `<p>${esc(short.length ? t.impactCriticalShort : t.impactCriticalAlone)}</p>` : '';
+  const lists = (level === 'substitute' && available.length ? `<h3>${esc(t.altTitle)}</h3>${altList(available, 6)}` : '') + (short.length && level !== 'vet' ? `<h3>${esc(t.altShort)}</h3>${altList(short, 6)}` : '');
+  return `<section class="panel impact-panel" aria-labelledby="impact-title"><h2 id="impact-title">${esc(t.impactQuestion)}</h2>${impactBadge(e)}<p>${esc(text)}</p>${reason}${lists}`
+    + `<p class="note">${code && level !== 'vet' ? `${esc(t.groupCode(code))}. ` : ''}${esc(t.altNote)} <a href="about.html#impact">${esc(t.impactLink)}</a></p></section>`;
+}
+// "Ask your pharmacy" is said once: by the impact panel for a current package, else by the opening sentence of the advice.
 function whatMarkup(e, status) {
-  const t = copy[language], group = status !== 'left' && !isVet(e) && e.other_packages_count > 0;
-  const advice = isVet(e) ? t.whatTextVet : group ? t.whatTextRest : t.whatText;
-  return `<section class="panel what" aria-labelledby="what-title"><h2 id="what-title">${esc(t.whatTitle)}</h2>${group ? `<p class="callout">${esc(t.otherPackages)}</p>` : ''}<p>${esc(advice)}</p><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${esc(t.moreInfoUrl)}">${esc(t.moreInfoLink)}</a></p><p><a href="about.html#what-to-do">${esc(t.whatLink)}</a></p></section>`;
+  const t = copy[language], asked = status !== 'left';
+  const advice = isVet(e) ? t.whatTextVet : asked ? t.whatTextRest : t.whatText;
+  return `<section class="panel what" aria-labelledby="what-title"><h2 id="what-title">${esc(t.whatTitle)}</h2><p>${esc(advice)}</p><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${esc(t.moreInfoUrl)}">${esc(t.moreInfoLink)}</a></p><p><a href="about.html#what-to-do">${esc(t.whatLink)}</a></p></section>`;
 }
 function notFound(root) {
   const t = copy[language];
@@ -66,7 +83,7 @@ function render() {
   if (found.state === 'missing') return notFound(root);
   const events = found.events, e = events[0], left = found.state === 'left', status = found.state, now = todayUTC();
   document.title = `${e.name || t.unavailable} | ${t.brand}`;
-  root.innerHTML = `<a class="back" href="shortages.html">${uiIcon('back', 18)}<span>${esc(t.medBack)}</span></a><div class="med-layout"><div class="med-main">${labelMarkup(e, status)}${timelineMarkup(e, left)}${whatMarkup(e, status)}`
+  root.innerHTML = `<a class="back" href="shortages.html">${uiIcon('back', 18)}<span>${esc(t.medBack)}</span></a><div class="med-layout"><div class="med-main">${labelMarkup(e, status)}${left ? '' : impactMarkup(e, shard.groups)}${timelineMarkup(e, left)}${whatMarkup(e, status)}`
     + (events.length > 1 ? `<section class="panel"><h2>${esc(t.otherNotice)}</h2><div class="pkg-list">${events.slice(1).map(x => pkgCard(x, now)).join('')}</div></section>` : '')
     + `</div><aside class="med-side">${detailsMarkup(e)}<section class="panel share" aria-labelledby="share-title"><h2 id="share-title">${esc(t.shareTitle)}</h2><button type="button" class="btn" id="copy-page">${uiIcon('copy', 18)}<span>${esc(t.copyPage)}</span></button> <span id="copy-status" role="status"></span></section>`
     + `<p class="source-note">${esc(t.sourceNote(dateText(shard.snapshot_date)))} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceLink)}</a></p></aside></div>`;

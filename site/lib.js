@@ -125,7 +125,12 @@ const UI_PATHS = {
   filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   pill: '<rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="m9.500 8.500 5 7"/>',
   trend: '<path d="M3 17l6-6 4 4 8-9M15 6h6v6"/>',
-  pharmacy: '<path d="M12 4v16M4 12h16"/><rect x="3" y="3" width="18" height="18" rx="5"/>'
+  pharmacy: '<path d="M12 4v16M4 12h16"/><rect x="3" y="3" width="18" height="18" rx="5"/>',
+  substitute: '<path d="M4 8h14l-3.500-3.500M20 16H6l3.500 3.500"/>',
+  critical: '<path d="M5 4.500h14a1.500 1.500 0 0 1 1.500 1.500v9a1.500 1.500 0 0 1-1.500 1.500h-7.500L7 20v-3.500H5A1.500 1.500 0 0 1 3.500 15V6A1.500 1.500 0 0 1 5 4.500z"/><path d="M8 9h8M8 12.500h5"/>',
+  nogroup: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.500 12h7"/>',
+  vet: '<circle cx="6.500" cy="10.500" r="1.800"/><circle cx="10" cy="6" r="1.800"/><circle cx="14.500" cy="6" r="1.800"/><circle cx="18" cy="10.500" r="1.800"/><path d="M12 12c-2.500 0-4.500 2.800-4.500 5 0 1.500 1.200 2.500 2.500 2.500.8 0 1.300-.4 2-.4s1.200.4 2 .4c1.300 0 2.500-1 2.500-2.500 0-2.200-2-5-4.500-5z"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>'
 };
 function uiIcon(name, size = 20) { return `<svg class="uicon" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" focusable="false">${UI_PATHS[name]}</svg>`; }
 
@@ -151,11 +156,46 @@ function sortPackages(rows, sort, now = todayUTC(), lang = language) {
   return rows.slice().sort(compare);
 }
 function groupKey(atc) { return atc?.startsWith('S01') ? 'eye' : atc?.startsWith('S02') ? 'ear' : (atc || '')[0] || ''; }
-const FILTER_KEYS = ['status', 'group', 'form', 'company'];
+function isVet(e) { return (e.atc || '').startsWith('Q'); }
+// ---- Impact: can a pharmacy usually give a substitute? The level is set at build time (scripts/triage.py).
+const IMPACT_LEVELS = ['substitute', 'critical', 'nogroup', 'vet'];
+function impactOf(e) {
+  if (IMPACT_LEVELS.includes(e.impact)) return e.impact;
+  return isVet(e) ? 'vet' : !e.substitution_group ? 'nogroup' : e.other_packages_count > 0 ? 'substitute' : 'critical';
+}
+// The plain label with its reason, for a package card and the medicine page.
+function impactLine(e) {
+  const level = impactOf(e), t = copy[language];
+  return level === 'substitute' ? t.impactCard_substitute(e.other_packages_count || 0) : t['impactCard_' + level];
+}
+function impactBadge(e, tag = 'p') {
+  const level = impactOf(e);
+  return `<${tag} class="impact impact-${level}">${uiIcon(level, 20)}<span>${esc(impactLine(e))}</span></${tag}>`;
+}
+// Strengths of one medicine side by side: "10/20/30 mg" when they share a unit, else listed in order.
+function mergedStrengths(list) {
+  const uniq = [...new Set(list.filter(Boolean))], value = s => parseFloat(s.replace(',', '.'));
+  const parts = uniq.map(s => s.match(/^(\d+(?:[.,]\d+)?)\s*(\S.*)$/u));
+  // Slashes only between numbers of two digits or more, so "1 g, 2 g" is not read as a half.
+  if (parts.length > 1 && parts.every(p => p && value(p[1]) >= 10) && new Set(parts.map(p => p[2])).size === 1) return parts.sort((a, b) => value(a[1]) - value(b[1])).map(p => p[1]).join('/') + '\u00a0' + parts[0][2];
+  return uniq.sort((a, b) => (value(a) || 0) - (value(b) || 0) || a.localeCompare(b)).join(', ');
+}
+// Critical rows grouped by medicine: one row for each active substance and form, with its strengths, product names and packages.
+function groupByMedicine(rows, lang = language) {
+  const groups = new Map();
+  for (const e of rows) {
+    const medicine = e.medicine || e.name || '', form = formText(e.form), key = `${fold(medicine)}|${form}`;
+    if (!groups.has(key)) groups.set(key, {key, medicine, form, kind: formKind(e.form), packages: []});
+    groups.get(key).packages.push(e);
+  }
+  return [...groups.values()].map(g => ({...g, strength: mergedStrengths(g.packages.map(strengthText)), names: [...new Set(g.packages.map(e => e.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, lang))}))
+    .sort((a, b) => a.medicine.localeCompare(b.medicine, lang) || a.form.localeCompare(b.form, lang));
+}
+const FILTER_KEYS = ['impact', 'status', 'group', 'form', 'company'];
 function parseFilters(search) {
   const params = new URLSearchParams(search), pick = (key, max = 100) => (params.get(key) || '').trim().slice(0, max);
-  const status = pick('status'), sort = pick('sort'), form = pick('form');
-  return {q: pick('q'), status: ['now', 'soon'].includes(status) ? status : '', group: pick('group', 10), form: KINDS.includes(form) ? form : '', company: pick('company', 120), sort: ['name', 'longest', 'end'].includes(sort) ? sort : ''};
+  const status = pick('status'), sort = pick('sort'), form = pick('form'), impact = pick('impact');
+  return {q: pick('q'), impact: IMPACT_LEVELS.includes(impact) ? impact : '', status: ['now', 'soon'].includes(status) ? status : '', group: pick('group', 10), form: KINDS.includes(form) ? form : '', company: pick('company', 120), sort: ['name', 'longest', 'end'].includes(sort) ? sort : ''};
 }
 function filtersToQuery(f) {
   const params = new URLSearchParams();
@@ -163,13 +203,12 @@ function filtersToQuery(f) {
   return params.toString();
 }
 function filterPackages(rows, f, now = todayUTC()) {
-  return rows.filter(e => (!f.q || searchMatches(e, f.q)) && (!f.status || statusOf(e, now) === f.status || (f.status === 'now' && statusOf(e, now) === 'unknown')) && (!f.group || groupKey(e.atc) === f.group) && (!f.form || formKind(e.form) === f.form) && (!f.company || e.Company === f.company));
+  return rows.filter(e => (!f.q || searchMatches(e, f.q)) && (!f.impact || impactOf(e) === f.impact) && (!f.status || statusOf(e, now) === f.status || (f.status === 'now' && statusOf(e, now) === 'unknown')) && (!f.group || groupKey(e.atc) === f.group) && (!f.form || formKind(e.form) === f.form) && (!f.company || e.Company === f.company));
 }
 const relevant = rows => rows.filter(e => !e.removed_on);
 
 // ---- Package card: the shelf label. Status tab, pictogram, name, strength and pack, form and group, dates.
 const daysBetween = (from, to) => Math.floor((to - from) / DAY);
-function isVet(e) { return (e.atc || '').startsWith('Q'); }
 function pkgCard(e, now = todayUTC(), level = 3) {
   const t = copy[language], start = parsedDate(e.UnavailableFrom), end = parsedDate(e.EndingDate), status = statusOf(e, now);
   const late = status === 'now' && end && end.valueOf() < now;
@@ -182,7 +221,7 @@ function pkgCard(e, now = todayUTC(), level = 3) {
     + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<dl class="pkg-dates"><div><dt>${esc(status === 'soon' ? t.startsLabel : t.fromLabel)}</dt><dd>${esc(dateText(e.UnavailableFrom))}${startNote ? `<small>${esc(startNote)}</small>` : ''}</dd></div>`
     + `<div><dt>${esc(t.backLabel)}</dt><dd>${end ? esc(dateText(e.EndingDate)) : esc(t.notKnown)}${late ? `<small class="late">${esc(t.late)}</small>` : ''}</dd></div></dl>`
-    + (e.other_packages_count > 0 && !isVet(e) ? `<p class="ask">${esc(t.otherPackages)}</p>` : '') + '</article>';
+    + (e.removed_on ? '' : impactBadge(e)) + '</article>';
 }
 
 // ---- Timeline model for one package: where the reported start, today and the company's estimate fall.

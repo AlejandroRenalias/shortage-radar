@@ -50,6 +50,18 @@ function drawDelays(d, snapshotDate) {
   $('how-count-text').textContent=t.howText(n(d.sample_size),n(d.removed_total),n(d.max_gap_days),skipped);
   $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3><ul class="examples">`+d.examples.map(e=>`<li><strong>${esc(nameWithStrength(e) || e.vnr)}</strong><span>${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))}, ${esc(t.lastListed)} ${esc(dateText(e.last_seen))}, ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</span></li>`).join('')+'</ul>' : '';
 }
+// Groups that newly have no interchangeable product, and the counts recorded each day with that day's register.
+function drawCritical(h) {
+  const t = copy[language], list = h.newly_critical || [], gaps = h.history.filter(x => x.gap_days > h.max_gap_days);
+  const from = (gaps.length ? gaps[gaps.length - 1] : h.history[0]).date;
+  $('new-crit-list').innerHTML = list.slice(0, 12).map(c => {
+    const names = [...new Set((c.packages || []).map(p => p.name).filter(Boolean))].join(', ');
+    return `<li><div><strong><a href="medicine.html?vnr=${esc(c.vnrs[0])}">${esc([c.medicine || names, strengthText(c)].filter(Boolean).join(' '))}</a></strong>${names ? `<small>${esc(names)}</small>` : ''}</div><span class="crit-when">${esc(t.newCritItem(dateText(c.date), dateText(c.after)))}</span></li>`;
+  }).join('') || `<li>${esc(t.newCritNone)}</li>`;
+  $('new-crit-method').textContent = t.newCritMethod(numberText(list.length), dateText(from));
+  const rec = h.triage_counts || [];
+  $('triage-record').innerHTML = rec.length ? `<h3>${esc(t.triageRecTitle)}</h3><p class="note">${esc(t.triageRecNote(dateText(rec[0].date)))}</p><div class="data-table"><table><thead><tr><th scope="col">${esc(t.thDate)}</th>${IMPACT_LEVELS.map(k => `<th scope="col">${esc(t['impact_' + k])}</th>`).join('')}</tr></thead><tbody>${rec.slice().reverse().map(r => `<tr><td>${esc(dateText(r.date))}</td>${IMPACT_LEVELS.map(k => `<td>${numberText(r[k] || 0)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+}
 function drawDates(d) {
   $('data-date').textContent = copy[language].dataDate(dateText(d.snapshot_date));
   renderCitation(d);
@@ -60,7 +72,7 @@ function drawDates(d) {
   const rss = (h.rss_counts || []).filter(c => c.items);
   $('rss-note').textContent = rss.length ? t.rssSummary(rss.map(c => t.rssItem(dateText(c.date), numberText(c.items))).join('; ')) : '';
   chartWidth = Math.round($('chart').clientWidth) || 400;
-  drawChart(h.history, h.max_gap_days, Math.max(300, Math.min(chartWidth, 1200))); drawTable(h.history); drawDelays(h.delays, d.snapshot_date);
+  drawChart(h.history, h.max_gap_days, Math.max(300, Math.min(chartWidth, 1200))); drawTable(h.history); drawDelays(h.delays, d.snapshot_date); drawCritical(h);
 }
 function renderData() {
   if (!data) return;

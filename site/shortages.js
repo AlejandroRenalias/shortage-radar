@@ -1,8 +1,10 @@
 // Shortages: the full list with search, filters and sort. Everything is kept in the address, so a search can be shared.
+// With the impact filter set to critical, the list shows one row for each medicine, which opens to its packages.
 const PAGE_SIZE = 30;
 let rows = [], filters = parseFilters(location.search), visible = PAGE_SIZE, loaded = false, urlTimer;
 function readControls() {
   filters.q = $('search').value.trim().slice(0, 100);
+  filters.impact = document.querySelector('input[name="impact"]:checked').value;
   filters.status = document.querySelector('input[name="status"]:checked').value;
   filters.group = $('f-group').value; filters.form = $('f-form').value; filters.company = $('f-company').value; filters.sort = $('sort').value;
 }
@@ -22,14 +24,27 @@ function activeFilters() { return FILTER_KEYS.filter(k => filters[k]).length; }
 function syncUrl() {
   try { const url = new URL(location.href); url.search = filtersToQuery(filters); history.replaceState(null, '', url); } catch (_) {}
 }
+// One row for a medicine without an interchangeable product: name and strengths, form, product names, and its packages inside.
+function critRow(g, now) {
+  const t = copy[language];
+  return `<details class="crit-row"><summary><span class="pkg-icon" title="${esc(kindLabel(g.kind))}">${formIcon(g.kind, 40)}</span><span class="crit-id"><h2 class="crit-name">${esc([g.medicine, g.strength].filter(Boolean).join(' '))}</h2>`
+    + `<span class="crit-form">${esc(g.form)}</span><span class="crit-names">${esc(g.names.join(', '))}</span></span><span class="crit-count">${esc(t.critPackages(g.packages.length))}</span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon crit-go"')}</summary>`
+    + `<div class="pkg-list crit-packages">${g.packages.map(e => pkgCard(e, now, 3)).join('')}</div></details>`;
+}
 function draw() {
-  const t = copy[language], now = todayUTC();
+  const t = copy[language], now = todayUTC(), grouped = filters.impact === 'critical';
   const found = sortPackages(filterPackages(rows, filters, now), filters.sort, now);
-  $('result-count').textContent = t.count(found.length);
-  $('list').innerHTML = found.slice(0, visible).map(e => pkgCard(e, now, 2)).join('') || `<p class="state">${esc(filters.q ? t.empty : t.emptyFiltered)}</p>`;
-  $('more').hidden = visible >= found.length;
-  $('more').parentElement.hidden = found.length <= PAGE_SIZE;
-  $('more-count').textContent = found.length > PAGE_SIZE ? t.moreCount(Math.min(visible, found.length), found.length) : '';
+  const items = grouped ? groupByMedicine(found) : found;
+  $('result-count').textContent = grouped ? t.critCount(found.length, items.length) : t.count(found.length);
+  $('list').className = grouped ? 'crit-list' : 'pkg-list';
+  $('list').innerHTML = items.slice(0, visible).map(x => grouped ? critRow(x, now) : pkgCard(x, now, 2)).join('') || `<p class="state">${esc(filters.q ? t.empty : t.emptyFiltered)}</p>`;
+  $('more').hidden = visible >= items.length;
+  $('more').parentElement.hidden = items.length <= PAGE_SIZE;
+  $('more-count').textContent = items.length > PAGE_SIZE ? t.moreCount(Math.min(visible, items.length), items.length) : '';
+  const critical = rows.filter(e => impactOf(e) === 'critical').length;
+  $('crit-callout').hidden = grouped || !critical;
+  $('crit-callout-text').textContent = t.critCallout(critical);
+  $('crit-intro').hidden = !grouped;
   const n = activeFilters();
   $('filters-count').textContent = n ? ` (${n})` : '';
   $('clear').hidden = !n && !filters.sort;
@@ -38,13 +53,15 @@ function render() {
   if (!loaded) return;
   fillFilters(); $('search').value = filters.q; $('sort').value = filters.sort;
   document.querySelector(`input[name="status"][value="${filters.status}"]`).checked = true;
+  document.querySelector(`input[name="impact"][value="${filters.impact}"]`).checked = true;
   draw();
 }
 function changed(resetPage = true) { readControls(); if (resetPage) visible = PAGE_SIZE; draw(); clearTimeout(urlTimer); urlTimer = setTimeout(syncUrl, 300); }
 $('finder').addEventListener('submit', e => e.preventDefault());
 $('search').addEventListener('input', () => changed());
 $('finder').addEventListener('change', e => { if (e.target.id !== 'search') changed(); });
-$('clear').addEventListener('click', () => { filters = {q: filters.q, status: '', group: '', form: '', company: '', sort: ''}; render(); syncUrl(); });
+$('clear').addEventListener('click', () => { filters = {q: filters.q, impact: '', status: '', group: '', form: '', company: '', sort: ''}; render(); syncUrl(); });
+$('crit-show').addEventListener('click', e => { e.preventDefault(); filters.impact = 'critical'; visible = PAGE_SIZE; render(); syncUrl(); });
 $('more').addEventListener('click', () => { visible += PAGE_SIZE; draw(); });
 $('copy-link').addEventListener('click', () => {
   syncUrl();

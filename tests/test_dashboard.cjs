@@ -227,9 +227,9 @@ test('the q parameter and filters are read from the address and written back', (
   assert.equal(queryFromUrl('?q=%20Burana%20'), 'Burana');
   assert.ok(context.searchMatches({NordicArticleNumber:'599361', name:'Other'}, queryFromUrl('?q=599361')));
   const f = context.parseFilters('?q=burana&status=soon&group=N&form=tablet&company=Orion%20Corporation&sort=name');
-  assert.deepEqual({...f}, {q:'burana', status:'soon', group:'N', form:'tablet', company:'Orion Corporation', sort:'name'});
+  assert.deepEqual({...f}, {q:'burana', impact:'', status:'soon', group:'N', form:'tablet', company:'Orion Corporation', sort:'name'});
   assert.equal(context.filtersToQuery(f), 'q=burana&status=soon&group=N&form=tablet&company=Orion+Corporation&sort=name');
-  assert.deepEqual({...context.parseFilters('?status=bogus&form=bogus&sort=bogus')}, {q:'', status:'', group:'', form:'', company:'', sort:''});
+  assert.deepEqual({...context.parseFilters('?status=bogus&form=bogus&sort=bogus&impact=bogus')}, {q:'', impact:'', status:'', group:'', form:'', company:'', sort:''});
   assert.equal(context.filtersToQuery(context.parseFilters('')), '');
 });
 
@@ -391,27 +391,94 @@ test('the pages keep the head tags, the one search, the report link and the cita
   assert.doesNotMatch(Object.values(pages).join(''), /https?:\/\/(?!alejandrorenalias|fimea|creativecommons|web\.archive|github)/);
 });
 
-test('other packages line appears only for positive counts in both languages', () => {
+test('every current card carries one impact label with its reason, in both languages', () => {
+  const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'N02'};
+  const cases = [
+    [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Pharmacy can usually give a substitute: 5 other packages on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 5 muuta pakkausta'}],
+    [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Pharmacy can usually give a substitute: 1 other package on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 1 muu pakkaus'}],
+    [{substitution_group:'0042', other_packages_count:0}, 'critical', {en:'No interchangeable product on the market. Talk to your pharmacist or doctor early.', fi:'Ei vaihtokelpoista valmistetta kaupan. Kysy apteekista tai lääkäriltä hyvissä ajoin.'}],
+    [{other_packages_count:0}, 'nogroup', {en:'No substitution group. Ask your pharmacist.', fi:'Ei vaihtokelpoisuusryhmää. Kysy apteekista.'}],
+    [{atc:'QN02', substitution_group:'0042', other_packages_count:3}, 'vet', {en:'Veterinary medicine. Ask your veterinarian or pharmacy.', fi:'Eläinlääke. Kysy eläinlääkäriltä tai apteekista.'}],
+  ];
   for (const lang of ['en', 'fi']) {
     setLanguage(context, lang);
-    const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01'};
-    const message = vm.runInContext(`copy.${lang}.otherPackages`, context);
-    assert.ok(context.pkgCard({...record, other_packages_count:1}, NOW).includes(message));
-    assert.ok(!context.pkgCard({...record, other_packages_count:0}, NOW).includes(message));
-    assert.ok(!context.pkgCard(record, NOW).includes(message));
+    for (const [extra, level, text] of cases) {
+      const html = context.pkgCard({...record, ...extra}, NOW);
+      assert.equal(context.impactOf({...record, ...extra}), level);
+      assert.equal((html.match(/class="impact /g) || []).length, 1);
+      assert.ok(html.includes(`<p class="impact impact-${level}">`) && html.includes(`<span>${text[lang]}</span>`), `${lang} ${level}`);
+    }
+    // The level built into the data wins; a package that left the list has no label.
+    assert.equal(context.impactOf({...record, impact:'critical', other_packages_count:4, substitution_group:'1'}), 'critical');
+    assert.doesNotMatch(context.pkgCard({...record, removed_on:'2026-11-10'}, NOW), /class="impact /);
   }
   setLanguage(context, 'en');
 });
 
-test('"Ask your pharmacy" is said once: by the substitution line on a card, and in What to do on the page', () => {
+test('the critical wording never says that no medicine or treatment exists, and uses no alarm words', () => {
+  const copy = vm.runInContext('copy', context);
+  const keys = Object.keys(copy.en).filter(k => /impact|crit|triage|altShort|newCrit/i.test(k));
+  for (const lang of ['en', 'fi']) for (const key of keys) {
+    const value = copy[lang][key], text = typeof value === 'function' ? value(2, 'x') : value;
+    assert.doesNotMatch(text, /no (medicine|treatment) (is )?available|no treatment exists|urgent|danger|warning|alarm|critical/i, `${lang} ${key}`);
+    assert.doesNotMatch(text, /ei (ole )?(lääkettä|hoitoa) saatavilla|kiireellinen|vaara|hälytys|kriittinen/i, `${lang} ${key}`);
+  }
+  // The About text says plainly that the label is not about treatment existing.
+  assert.match(copy.en.aboutImpact_critical, /does not mean that there is no treatment/); assert.match(copy.fi.aboutImpact_critical, /ei tarkoita, ettei hoitoa olisi/);
+});
+
+test('critical rows group by medicine and form, with strengths side by side', () => {
+  setLanguage(context, 'en');
+  const p = (vnr, name, strength, medicine, form = 'injektiokuiva-aine ja liuotin, depotsuspensiota varten') => ({NordicArticleNumber:vnr, name, strength, medicine, form, impact:'critical'});
+  const rows = [p('1', 'Octreotide ratiopharm', '20 mg', 'Octreotide'), p('2', 'Octreotide ratiopharm', '10 mg', 'Octreotide'), p('3', 'Octreotide ratiopharm', '30 mg', 'Octreotide'),
+    p('4', 'Biquetan', '200 mg', 'Quetiapine', 'depottabletti'), p('5', 'Ketipinor', '400 mg', 'Quetiapine', 'depottabletti'), p('6', 'Seroquel Prolong', '200 mg', 'Quetiapine', 'depottabletti'),
+    p('7', 'Moviprep', '', '', 'jauhe oraaliliuosta varten')];
+  const groups = Array.from(context.groupByMedicine(rows, 'en')).map(plain);
+  assert.deepEqual(groups.map(g => [g.medicine, nb(g.strength), g.packages.length]), [['Moviprep', '', 1], ['Octreotide', '10/20/30 mg', 3], ['Quetiapine', '200/400 mg', 3]]);
+  assert.deepEqual(groups[2].names, ['Biquetan', 'Ketipinor', 'Seroquel Prolong']);
+  // The same substance in another form is another row.
+  assert.equal(context.groupByMedicine([...rows, p('8', 'Quetiapin tablet', '25 mg', 'Quetiapine', 'tabletti, kalvopäällysteinen')], 'en').length, 3);
+  assert.equal(context.groupByMedicine([...rows, p('8', 'Quetiapin solution', '25 mg/ml', 'Quetiapine', 'oraaliliuos')], 'en').length, 4);
+  assert.equal(nb(context.mergedStrengths(['25 mg/ml', '200 mg'])), '25 mg/ml, 200 mg');
+  setLanguage(context, 'fi');
+  assert.equal(nb(context.mergedStrengths(['2,5 mg', '10 mg'])), '2,5 mg, 10 mg');
+  assert.equal(nb(context.mergedStrengths(['2 g', '1 g'])), '1 g, 2 g', 'never "1/2 g", which reads as a half');
+  setLanguage(context, 'en');
+});
+
+test('the impact filter is kept in the address and narrows the list', () => {
+  const f = context.parseFilters('?impact=critical&q=quetiapine');
+  assert.equal(f.impact, 'critical');
+  assert.equal(context.filtersToQuery(f), 'q=quetiapine&impact=critical');
+  for (const level of ['substitute', 'critical', 'nogroup', 'vet']) assert.equal(context.parseFilters('?impact=' + level).impact, level);
+  const rows = [{name:'A', impact:'substitute'}, {name:'B', impact:'critical'}, {name:'C', impact:'nogroup'}, {name:'D', atc:'QA01'}];
+  const run = impact => Array.from(context.filterPackages(rows, {q:'', impact, status:'', group:'', form:'', company:''}, NOW)).map(e => e.name);
+  assert.deepEqual(run('critical'), ['B']); assert.deepEqual(run('vet'), ['D']); assert.deepEqual(run(''), ['A', 'B', 'C', 'D']);
+  const list = pages['shortages.html'];
+  for (const level of ['', 'critical', 'substitute', 'nogroup', 'vet']) assert.match(list, new RegExp(`name="impact" value="${level}"`));
+  assert.ok(list.indexOf('name="impact"') < list.indexOf('name="status"'), 'impact is the first filter');
+  assert.match(list, /href="shortages\.html\?impact=critical" id="crit-show"/);
+});
+
+test('home leads with the triage: words and numbers, each part one tap from the filtered list', () => {
+  const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'critical':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
+  assert.ok(html.indexOf('id="triage"') < html.indexOf('id="q"'), 'the triage comes before the search');
+  for (const [level, n] of [['substitute', '531'], ['critical', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
+  assert.match(html, /For 531 of them, the pharmacy can usually give a substitute\./);
+  assert.match(html, /href="shortages\.html\?impact=vet" id="triage-vet">Also on the list: 39 veterinary medicines/);
+  // The bar is decoration for the list; its widths follow the human counts only.
+  assert.match(html, /<svg class="triage-bar"[^>]*aria-hidden="true"/);
+  assert.match(html, /class="tb-critical" x="74\.79" y="0" width="8\.45"/);
+});
+
+test('"Ask your pharmacy" is said once: by the impact label for a current package, and in What to do for one that left', () => {
   const copy = vm.runInContext('copy', context);
   for (const lang of ['en', 'fi']) {
-    setLanguage(context, lang);
-    assert.doesNotMatch(context.pkgCard({name:'T', atc:'N02'}, 0), /class="ask"/);
-    assert.ok(context.pkgCard({name:'T', atc:'N02', other_packages_count:2}, 0).includes('<p class="ask">' + copy[lang].otherPackages));
-    assert.doesNotMatch(context.pkgCard({name:'T', atc:'Q02', other_packages_count:2}, 0), /class="ask"/);
+    assert.match(copy[lang].impactCard_nogroup, lang === 'en' ? /Ask your pharmacist\.$/ : /Kysy apteekista\.$/);
+    // The explanation under the label does not repeat the label's own advice.
+    for (const level of ['substitute', 'critical', 'nogroup', 'vet']) assert.doesNotMatch(copy[lang]['impactText_' + level], /^(Ask your|Talk to your|Kysy )/);
   }
-  // With the substitution line the advice does not repeat the opening sentence; without it the advice opens with the ask.
+  // Without the label the advice opens with the ask; with it, the advice does not repeat it.
   assert.doesNotMatch(copy.en.whatTextRest, /Ask your pharmacy/); assert.doesNotMatch(copy.fi.whatTextRest, /Kysy apteekista/);
   assert.match(copy.en.whatText, /^Ask your pharmacy\./); assert.match(copy.fi.whatText, /^Kysy apteekista\./);
   setLanguage(context, 'en');
@@ -429,8 +496,33 @@ test('veterinary packages are told to ask the veterinarian or pharmacy, not give
   const vet = env.whatMarkup({atc:'QN02BA', Company:'Vet Oy', other_packages_count:3}, 'now');
   assert.match(vet, /Ask your veterinarian or pharmacy/); assert.doesNotMatch(vet, /pharmacist or doctor|substitution group/);
   const human = env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:3}, 'now');
-  assert.match(human, /class="callout">Other packages in the same substitution group/); assert.doesNotMatch(human, /<p>Ask your pharmacy/);
-  assert.match(env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:0}, 'now'), /<p>Ask your pharmacy\./);
+  assert.doesNotMatch(human, /<p>Ask your pharmacy/);
+  assert.match(env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:0}, 'left'), /<p>Ask your pharmacy\./);
+  const vetImpact = env.impactMarkup({atc:'QN02BA', NordicArticleNumber:'123456'}, {});
+  assert.match(vetImpact, /Ask your veterinarian or pharmacy/); assert.doesNotMatch(vetImpact, /Substitution group /);
+});
+
+test('the medicine page shows the impact label with the other packages of the group, so it can be checked', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const groups = {'1299': {available: [], short: [
+    {vnr:'147881', name:'Quetiapin Hexal', strength:'200 mg', pack_label:{en:'120 tablets', fi:'120 tablettia'}, company:'Hexal A/S', listed:true},
+    {vnr:'386574', name:'Ketipinor', strength:'200 mg', pack_label:{en:'100 tablets', fi:'100 tablettia'}, company:'Orion Corporation', listed:true}]},
+    '0381': {available: [{vnr:'567362', name:'Seronil', strength:'20 mg', pack_label:{en:'30 capsules', fi:'30 kapselia'}, company:'Orion Corporation'}, {vnr:'138828', name:'Self', strength:'20 mg', pack_label:{en:'30', fi:'30'}, company:'X'}], short: []}};
+  const critical = env.impactMarkup({NordicArticleNumber:'147881', atc:'N05AH04', substitution_group:'1299', other_packages_count:0, impact:'critical'}, groups);
+  assert.match(critical, /No interchangeable product on the market\. Talk to your pharmacist or doctor early\./);
+  assert.match(critical, /The other packages in its substitution group are short too\./);
+  assert.match(critical, /<strong>Ketipinor 200&nbsp;mg|<strong>Ketipinor 200\u00a0mg/); assert.match(critical, /Orion Corporation/); assert.doesNotMatch(critical, /class="alt-flag"/, 'packages under "Short too" need no flag of their own');
+  assert.doesNotMatch(critical, /Quetiapin Hexal/, 'the package itself is not its own alternative');
+  assert.match(critical, /Substitution group 1299\./); assert.match(critical, /href="about\.html#impact"/);
+  const substitute = env.impactMarkup({NordicArticleNumber:'138828', atc:'N06AB03', substitution_group:'0381', other_packages_count:1, impact:'substitute'}, groups);
+  assert.match(substitute, /Pharmacy can usually give a substitute: 1 other package on the market/);
+  assert.match(substitute, /<h3>Other packages on the market<\/h3>/); assert.match(substitute, /Seronil 20.mg<\/strong><span>30 capsules<\/span><span>Orion Corporation<\/span>/);
+  assert.doesNotMatch(substitute, /<strong>Self/);
+  const alone = env.impactMarkup({NordicArticleNumber:'111111', atc:'N01', substitution_group:'9999', other_packages_count:0, impact:'critical'}, groups);
+  assert.match(alone, /It is the only package in its substitution group on the market\./);
+  const nogroup = env.impactMarkup({NordicArticleNumber:'111111', atc:'L01', impact:'nogroup'}, groups);
+  assert.match(nogroup, /No substitution group\. Ask your pharmacist\./); assert.doesNotMatch(nogroup, /Substitution group \d/);
 });
 
 test('the medicine page opens the right package from a feed link and shows a helpful state for an unknown number', () => {

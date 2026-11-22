@@ -106,7 +106,8 @@ def test_home_has_the_form_shelf_before_the_newest_cards_and_about_leads_with_th
     assert home.index('id="q"') < home.index('id="shelf"')
     about = out['about.html']
     assert about.index('data-i18n="aboutIntro"') < about.index('class="toc"') < about.index('id="what-to-do"')
-    assert 'id="what-is"' not in about and about.count('<li><a href="#') == 9
+    assert 'id="what-is"' not in about and about.count('<li><a href="#') == 10
+    assert about.index('id="substitution"') < about.index('id="impact"') < about.index('id="how"')
 
 
 def test_pages_load_only_small_data_files():
