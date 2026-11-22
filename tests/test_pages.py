@@ -116,3 +116,17 @@ def test_pages_load_only_small_data_files():
         assert 'data.json' not in text and 'current.json' not in text, name
     assert 'data.json' not in (root / 'medicine.js').read_text(encoding='utf-8')
     assert "p/${vnr.slice(-2)}.json" in (root / 'medicine.js').read_text(encoding='utf-8')
+
+
+def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
+    """Faces of one family with different font-weight ranges are not combined by unicode-range:
+    the browser picks one of them for a weight, and every character it does not cover falls back to Arial.
+    The digits face once had 100 900 against the letters' 200 800, and all letters rendered in Arial."""
+    css = (ROOT / 'site/style.css').read_text(encoding='utf-8')
+    faces = re.findall(r"@font-face\{font-family:'Atkinson Hyperlegible Next';([^}]*)\}", css)
+    assert len(faces) == 3
+    assert {re.search(r'font-weight:([\d ]+);', f).group(1) for f in faces} == {'200 800'}
+    ranges = [re.search(r'unicode-range:([^;}]+)', f).group(1) for f in faces]
+    assert any(r == 'U+0030-0039' for r in ranges)
+    html = render_pages(749)['index.html']
+    assert 'fonts/atkinson-latin.woff2' in html and 'fonts/public-sans-digits.woff2' in html
