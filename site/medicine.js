@@ -12,8 +12,7 @@ function lookup(vnr, shard) {
   return gone.length ? {state: 'left', events: gone} : {state: 'missing', events: []};
 }
 let vnr = '', shard = null;
-// One horizontal track with three markers in time order. Markers are evenly spaced, so the end can never hide behind today;
-// the days between them are written under each marker.
+// One track with markers in time order and the actual dates next to each marker.
 function timelineMarkup(e, archive) {
   const t = copy[language], now = archive ? parsedDate(e.last_seen).valueOf() : todayUTC(), model = timelineModel(e, now);
   const items = {
@@ -25,7 +24,7 @@ function timelineMarkup(e, archive) {
   const todayAt = model.order.indexOf('today');
   const track = model.order.map((key, i) => {
     const [label, date, note] = items[key], prev = model.order[i - 1];
-    // The connector to the left of a marker is solid when that stretch has happened, dashed when it is still ahead.
+    // The connector before a marker is solid when that stretch has happened, dashed when it is still ahead.
     const seg = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : `seg-done seg-${tone}`;
     return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(t.late)}</small>` : ''}</li>`;
   }).join('');
