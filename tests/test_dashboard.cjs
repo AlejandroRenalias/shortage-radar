@@ -436,14 +436,42 @@ test('critical rows group by medicine and form, with strengths side by side', ()
   const groups = Array.from(context.groupByMedicine(rows, 'en')).map(plain);
   assert.deepEqual(groups.map(g => [g.medicine, nb(g.strength), g.packages.length]), [['Moviprep', '', 1], ['Octreotide', '10/20/30 mg', 3], ['Quetiapine', '200/400 mg', 3]]);
   assert.deepEqual(groups[2].names, ['Biquetan', 'Ketipinor', 'Seroquel Prolong']);
-  // The same substance in another form is another row.
-  assert.equal(context.groupByMedicine([...rows, p('8', 'Quetiapin tablet', '25 mg', 'Quetiapine', 'tabletti, kalvopäällysteinen')], 'en').length, 3);
+  // The same substance in another form is another row, and prolonged-release tablets are not ordinary tablets.
+  assert.equal(groups[2].form, 'Prolonged-release tablet');
+  assert.equal(context.groupByMedicine([...rows, p('8', 'Quetiapin tablet', '25 mg', 'Quetiapine', 'tabletti, kalvopäällysteinen')], 'en').length, 4);
+  assert.equal(context.groupByMedicine([...rows, p('8', 'Ketipinor', '50 mg', 'Quetiapine', 'depottabletti')], 'en').length, 3);
   assert.equal(context.groupByMedicine([...rows, p('8', 'Quetiapin solution', '25 mg/ml', 'Quetiapine', 'oraaliliuos')], 'en').length, 4);
   assert.equal(nb(context.mergedStrengths(['25 mg/ml', '200 mg'])), '25 mg/ml, 200 mg');
   setLanguage(context, 'fi');
   assert.equal(nb(context.mergedStrengths(['2,5 mg', '10 mg'])), '2,5 mg, 10 mg');
   assert.equal(nb(context.mergedStrengths(['2 g', '1 g'])), '1 g, 2 g', 'never "1/2 g", which reads as a half');
   setLanguage(context, 'en');
+});
+
+test('modified-release and similar forms are named exactly in both languages, and the form filter still groups them', () => {
+  const cases = [
+    ['depottabletti', 'Prolonged-release tablet', 'Depottabletti', 'tablet'],
+    ['depotkapseli, kova', 'Prolonged-release capsule', 'Depotkapseli', 'capsule'],
+    ['säädellysti vapauttava tabletti', 'Modified-release tablet', 'Säädellysti vapauttava tabletti', 'tablet'],
+    ['säädellysti vapauttava kapseli, kova', 'Modified-release capsule', 'Säädellysti vapauttava kapseli', 'capsule'],
+    ['enterotabletti', 'Gastro-resistant tablet', 'Enterotabletti', 'tablet'],
+    ['enterokapseli, kova', 'Gastro-resistant capsule', 'Enterokapseli', 'capsule'],
+    ['tabletti, suussa hajoava', 'Orally disintegrating tablet', 'Suussa hajoava tabletti', 'tablet'],
+    ['dispergoituva tabletti', 'Dispersible tablet', 'Dispergoituva tabletti', 'tablet'],
+    ['poretabletti', 'Effervescent tablet', 'Poretabletti', 'tablet'],
+    ['imeskelytabletti, puristettu', 'Lozenge', 'Imeskelytabletti', 'tablet'],
+    ['injektiokuiva-aine ja liuotin, depotsuspensiota varten', 'Prolonged-release injection', 'Depotinjektio', 'injection'],
+    ['Injektioneste, depotsuspensio, esitäytetty ruisku', 'Prolonged-release injection', 'Depotinjektio', 'injection'],
+    ['tabletti, kalvopäällysteinen', 'Tablet', 'Tabletti', 'tablet'],
+    ['purutabletti', 'Chewable tablet', 'Purutabletti', 'tablet'],
+  ];
+  for (const [form, en, fi, kind] of cases) {
+    setLanguage(context, 'en'); assert.equal(context.formText(form), en, form);
+    setLanguage(context, 'fi'); assert.equal(context.formText(form), fi, form);
+    assert.equal(context.formKind(form), kind, form);
+  }
+  setLanguage(context, 'en');
+  assert.match(context.pkgCard({name:'Quetiapin Hexal', strength:'200 mg', form:'depottabletti', atc:'N05AH04', UnavailableFrom:'2026-11-01'}, NOW), /<p class="pkg-kind"><span>Prolonged-release tablet<\/span>/);
 });
 
 test('the impact filter is kept in the address and narrows the list', () => {
@@ -576,9 +604,15 @@ test('the timeline is one track in time order with evenly spaced markers and the
 test('the form shelf counts packages by form and links to the list filtered by that form', () => {
   const [env] = pageEnv(['home.js']);
   vm.runInContext("language='en'", env);
-  const html = env.shelfMarkup({'tabletti, kalvopäällysteinen':5, 'tabletti':3, 'silmätipat, liuos':2, 'nenäsumute, liuos':4, 'inhalaatiojauhe':1});
+  // Long tile words carry soft hyphens, so they break only at a hyphen in a narrow tile.
+  const raw = env.shelfMarkup({'tabletti, kalvopäällysteinen':5, 'tabletti':3, 'silmätipat, liuos':2, 'nenäsumute, liuos':4, 'inhalaatiojauhe':1});
+  assert.match(raw, /In\u00adhal\u00aders/);
+  const html = raw.replace(/\u00ad/g, '');
   assert.match(html, /href="shortages\.html\?form=tablet">[\s\S]*?<span class="shelf-name">Tablets<\/span><span class="shelf-count">8<\/span>/);
   assert.match(html, /form=spray[\s\S]*?Sprays[\s\S]*?4/); assert.match(html, /form=inhaler[\s\S]*?Inhalers/); assert.match(html, /form=drops/);
   assert.doesNotMatch(html, /form=capsule/);
   assert.equal((html.match(/<li>/g) || []).length, 4);
+  const copy = vm.runInContext('copy', env);
+  for (const lang of ['en', 'fi']) for (const kind of ['injection', 'inhaler', 'suppository']) assert.match(copy[lang]['shelf_' + kind], /\u00ad/, `${lang} ${kind}`);
+  assert.match(fs.readFileSync('site/style.css', 'utf8'), /\.shelf-name\{[^}]*overflow-wrap:normal[^}]*hyphens:auto/);
 });

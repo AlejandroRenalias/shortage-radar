@@ -52,9 +52,28 @@ function freshnessInfo(d, now = Date.now(), today = todayUTC()) {
   if (built && !Number.isNaN(built.valueOf())) return {text:`${t.checked(timestampText(d.generated_at))}. ${t.buildOnly}`, stale:now-built.valueOf()>3*86400000, warning:t.staleBuild};
   return {text:'', stale:false, warning:''};
 }
+// Modified-release and similar forms are named exactly, because a pharmacy does not swap them for ordinary tablets or capsules.
+// The form filter still groups them with their pictogram (formKind).
+const MODIFIED_FORMS = [
+  ['depotInjection', v => v.includes('depot') && v.includes('injekt')],
+  ['depotTablet', v => v.includes('depottabletti')],
+  ['depotCapsule', v => v.includes('depotkapseli')],
+  ['mrTablet', v => v.includes('säädellysti vapauttava') && v.includes('tabletti')],
+  ['mrCapsule', v => v.includes('säädellysti vapauttava') && v.includes('kapseli')],
+  ['entericTablet', v => v.includes('enterotabletti')],
+  ['entericCapsule', v => v.includes('enterokapseli')],
+  ['odFilm', v => v.includes('suussa hajoava kalvo')],
+  ['odTablet', v => v.includes('suussa hajoava') && v.includes('tabletti')],
+  ['dispersibleTablet', v => v.includes('dispergoituva tabletti')],
+  ['effervescentTablet', v => v.includes('poretabletti')],
+  ['lozenge', v => v.includes('imeskelytabletti')],
+  ['sublingualTablet', v => v.includes('kielenalustabletti')]
+];
 function formText(form) {
   if (!form) return '';
   const value = form.toLocaleLowerCase();
+  const modified = MODIFIED_FORMS.find(([, test]) => test(value));
+  if (modified) return copy[language]['form_' + modified[0]];
   if (value.includes('injektio') && value.includes('infuusio')) return copy[language].form_combined;
   if ((value.includes('jauhe') || value.includes('kuiva-aine')) && value.includes('injektio')) return copy[language].form_injectionPowder;
   if ((value.includes('jauhe') || value.includes('kuiva-aine')) && value.includes('infuusio')) return copy[language].form_infusionPowder;
