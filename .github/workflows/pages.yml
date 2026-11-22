@@ -10,12 +10,16 @@ on:
       last_checked:
         type: string
         required: false
+      called_by_archive:
+        type: boolean
+        required: false
+        default: false
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
   freshness:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && !inputs.called_by_archive
     uses: ./.github/workflows/freshness.yml
     permissions:
       contents: read
@@ -70,7 +74,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    if: always() && github.event_name == 'schedule'
+    if: always() && !inputs.called_by_archive && github.event_name == 'schedule'
     needs: [build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 5

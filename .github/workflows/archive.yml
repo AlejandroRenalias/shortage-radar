@@ -28,9 +28,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      deployments: read
     outputs:
       checked: ${{ steps.check.outputs.date }}
       changed: ${{ steps.commit.outputs.changed }}
+      pages_current: ${{ steps.pages_status.outputs.current }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -72,12 +74,27 @@ jobs:
             done
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check latest Pages deployment
+        id: pages_status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: Europe/Helsinki
+        run: |
+          current=false
+          if deployment=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&ref=main&per_page=1" --jq '.[0].id // empty') && [ -n "$deployment" ]; then
+            if status=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses?per_page=1" --jq '.[0] | select(.state == "success") | .created_at') && [ -n "$status" ] && [ "$(date -d "$status" +%F)" = "$(date +%F)" ]; then
+              current=true
+            fi
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
   deploy:
-    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.archive.result == 'success' && (needs.archive.outputs.changed == 'true' || needs.archive.outputs.checked != needs.freshness.outputs.last_checked)
+    # An unavailable or empty freshness lookup forces this run's deploy; it does not retry itself.
+    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.archive.result == 'success' && (needs.archive.outputs.changed == 'true' || needs.archive.outputs.checked != needs.freshness.outputs.last_checked || needs.archive.outputs.pages_current != 'true')
     needs: [freshness, archive]
     uses: ./.github/workflows/pages.yml
     with:
       last_checked: ${{ needs.archive.outputs.checked }}
+      called_by_archive: true
     permissions:
       contents: read
       pages: write
