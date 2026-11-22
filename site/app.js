@@ -37,8 +37,8 @@ Object.assign(copy.fi, {
   delayExcluded: (first,noEstimate,start,end,changed) => ` Tarkastelusta jätettiin pois ${first} jo ensimmäisessä tilannekuvassa ollutta ilmoitusta, ${noEstimate} ilman arviota, ${start} pitkän aukon jälkeen havaittua, ${end} pitkän aukon aikana poistunutta ja ${changed}, joiden pakkaus jäi listalle muuttuneella ilmoituksella.`,
   delayExamples: 'Pisimmät havaitut viiveet', lastListed: 'viimeksi listalla', goneBy: 'poistunut viimeistään', dayRange: (a,b) => `${a === b ? a : `${a}–${b}`} päivää`
 });
-Object.assign(copy.en, {skip:'Skip to shortages', sortLabel:'Sort by', sortNewest:'Newest', sortName:'Name', sortLongest:'Longest running', longestTitle:'Longest current shortages', longestNote:'Time since the reported start date.', veterinary:'Veterinary', download:'Download the data:', checked:d=>`Checked ${d}`, stale:'Data was last checked more than 3 days ago.'});
-Object.assign(copy.fi, {skip:'Siirry saatavuushäiriöihin', sortLabel:'Järjestä', sortNewest:'Uusimmat', sortName:'Nimi', sortLongest:'Pisimpään jatkuneet', longestTitle:'Pisimpään jatkuneet saatavuushäiriöt', longestNote:'Aika ilmoitetusta alkamispäivästä.', veterinary:'Eläinlääke', download:'Lataa aineisto:', checked:d=>`Tarkistettu ${d}`, stale:'Aineisto on tarkistettu yli 3 päivää sitten.'});
+Object.assign(copy.en, {skip:'Skip to shortages', sortLabel:'Sort by', sortCurrent:'Current first', sortNewest:'Newest', sortName:'Name', sortLongest:'Longest running', longestTitle:'Longest current shortages', longestNote:'Time since the reported start date.', veterinary:'Veterinary', download:'Download the data:', checked:d=>`Checked ${d}`, stale:'Data was last checked more than 3 days ago.'});
+Object.assign(copy.fi, {skip:'Siirry saatavuushäiriöihin', sortLabel:'Järjestä', sortCurrent:'Nykyiset ensin', sortNewest:'Uusimmat', sortName:'Nimi', sortLongest:'Pisimpään jatkuneet', longestTitle:'Pisimpään jatkuneet saatavuushäiriöt', longestNote:'Aika ilmoitetusta alkamispäivästä.', veterinary:'Eläinlääke', download:'Lataa aineisto:', checked:d=>`Tarkistettu ${d}`, stale:'Aineisto on tarkistettu yli 3 päivää sitten.'});
 Object.assign(copy.en, {buildOnly:'Build time; the last source check is unknown.', staleBuild:'The build is more than 3 days old.'});
 Object.assign(copy.fi, {buildOnly:'Koostamisaika; viimeisin lähteen tarkistus ei ole tiedossa.', staleBuild:'Koostamisesta on yli 3 päivää.'});
 Object.assign(copy.en, {form:'Form on the package (Finnish)', latest:d=>`Latest snapshot ${d}`, updated:d=>`Updated ${d}`, sourceError:'Fimea open data', historyError:'History could not be loaded.', delayHeadline:(past,total,unknown,a,b)=>`${past} of ${total} observed shortages stayed listed past the estimate; for ${unknown} we cannot tell yet. The share listed past the estimate is ${a}–${b}.`, delayBy:'Left by the estimate', delayPast:'Listed after the estimate', delayUncertain:'Timing uncertain', delayActive:n=>`${n} other shortages were still listed past the estimate.`, delayMethod:(n,g)=>`Among ${n} shortages that entered and left the list, captures were at most ${g} days apart at both ends. Removal from the list does not prove supply returned. The uncertain cases set the range; ongoing shortages are not included in it.`});
@@ -156,12 +156,17 @@ function card(e, now) {
   const details=[[t.form,e.form],[t.strength,strengthText(e)],[t.substance,e.substances],['ATC',e.atc],['VNR',e.NordicArticleNumber],[t.company,e.Company],[t.reported,e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '']];
   return `<article class="row"><div class="card-heading"><h3>${esc(e.name || t.unavailable)}</h3><span class="status ${upcoming ? 'upcoming' : ''}">${esc(status)}</span>${(e.atc || '').startsWith('Q') ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</div><p class="form">${esc(formAndPack(e).filter(Boolean).join(' · '))}</p><p class="group">${esc(t.group)}: ${esc(group)}</p><p class="status-sentence">${esc(sentence)}</p><p>${esc(expectation)} ${late ? `<strong class="late">${esc(t.late)}.</strong>` : ''}</p>${e.other_packages_count > 0 ? `<p class="ask">${esc(t.otherPackages)}</p>` : `<p class="ask">${esc(t.askPharmacy)}</p>`}<details><summary>${esc(t.details)}</summary><dl>${details.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value || '—')}</dd></div>`).join('')}</dl><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${t.moreInfoUrl}">${esc(t.moreInfoLink)} ↗</a></p></details></article>`;
 }
+function compareCurrentFirst(a, b, now) {
+  const startA=parsedDate(a.UnavailableFrom), startB=parsedDate(b.UnavailableFrom);
+  const rank=start=>!start ? 2 : start.valueOf()>now ? 1 : 0;
+  const groupA=rank(startA), groupB=rank(startB);
+  return groupA-groupB || (groupA===0 ? startB-startA : groupA===1 ? startA-startB : 0);
+}
 function drawList() {
   const t=copy[language], query=$('search').value;
   const rows=data.events.filter(e=>!e.removed_on && searchMatches(e,query));
-  const sort=$('sort').value; rows.sort((a,b)=>sort==='name' ? (a.name || '').localeCompare(b.name || '',language) : sort==='longest' ? (a.UnavailableFrom || '9999').localeCompare(b.UnavailableFrom || '9999') : (b.UnavailableFrom || '').localeCompare(a.UnavailableFrom || ''));
+  const now=todayUTC(), sort=$('sort').value; rows.sort((a,b)=>sort==='current' ? compareCurrentFirst(a,b,now) : sort==='name' ? (a.name || '').localeCompare(b.name || '',language) : sort==='longest' ? (a.UnavailableFrom || '9999').localeCompare(b.UnavailableFrom || '9999') : (b.UnavailableFrom || '').localeCompare(a.UnavailableFrom || ''));
   $('result-count').textContent=t.count(rows.length);
-  const now=todayUTC();
   $('jump').hidden=!query.trim(); $('jump').textContent=`${t.count(rows.length)} · ${t.jump}`;
   $('list').innerHTML=rows.slice(0,visible).map(e=>card(e,now)).join('') || `<p class="list-state">${esc(t.empty)}</p>`;
   $('more').textContent=t.more; $('more').hidden=visible>=rows.length;

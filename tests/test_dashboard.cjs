@@ -144,6 +144,28 @@ test('the q parameter fills the search from a feed link', () => {
   assert.ok(context.searchMatches({NordicArticleNumber:'599361', name:'Other'}, queryFromUrl('?q=599361')));
 });
 
+test('default list orders current shortages before upcoming ones', () => {
+  const html = fs.readFileSync('site/index.html', 'utf8');
+  assert.match(html, /<select id="sort"><option value="current"/);
+  const elements = {};
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', value:'', addEventListener(){}, setAttribute(){}};
+  get('sort').value = 'current';
+  const document = {getElementById:get, documentElement:{dataset:{},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
+  const env = vm.createContext({Intl, Date, document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{})});
+  vm.runInContext(fs.readFileSync('site/app.js','utf8'), env);
+  vm.runInContext(`data={events:[
+    {name:'Future later',UnavailableFrom:'2099-12-31'},
+    {name:'Current older',UnavailableFrom:'2000-01-01'},
+    {name:'Unknown'},
+    {name:'Future sooner',UnavailableFrom:'2099-01-01'},
+    {name:'Current newer',UnavailableFrom:'2001-01-01'}
+  ]}`, env);
+  env.drawList();
+  const names = [...get('list').innerHTML.matchAll(/<h3>(.*?)<\/h3>/g)].map(m=>m[1]);
+  assert.deepEqual(names, ['Current newer','Current older','Future sooner','Future later','Unknown']);
+  assert.equal(get('result-count').textContent, '5 records');
+});
+
 test('this week summary and how-we-count note state their window and counts', () => {
   const elements = {};
   const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:true, href:'', value:'en', addEventListener(){}, setAttribute(){}};
