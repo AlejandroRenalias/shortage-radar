@@ -111,29 +111,21 @@ IMPACT_NOTES = {'substitute': 'Other packages in the same substitution group are
                 'nogroup': 'Often hospital medicines or medicines from one company. Ask your pharmacist.'}
 
 
-def triage_bar(impact):
-    """Human medicines split by impact, as one bar. The list below it carries the same numbers in words."""
-    total = sum(impact.get(k, 0) for k in IMPACT_NAMES) or 1
-    x, parts = 0.0, []
-    for key in IMPACT_NAMES:
-        width = 100 * impact.get(key, 0) / total
-        if width:
-            parts.append(f'<rect class="tb-{key}" x="{x:.2f}" y="0" width="{width:.2f}" height="12"/>')
-            # The critical part also carries a hatch, so the bar does not rely on colour alone.
-            if key == 'critical':
-                parts.append(f'<rect fill="url(#tb-hatch)" x="{x:.2f}" y="0" width="{width:.2f}" height="12"/>')
-        x += width
-    return ('<svg class="triage-bar" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><pattern id="tb-hatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.2" height="3" fill="#fff" fill-opacity=".55"/></pattern></defs>'
-            + ''.join(parts) + '</svg>')
+def triage_bar(share):
+    """One level's share of the human packages, as a bar. The number beside it says the same in words."""
+    return (f'<svg class="tri-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="track" width="100" height="6"/>'
+            f'<rect class="part" width="{share:.2f}" height="6"/></svg>')
 
 
 def triage_list(impact):
+    total = sum(impact.get(k, 0) for k in IMPACT_NAMES) or 1
     rows = []
     for key, name in IMPACT_NAMES.items():
         n = impact.get(key, 0)
         rows.append(f'<li><a class="tri tri-{key}" href="shortages.html?impact={key}"><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS[key]}</svg>'
                     f'<span class="tri-num">{n:,}</span><span class="tri-text"><strong data-i18n="impact_{key}">{name}</strong><span data-i18n="triageNote_{key}">{IMPACT_NOTES[key]}</span></span>'
-                    '<svg class="uicon tri-go" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></a></li>')
+                    '<svg class="uicon tri-go" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg>'
+                    f'{triage_bar(100 * n / total)}</a></li>')
     return ''.join(rows)
 
 
@@ -146,29 +138,27 @@ def home(count, impact=None):
     return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-text">
 <h1 id="hero-line" data-count="{count}">{line}</h1>
 {answer}
-<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'critical', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
-<div id="triage-bar">{triage_bar(impact)}</div>
-<ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
-<p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a> <span data-i18n="triageVetNote">Substitution groups are for human medicines.</span></p>
-<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
-</section></div>
-<div class="hero-side">
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
 <p class="lead" id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
-<section class="shelf needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
-</div></div></section>
-<section class="wrap newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
-<section class="facts-band needs-js" aria-labelledby="facts-title"><div class="wrap">
+</div>
+<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'critical', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
+<ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
+<p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a> <span data-i18n="triageVetNote">Substitution groups are for human medicines.</span></p>
+<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
+</section></div></section>
+<section class="wrap home-section needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
+<section class="wrap home-section newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
+<section class="wrap home-section facts-block needs-js" aria-labelledby="facts-title">
 <div class="facts-head"><h2 id="facts-title">This week</h2><p id="facts-since"></p></div>
 <dl class="facts" id="facts"></dl>
-</div></section>
+</section>
 <section class="wrap paths" aria-labelledby="paths-title">
 <h2 id="paths-title" class="sr-only" data-i18n="pathsTitle">Where to next</h2>
-<a class="path path-main" href="shortages.html"><svg class="uicon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m16.500 16.500 4 4"/></svg><span><strong data-i18n="pathFind">Find a medicine</strong><span data-i18n="pathFindText">Search the full list and filter it by group, form and company.</span></span></a>
+<a class="path" href="shortages.html"><svg class="uicon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m16.500 16.500 4 4"/></svg><span><strong data-i18n="pathFind">Find a medicine</strong><span data-i18n="pathFindText">Search the full list and filter it by group, form and company.</span></span></a>
 <a class="path" href="trends.html"><svg class="uicon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path d="M4 20V4M4 20h16M8 15l3-4 3 2 5-7"/></svg><span><strong data-i18n="pathTrends">See trends</strong><span data-i18n="pathTrendsText">How many shortages there are and how that has changed.</span></span></a>
 <a class="path" href="about.html#what-to-do"><svg class="uicon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path d="M12 4v16M4 12h16"/><rect x="3" y="3" width="18" height="18" rx="5"/></svg><span><strong data-i18n="pathAdvice">What to do if your medicine is short</strong><span data-i18n="pathAdviceText">Short steps for patients and relatives.</span></span></a>
 </section>

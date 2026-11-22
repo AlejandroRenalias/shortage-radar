@@ -1,4 +1,4 @@
-// Home: one sentence on today's situation, the impact triage, a search, a shelf of forms, the newest packages, three facts and three paths.
+// Home: one sentence on today's situation, a search, the impact triage, a list of forms, the newest packages, three facts and three paths.
 let data, week = null;
 function started(rows, now) { return rows.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now); }
 // Counts for the form shelf, from the raw form text counted at build time.
@@ -26,8 +26,8 @@ function impactCounts() {
   return Object.fromEntries(raw.split(',').filter(Boolean).map(pair => { const [key, n] = pair.split(':'); return [key, Number(n) || 0]; }));
 }
 function triageMarkup(counts) {
-  const t = copy[language];
-  return ['substitute', 'critical', 'nogroup'].map(k => `<li><a class="tri tri-${k}" href="shortages.html?impact=${k}">${uiIcon(k, 24)}<span class="tri-num">${numberText(counts[k] || 0)}</span><span class="tri-text"><strong>${esc(t['impact_' + k])}</strong><span>${esc(t['triageNote_' + k])}</span></span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon tri-go"')}</a></li>`).join('');
+  const t = copy[language], levels = ['substitute', 'critical', 'nogroup'], total = levels.reduce((sum, k) => sum + (counts[k] || 0), 0) || 1;
+  return levels.map(k => `<li><a class="tri tri-${k}" href="shortages.html?impact=${k}">${uiIcon(k, 24)}<span class="tri-num">${numberText(counts[k] || 0)}</span><span class="tri-text"><strong>${esc(t['impact_' + k])}</strong><span>${esc(t['triageNote_' + k])}</span></span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon tri-go"')}<svg class="tri-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="track" width="100" height="6"/><rect class="part" width="${(100 * (counts[k] || 0) / total).toFixed(2)}" height="6"/></svg></a></li>`).join('');
 }
 function renderHome() {
   const t = copy[language], hero = $('hero-line'), now = todayUTC();
