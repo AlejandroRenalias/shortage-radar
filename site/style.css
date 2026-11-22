@@ -319,8 +319,8 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .crit-row summary:focus-visible{outline:3px solid var(--green);outline-offset:2px}
 .crit-name{font-size:1.1875rem;line-height:1.25;margin:0;overflow-wrap:anywhere}
 .crit-form,.crit-names{display:block;color:var(--muted);font-size:.9375rem;line-height:1.35}
-.crit-form{color:var(--ink);font-weight:500}
-.crit-count{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.crit-form{color:var(--ink);font-weight:400}
+.crit-count{font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
 .crit-go{color:var(--muted);transition:transform .15s}
 .crit-row[open] .crit-go{transform:rotate(90deg)}
 .crit-packages{padding:4px 14px 14px}
