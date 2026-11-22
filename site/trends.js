@@ -22,7 +22,7 @@ function drawChart(history, maxGap, width = 400) {
     x0+=w;
     if(i<segments.length-1) {const days=Math.round(day(segments[i+1][0])-day(g[g.length-1])); gaps.push(numberText(days)); svg+=`<rect x="${x0}" y="10" width="${band}" height="140" fill="#e3ece7"/>`; x0+=band;}
   });
-  const mid=(lo+hi)/2, tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(n)}</text>`;
+  const mid=(lo+hi)/2, tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#5d6d68" text-anchor="end">${numberText(n)}</text>`;
   const grid=`<path d="M40 ${y(hi)}H${plotRight}M40 ${y(mid)}H${plotRight}M40 150H${plotRight}" stroke="#d3dede" fill="none"/>${tick(hi,5)}${tick(mid,5)}${tick(lo,5)}`;
   const label=`<text x="${plotRight+8}" y="${(y(last.count)+5).toFixed(1)}" font-size="14" font-weight="600" fill="#0f2a24">${latest}</text>`;
   $('chart').innerHTML=`<svg viewBox="0 0 ${width} 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}${label}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)}, ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${lo>0 ? `<div class="chart-labels"><span>${esc(t.axisNote(numberText(lo)))}</span></div>` : ''}${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
