@@ -4,6 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 import os
+import unicodedata
 from statistics import median
 from pathlib import Path
 
@@ -44,13 +45,25 @@ def read_snapshot(path):
     return rows
 
 
-def register(path, wanted):
+def match_key(product):
+    """Require known group, strength and form; normalise text without guessing equivalence."""
+    def normalise(value):
+        return ' '.join(unicodedata.normalize('NFKC', value).casefold().split())
+    key = tuple(normalise(product.get(field, '')) for field in ('substitution_group', 'strength', 'form'))
+    return key if all(key) else None
+
+
+def register(path, wanted, current_shortages=()):
     packages, exact, products, substances = {}, set(), {}, {}
+    candidates = []
+    current_shortages = set(current_shortages)
     for _, el in ET.iterparse(path, events=('end',)):
         if el.tag == 'Pakkaus':
             vnr = el.findtext('VNR-numero')
             unit = el.find('Pakkauskokoyksikko')
             package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '', unit.get('value', '') if unit is not None else '')
+            old_vnrs = {x.text for x in el.findall('VanhaVNR') if x.text}
+            candidates.append((el.get('Laakevalmiste-ref'), vnr, old_vnrs, el.findtext('Kaupanolo/Kaupan'), el.findtext('SaatavuushairioTiedot/Saatavuushairio')))
             if vnr in wanted:
                 packages[vnr] = package
                 exact.add(vnr)
@@ -67,10 +80,17 @@ def register(path, wanted):
         elif el.tag == 'Laakeaine':
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
             el.clear()
+    available = {}
+    for ref, vnr, old_vnrs, market, shortage in candidates:
+        key = match_key(products.get(ref, {}))
+        if key and vnr and market == '1' and shortage == '0' and not ({vnr} | old_vnrs) & current_shortages:
+            available.setdefault(key, set()).add(vnr)
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
-            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, products[ref]['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)))
+            key = match_key(products[ref])
+            count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
+            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, products[ref]['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
     return result
 
 
@@ -182,9 +202,14 @@ def build():
     es, history = events(snapshots)
     for h in history:
         h['imported'] = h['date'] in imported
-    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es})
+    current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
+    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs)
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
+        if e['removed_on'] is None:
+            e.setdefault('other_packages_count', 0)
+        else:
+            e.pop('other_packages_count', None)
     current = [e for e in es if e['removed_on'] is None]
     unmatched = sorted({e['NordicArticleNumber'] for e in current if not e.get('name')})
     matched = sum(bool(e.get('name')) for e in current)
@@ -198,12 +223,12 @@ def build():
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata}
     output['generated_at'] = datetime.now(timezone.utc).isoformat()
     output['last_checked'] = os.environ.get('LAST_CHECKED') or None
-    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary']
+    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market']
     with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(csv_columns)
         for e in current:
-            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else ''])
+            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else ''])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current
