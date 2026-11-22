@@ -24,7 +24,7 @@ A scheduled job downloads and validates Fimea's shortage file and saves a dated 
 
 The archive checks Fimea four times daily at 04:35, 10:05, 15:35 and 21:05 UTC to reduce the chance of a missed day. A separate Pages build runs daily at 04:55 UTC as a safety net. When a scheduled or manual workflow starts more than 30 hours after the last successful archive check, it raises a data-pipeline issue until an archive check succeeds. If GitHub starts no workflows at all, that alert will be late; the site itself shows a stale-data warning after more than three days.
 
-Each page loads `current.json` for the list; the trends page then loads `history.json` for the chart and analysis, and the home page loads `week.json` for its weekly facts. The downloadable `data.json` retains the complete event history. `week.json` holds the counts for the "This week" summary, and `feed.xml` (English) and `feed-fi.xml` (Finnish) are Atom feeds of the shortages that appeared or left the list in the last 14 days, with at most 200 entries.
+The list page loads `current.json`. The other pages load small files built with it, so no page downloads the whole archive: `summary.json` (counts, longest and newest packages) for home, trends and about, `p/NN.json` (every notice of the packages whose VNR ends in NN) for the medicine page, `history.json` for the trends chart and `week.json` for the weekly facts. The downloadable `data.json` retains the complete event history. `week.json` holds the counts for the "This week" summary, and `feed.xml` (English) and `feed-fi.xml` (Finnish) are Atom feeds of the shortages that appeared or left the list in the last 14 days, with at most 200 entries.
 
 The current dataset counts other packages in the same substitution group, strength and pharmaceutical form whose register entries say they are on the market and not in shortage, excluding packages listed in the current shortage file. This is not a pharmacy stock check, and a group does not establish that a particular package is suitable.
 
@@ -46,7 +46,7 @@ The site is static and has five pages, all under `/shortage-radar/` on GitHub Pa
 | Trends (Tilastot) | `trends.html` | Count over time, this week, groups, companies, longest running, the delay result and a citation. |
 | About (Tietoa) | `about.html` | What a shortage is, what to do, substitution groups, how the data works, limits, downloads, privacy and licence. |
 
-The pages are built by `scripts/pages.py`, which writes the shared header and footer once into every page, and `scripts/build.py` runs it with the data. The generated pages are not committed. Browser code is in `site/`: `i18n.js` holds all text, `lib.js` the shared code (search, dates, the package card, filters, the timeline model, page set-up) and one script for each page. Form pictograms are drawn in `lib.js`. The font is Atkinson Hyperlegible Next, hosted in `site/fonts`.
+The pages are built by `scripts/pages.py`, which writes the shared header and footer once into every page, and `scripts/build.py` runs it with the data. The generated pages are not committed. Browser code is in `site/`: `i18n.js` holds all text, `lib.js` the shared code (search, dates, the package card, filters, the timeline model, page set-up) and one script for each page. Form pictograms are drawn in `lib.js`. The font is Atkinson Hyperlegible Next, hosted in `site/fonts`; its digits are replaced by Public Sans digits (a 3 KB subset under the same family name) because Atkinson's zero is slashed and reads as a letter in dates and doses.
 
 ## Sources and limits
 
@@ -73,6 +73,6 @@ Open `http://localhost:8000/` to preview the static site.
 
 ## Licence and citation
 
-Code is licensed under the [MIT License](LICENSE). Fimea data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Atkinson Hyperlegible Next is locally hosted under the SIL Open Font License; the licence text is in [`site/fonts`](site/fonts/).
+Code is licensed under the [MIT License](LICENSE). Fimea data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Atkinson Hyperlegible Next and the Public Sans digits are locally hosted under the SIL Open Font License; the licence texts are in [`site/fonts`](site/fonts/).
 
 Suggested citation: Alejandro Renalias, *Shortage Radar*, https://alejandrorenalias.github.io/shortage-radar/ (data dated [data date], accessed [date]); data from the Finnish Medicines Agency Fimea, CC BY 4.0, selected, joined and transformed; earlier captures from the Internet Archive.
