@@ -111,7 +111,7 @@ def test_feed_is_capped_and_links_open_the_site_on_the_medicine():
     assert len(entries) == FEED_MAX_ENTRIES
     first = entries[0]
     vnr = first.findtext(ATOM + 'title').rsplit('VNR ', 1)[1]
-    assert first.find(ATOM + 'link').get('href') == f'https://alejandrorenalias.github.io/shortage-radar/?q={vnr}'
+    assert first.find(ATOM + 'link').get('href') == f'https://alejandrorenalias.github.io/shortage-radar/medicine.html?vnr={vnr}'
     ids_before = [e.findtext(ATOM + 'id') for e in entries]
     assert ids_before == [e.findtext(ATOM + 'id') for e in ET.fromstring(feeds(es, snapshots, history)['feed.xml'].encode('utf-8')).findall(ATOM + 'entry')]
     assert all(i.startswith('tag:alejandrorenalias.github.io,2026:shortage-radar/') for i in ids_before)

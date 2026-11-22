@@ -10,6 +10,8 @@ from pathlib import Path
 
 from changes import feeds, week_summary
 from packs import pack_label
+from pages import render_pages
+from slices import package_shards, summary
 
 ROOT = Path(__file__).resolve().parents[1]
 # Captures further apart than this are not joined into one continuous series,
@@ -236,9 +238,17 @@ def build():
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    meta = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
+    shard_dir = ROOT / 'site/p'
+    shard_dir.mkdir(exist_ok=True)
+    for name, shard in package_shards(es, meta).items():
+        (shard_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (ROOT / 'site/summary.json').write_text(json.dumps(summary(current, meta), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     for name, text in feeds(es, snapshots, history).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
+    for name, html in render_pages(len(current)).items():
+        (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
 
 
