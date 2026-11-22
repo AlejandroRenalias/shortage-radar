@@ -9,20 +9,22 @@ function drawChart(history, maxGap, width = 400) {
   if (history.length < 2) { $('chart').textContent=t.chartEmpty; return; }
   const day=h=>Date.parse(h.date)/86400000, segments=[];
   history.forEach(h=>{const g=segments[segments.length-1]; if(g && day(h)-day(g[g.length-1])<=maxGap) g.push(h); else segments.push([h]);});
-  const counts=history.map(h=>h.count), lo=Math.max(0,Math.floor((Math.min(...counts)-20)/50)*50), hi=Math.ceil((Math.max(...counts)+20)/50)*50, y=n=>150-125*(n-lo)/(hi-lo); let lastX=40;
-  const band=Math.min(26,150/Math.max(1,segments.length-1)), room=(width-50)-band*(segments.length-1), spans=segments.map(g=>Math.max(day(g[g.length-1])-day(g[0]),1)), sum=spans.reduce((a,b)=>a+b,0), minimum=Math.min(14,room/segments.length/2);
+  const last=history[history.length-1], latest=numberText(last.count);
+  // Leave a right gutter for the localized value, with space between it and the last point.
+  const plotRight=width-16-9*latest.length;
+  const counts=history.map(h=>h.count), lo=Math.max(0,Math.floor((Math.min(...counts)-20)/50)*50), hi=Math.ceil((Math.max(...counts)+20)/50)*50, y=n=>150-125*(n-lo)/(hi-lo);
+  const band=Math.min(26,150/Math.max(1,segments.length-1)), room=plotRight-40-band*(segments.length-1), spans=segments.map(g=>Math.max(day(g[g.length-1])-day(g[0]),1)), sum=spans.reduce((a,b)=>a+b,0), minimum=Math.min(14,room/segments.length/2);
   const widths=spans.map(s=>minimum+(room-minimum*segments.length)*s/sum); let x0=40, svg='', gaps=[];
   segments.forEach((g,i)=>{
     const w=widths[i], x=h=>g.length===1 ? x0+w/2 : x0+w*(day(h)-day(g[0]))/(day(g[g.length-1])-day(g[0]));
-    if(i===segments.length-1) lastX=x(g[g.length-1]);
     if(g.length>1) svg+=`<polyline points="${g.map(h=>`${x(h).toFixed(1)},${y(h.count).toFixed(1)}`).join(' ')}" fill="none" stroke="#00704b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
     svg+=g.map(h=>`<circle cx="${x(h).toFixed(1)}" cy="${y(h.count).toFixed(1)}" r="2.6" fill="${h.imported ? '#fbfdfc' : '#00704b'}" stroke="#00704b" stroke-width="1.2"><title>${esc(t.capturePoint(dateText(h.date),numberText(h.count),h.imported ? t.importedSource : t.savedSource))}</title></circle>`).join('');
     x0+=w;
     if(i<segments.length-1) {const days=Math.round(day(segments[i+1][0])-day(g[g.length-1])); gaps.push(numberText(days)); svg+=`<rect x="${x0}" y="10" width="${band}" height="140" fill="#e3ece7"/>`; x0+=band;}
   });
-  const mid=(lo+hi)/2, last=history[history.length-1], tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(n)}</text>`;
-  const grid=`<path d="M40 ${y(hi)}H${width-10}M40 ${y(mid)}H${width-10}M40 150H${width-10}" stroke="#d3dede" fill="none"/>${tick(hi,5)}${tick(mid,5)}${tick(lo,5)}`;
-  const label=`<text x="${(lastX-8).toFixed(1)}" y="${(y(last.count)-9).toFixed(1)}" font-size="14" font-weight="700" fill="#0f2a24" text-anchor="end">${numberText(last.count)}</text>`;
+  const mid=(lo+hi)/2, tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(n)}</text>`;
+  const grid=`<path d="M40 ${y(hi)}H${plotRight}M40 ${y(mid)}H${plotRight}M40 150H${plotRight}" stroke="#d3dede" fill="none"/>${tick(hi,5)}${tick(mid,5)}${tick(lo,5)}`;
+  const label=`<text x="${plotRight+8}" y="${(y(last.count)+5).toFixed(1)}" font-size="14" font-weight="700" fill="#0f2a24">${latest}</text>`;
   $('chart').innerHTML=`<svg viewBox="0 0 ${width} 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}${label}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)}, ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${lo>0 ? `<div class="chart-labels"><span>${esc(t.axisNote(numberText(lo)))}</span></div>` : ''}${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
 }
 function drawTable(history) {
