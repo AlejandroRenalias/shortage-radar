@@ -1,0 +1,55 @@
+name: Check archive freshness
+on:
+  workflow_call:
+    outputs:
+      last_checked:
+        value: ${{ jobs.freshness.outputs.last_checked }}
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pipeline-alert
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    outputs:
+      last_checked: ${{ steps.freshness.outputs.last_checked }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Find latest successful archive job
+        id: freshness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: Europe/Helsinki
+        run: |
+          latest=''
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/archive.yml/runs?branch=main&per_page=100" --jq '.workflow_runs[].id')
+          for run in $runs; do
+            completed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?per_page=100" --jq '[.jobs[] | select(.name == "archive" and .conclusion == "success" and .completed_at != null) | .completed_at] | max // ""')
+            if [[ -n "$completed" && ( -z "$latest" || "$completed" > "$latest" ) ]]; then
+              latest="$completed"
+            fi
+            # A check today is sufficient for both the date and 30-hour test.
+            if [ -n "$latest" ] && [ "$(date -d "$latest" +%F)" = "$(date +%F)" ]; then
+              break
+            fi
+          done
+          result=failure
+          if [ -n "$latest" ]; then
+            echo "last_checked=$(date -d "$latest" +%F)" >> "$GITHUB_OUTPUT"
+            if (( $(date -u +%s) - $(date -u -d "$latest" +%s) <= 30 * 3600 )); then
+              result=success
+            fi
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+      - name: Update freshness alert
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PIPELINE: archive-stale
+          RESULT: ${{ steps.freshness.outputs.result }}
+        run: python scripts/pipeline_alert.py
