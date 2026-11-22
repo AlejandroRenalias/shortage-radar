@@ -6,16 +6,6 @@ Shortage Radar is a searchable view and archive of reported medicine shortages i
 
 ![Home page](docs/home-en.png)
 
-![Shortage list with filters](docs/shortages-en.png)
-
-![One medicine package with its timeline](docs/medicine-en.png)
-
-![Trends](docs/trends-en.png)
-
-On a phone, in Finnish:
-
-![Home page on a phone, in Finnish](docs/home-fi-phone.png) ![Medicine page on a phone, in Finnish](docs/medicine-fi-phone.png)
-
 **This is not medical advice.** A listing does not establish whether a medicine is available at a particular pharmacy. Ask a pharmacist or doctor about your medicines.
 
 ## How it works
