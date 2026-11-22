@@ -490,13 +490,13 @@ test('the impact filter is kept in the address and narrows the list', () => {
 
 test('home leads with the triage: words and numbers, each part one tap from the filtered list', () => {
   const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'critical':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
-  assert.ok(html.indexOf('id="triage"') < html.indexOf('id="q"'), 'the triage comes before the search');
+  assert.ok(html.indexOf('id="q"') < html.indexOf('id="triage"'), 'the search is on the first screen of a phone, ahead of the triage');
   for (const [level, n] of [['substitute', '531'], ['critical', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
   assert.match(html, /For 531 of them, the pharmacy can usually give a substitute\./);
   assert.match(html, /href="shortages\.html\?impact=vet" id="triage-vet">Also on the list: 39 veterinary medicines/);
-  // The bar is decoration for the list; its widths follow the human counts only.
-  assert.match(html, /<svg class="triage-bar"[^>]*aria-hidden="true"/);
-  assert.match(html, /class="tb-critical" x="74\.79" y="0" width="8\.45"/);
+  // Each row carries its share of the human packages as a bar; the widths follow the human counts only.
+  assert.match(html, /<svg class="tri-bar"[^>]*aria-hidden="true"/);
+  assert.match(html, /class="part" width="8\.45"/);
 });
 
 test('"Ask your pharmacy" is said once: by the impact label for a current package, and in What to do for one that left', () => {
