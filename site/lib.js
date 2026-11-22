@@ -76,14 +76,14 @@ function groupName(atc, lang = language) {
 // ---- Form pictograms: one drawing for each kind of medicine form. Drawn on a 48 px grid with a 2.5 px line.
 const ICON_PATHS = {
   tablet: '<circle class="fill" cx="24" cy="24" r="16"/><path d="M8 24h32"/>',
-  film: '<rect class="fill" x="5" y="14" width="38" height="20" rx="10"/><path d="M13 22c1.500-2.500 4-3.500 7-3.500"/>',
   capsule: '<g transform="rotate(-40 24 24)"><path class="fill" d="M24 15h11a9 9 0 0 1 0 18H24z"/><rect x="4" y="15" width="40" height="18" rx="9"/><path d="M24 15v18"/></g>',
-  drops: '<path d="M19 23h10v3l3 5v11a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3V31l3-5z"/><path d="M21 23v-4h6v4"/><path class="fill" d="M24 4c3 4 4.500 6 4.500 8a4.500 4.500 0 0 1-9 0c0-2 1.500-4 4.500-8z"/>',
+  drops: '<rect x="18" y="4" width="12" height="6" rx="1.500"/><path class="fill" d="M16 10h16v13l-4.500 6h-7L16 23z"/><path d="M22 29v4h4v-4"/><path class="fill" d="M24 37c2.500 3 3.500 4.500 3.500 6a3.500 3.500 0 0 1-7 0c0-1.500 1-3 3.500-6z"/>',
   liquid: '<path class="fill" d="M14 29h20v11a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3z"/><rect x="18" y="5" width="12" height="7" rx="2"/><path d="M20 12v4l-6 6v18a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V22l-6-6v-4"/><path d="M14 29h20"/>',
   injection: '<g transform="rotate(-45 24 24)"><rect class="fill" x="12" y="19" width="20" height="10" rx="2"/><path d="M18 19v4M23 19v4M28 19v4M12 16v16M12 24H5M5 19v10M32 24h12"/></g>',
   tube: '<path class="fill" d="M13 6h22v6L32 37H16L13 12z"/><path d="M13 12h22"/><rect x="18" y="37" width="12" height="7" rx="1.500"/>',
   inhaler: '<rect x="17" y="4" width="14" height="19" rx="3"/><path class="fill" d="M14 23h20v13h8a2.500 2.500 0 0 1 0 5H18a4 4 0 0 1-4-4z"/>',
-  patch: '<rect x="6" y="6" width="36" height="36" rx="10"/><rect class="fill" x="16" y="16" width="16" height="16" rx="4"/>',
+  spray: '<path class="fill" d="M17 25h16a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3V28a3 3 0 0 1 3-3z"/><path d="M21 25v-5h8v5M19 20v-6h12v6zM19 17h-6"/><path d="M8 12h.01M6 17h.01M8 22h.01M3 14.500h.01M3 19.500h.01" stroke-width="3.500"/>',
+  patch: '<g transform="rotate(-10 24 24)"><rect x="7" y="7" width="34" height="34" rx="10"/><rect class="fill" x="16" y="16" width="16" height="16" rx="1.500"/><path d="M13 36h.01M36 12h.01" stroke-width="3.500"/></g>',
   powder: '<path class="fill" d="M12 6h24v36H12z"/><path d="M12 13h24M12 35h24"/><circle cx="19" cy="22" r="1.500"/><circle cx="28" cy="24" r="1.500"/><circle cx="22" cy="29" r="1.500"/>',
   suppository: '<g transform="rotate(-35 24 24)"><path class="fill" d="M5 24c0-6 6-10 14-10h17a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H19c-8 0-14-4-14-10z"/></g>',
   other: '<path class="fill" d="M6 16 24 7l18 9v17L24 42 6 33z"/><path d="M6 16l18 9 18-9M24 25v17"/>'
@@ -91,16 +91,17 @@ const ICON_PATHS = {
 const KINDS = Object.keys(ICON_PATHS);
 function formKind(form) {
   const v = String(form || '').toLocaleLowerCase();
-  if (!v) return 'other';
+  if (!v || /kohdun|kohtuun|intrauter|implant/.test(v)) return 'other';
+  if (/shampoo|sampoo/.test(v)) return 'liquid';
   if (/injektio|infuusio/.test(v)) return 'injection';
+  if (/inhalaa|aerosol/.test(v)) return 'inhaler';
+  if (/sumute|suihke|spray/.test(v)) return 'spray';
   if (/jauhe|rakeet|granula|kuiva-aine/.test(v)) return 'powder';
-  if (/inhalaa|aerosol|sumute/.test(v) && !/nenä|silmä/.test(v)) return 'inhaler';
+  if (/voide|geeli|pasta|ihotip/.test(v)) return 'tube';
   if (/silmätip|korvatip|silmä|korva/.test(v)) return 'drops';
   if (/laastari/.test(v)) return 'patch';
-  if (/voide|geeli|emulsio|pasta|ihotip/.test(v)) return 'tube';
   if (/puikko|peräruisk|ovuli/.test(v)) return 'suppository';
   if (/kapseli/.test(v)) return 'capsule';
-  if (/kalvopäällyst|depottabletti|enterotabletti|enteropäällyst/.test(v)) return 'film';
   if (/tabletti|resoribletti|kielenalus/.test(v)) return 'tablet';
   if (/oraali|liuos|suspensio|mikstuura|siirappi|tipat|emulsio/.test(v)) return 'liquid';
   return 'other';
@@ -168,6 +169,7 @@ const relevant = rows => rows.filter(e => !e.removed_on);
 
 // ---- Package card: the shelf label. Status tab, pictogram, name, strength and pack, form and group, dates.
 const daysBetween = (from, to) => Math.floor((to - from) / DAY);
+function isVet(e) { return (e.atc || '').startsWith('Q'); }
 function pkgCard(e, now = todayUTC(), level = 3) {
   const t = copy[language], start = parsedDate(e.UnavailableFrom), end = parsedDate(e.EndingDate), status = statusOf(e, now);
   const late = status === 'now' && end && end.valueOf() < now;
@@ -176,11 +178,11 @@ function pkgCard(e, now = todayUTC(), level = 3) {
   const vnr = e.NordicArticleNumber || '';
   return `<article class="pkg pkg-${status}"><p class="pkg-tab">${uiIcon(status === 'soon' ? 'soon' : status === 'unknown' ? 'unknown' : 'now', 18)}<span>${esc(statusLabel(status))}</span></p>`
     + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(kind))}">${formIcon(kind, 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="medicine.html?vnr=${esc(vnr)}">${esc(e.name || t.unavailable)}</a></h${level}>`
-    + (spec.length ? `<p class="form pkg-spec">${spec.map(s => `<span>${esc(s)}</span>`).join(' ')}</p>` : '')
-    + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(s => `<span>${esc(s)}</span>`).join('')}${(e.atc || '').startsWith('Q') ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
+    + (spec.length ? `<p class="form pkg-spec">${spec.map(x => `<span>${esc(x)}</span>`).join(' ')}</p>` : '')
+    + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<dl class="pkg-dates"><div><dt>${esc(status === 'soon' ? t.startsLabel : t.fromLabel)}</dt><dd>${esc(dateText(e.UnavailableFrom))}${startNote ? `<small>${esc(startNote)}</small>` : ''}</dd></div>`
     + `<div><dt>${esc(t.backLabel)}</dt><dd>${end ? esc(dateText(e.EndingDate)) : esc(t.notKnown)}${late ? `<small class="late">${esc(t.late)}</small>` : ''}</dd></div></dl>`
-    + (e.other_packages_count > 0 ? `<p class="ask">${esc(t.otherPackages)}</p>` : `<p class="ask">${esc(t.askPharmacy)}</p>`) + '</article>';
+    + (e.other_packages_count > 0 && !isVet(e) ? `<p class="ask">${esc(t.otherPackages)}</p>` : '') + '</article>';
 }
 
 // ---- Timeline model for one package: where the reported start, today and the company's estimate fall.
@@ -235,6 +237,8 @@ function start(render) {
 const fetchJson = url => fetch(url).then(r => { if (!r.ok) throw Error(url); return r.json(); });
 let currentPromise;
 const loadCurrent = () => currentPromise || (currentPromise = fetchJson('current.json'));
+let summaryPromise;
+const loadSummary = () => summaryPromise || (summaryPromise = fetchJson('summary.json'));
 function showLoadError() {
   const error = $('load-error'), loading = $('loading');
   if (error) error.hidden = false;

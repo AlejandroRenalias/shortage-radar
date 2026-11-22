@@ -9,18 +9,21 @@ function drawChart(history, maxGap, width = 400) {
   if (history.length < 2) { $('chart').textContent=t.chartEmpty; return; }
   const day=h=>Date.parse(h.date)/86400000, segments=[];
   history.forEach(h=>{const g=segments[segments.length-1]; if(g && day(h)-day(g[g.length-1])<=maxGap) g.push(h); else segments.push([h]);});
-  const lo=0, hi=Math.max(50,Math.ceil(Math.max(...history.map(h=>h.count))/50)*50), y=n=>150-125*n/hi;
+  const counts=history.map(h=>h.count), lo=Math.max(0,Math.floor((Math.min(...counts)-20)/50)*50), hi=Math.ceil((Math.max(...counts)+20)/50)*50, y=n=>150-125*(n-lo)/(hi-lo); let lastX=40;
   const band=Math.min(26,150/Math.max(1,segments.length-1)), room=(width-50)-band*(segments.length-1), spans=segments.map(g=>Math.max(day(g[g.length-1])-day(g[0]),1)), sum=spans.reduce((a,b)=>a+b,0), minimum=Math.min(14,room/segments.length/2);
   const widths=spans.map(s=>minimum+(room-minimum*segments.length)*s/sum); let x0=40, svg='', gaps=[];
   segments.forEach((g,i)=>{
     const w=widths[i], x=h=>g.length===1 ? x0+w/2 : x0+w*(day(h)-day(g[0]))/(day(g[g.length-1])-day(g[0]));
+    if(i===segments.length-1) lastX=x(g[g.length-1]);
     if(g.length>1) svg+=`<polyline points="${g.map(h=>`${x(h).toFixed(1)},${y(h.count).toFixed(1)}`).join(' ')}" fill="none" stroke="#00704b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
     svg+=g.map(h=>`<circle cx="${x(h).toFixed(1)}" cy="${y(h.count).toFixed(1)}" r="2.6" fill="${h.imported ? '#fbfdfc' : '#00704b'}" stroke="#00704b" stroke-width="1.2"><title>${esc(t.capturePoint(dateText(h.date),numberText(h.count),h.imported ? t.importedSource : t.savedSource))}</title></circle>`).join('');
     x0+=w;
     if(i<segments.length-1) {const days=Math.round(day(segments[i+1][0])-day(g[g.length-1])); gaps.push(numberText(days)); svg+=`<rect x="${x0}" y="10" width="${band}" height="140" fill="#e3ece7"/>`; x0+=band;}
   });
-  const grid=`<path d="M40 ${y(hi)}H${width-10}M40 150H${width-10}" stroke="#d3dede" fill="none"/><text x="36" y="${y(hi)+5}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(hi)}</text><text x="36" y="155" font-size="14" fill="#4a625c" text-anchor="end">${numberText(lo)}</text>`, last=history[history.length-1];
-  $('chart').innerHTML=`<svg viewBox="0 0 ${width} 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)}, ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
+  const mid=(lo+hi)/2, last=history[history.length-1], tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(n)}</text>`;
+  const grid=`<path d="M40 ${y(hi)}H${width-10}M40 ${y(mid)}H${width-10}M40 150H${width-10}" stroke="#d3dede" fill="none"/>${tick(hi,5)}${tick(mid,5)}${tick(lo,5)}`;
+  const label=`<text x="${(lastX-8).toFixed(1)}" y="${(y(last.count)-9).toFixed(1)}" font-size="14" font-weight="700" fill="#0f2a24" text-anchor="end">${numberText(last.count)}</text>`;
+  $('chart').innerHTML=`<svg viewBox="0 0 ${width} 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}${label}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)}, ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${lo>0 ? `<div class="chart-labels"><span>${esc(t.axisNote(numberText(lo)))}</span></div>` : ''}${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
 }
 function drawTable(history) {
   const t = copy[language];
@@ -59,16 +62,17 @@ function drawDates(d) {
 }
 function renderData() {
   if (!data) return;
-  const d = data, t = copy[language], current = relevant(d.events), companies = {}, atc = {};
-  current.forEach(e => { const company = e.Company || t.unknownCompany; companies[company] = (companies[company] || 0) + 1; const group = e.atc && groupName(e.atc); if (group) atc[group] = (atc[group] || 0) + 1; });
+  const d = data, t = copy[language], companies = {}, atc = {};
+  for (const [name, n] of Object.entries(d.companies)) companies[name || t.unknownCompany] = n;
+  for (const [prefix, n] of Object.entries(d.atc)) { const group = prefix && groupName(prefix); if (group) atc[group] = (atc[group] || 0) + n; }
   drawDates(d);
-  const now = todayUTC(), longest = current.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now).sort((a, b) => a.UnavailableFrom.localeCompare(b.UnavailableFrom)).slice(0, 5);
+  const now = todayUTC(), longest = d.longest.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now).slice(0, 5);
   $('longest-list').innerHTML = longest.map(e => `<li><div><strong><a href="medicine.html?vnr=${esc(e.NordicArticleNumber)}">${esc(nameWithStrength(e) || t.unavailable)}</a></strong><small>${esc(packText(e))}</small><small>${esc(e.Company)}</small><small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))}</small></div><span class="duration">${esc(t.days(daysBetween(parsedDate(e.UnavailableFrom).valueOf(), now)).replace(/ /g, ' '))}</span></li>`).join('');
-  drawWeek(weekData, current.length); bars('atc', atc, 30); bars('company', companies, 10);
+  drawWeek(weekData, d.total); bars('atc', atc, 30); bars('company', companies, 10);
 }
 if (typeof document !== 'undefined' && document.documentElement.dataset && document.documentElement.dataset.page === 'trends') {
   start(renderData); wireCitation();
-  loadCurrent().then(d => { data = d; renderChrome(d); renderData(); requestAnimationFrame(() => {
+  loadSummary().then(d => { data = d; renderChrome(d); renderData(); requestAnimationFrame(() => {
     fetchJson('history.json').then(h => { historyData = h; renderData(); }).catch(() => { historyFailed = true; renderData(); });
     fetchJson('week.json').then(w => { weekData = w; renderData(); }).catch(() => {});
   }); }).catch(showLoadError);

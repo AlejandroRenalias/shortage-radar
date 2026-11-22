@@ -52,7 +52,7 @@ def head(page, prefix, meta):
             f'<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="description" content="{desc}">\n<meta name="theme-color" content="#fbfdfc">\n{canonical}\n{og}\n'
             f'<link rel="alternate" type="application/atom+xml" title="Shortage Radar: changes (English)" href="{prefix}feed.xml"><link rel="alternate" type="application/atom+xml" title="Saatavuustutka: muutokset (suomi)" href="{prefix}feed-fi.xml">\n'
             f'<link rel="icon" href="{prefix}favicon.svg" type="image/svg+xml"><link rel="icon" href="{prefix}favicon-32.png" sizes="32x32"><link rel="apple-touch-icon" href="{prefix}apple-touch-icon.png">\n'
-            f'<link rel="preload" href="{prefix}fonts/atkinson-latin.woff2" as="font" type="font/woff2" crossorigin>\n'
+            f'<link rel="preload" href="{prefix}fonts/atkinson-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="{prefix}fonts/public-sans-digits.woff2" as="font" type="font/woff2" crossorigin>\n'
             f'<title>{escape(meta["title"])}</title><link rel="stylesheet" href="{prefix}style.css">{scripts}</head>')
 
 
@@ -66,7 +66,7 @@ def header(current, prefix):
     return ('<header class="site-header"><div class="wrap header-bar">'
             f'<a class="brand" href="{prefix}index.html">{MARK}<span data-i18n="brand">Shortage Radar</span></a>'
             f'<nav class="nav" aria-label="Main menu" data-i18n-attr="aria-label=navLabel">{"".join(links)}</nav>'
-            '<div class="lang" role="group" aria-label="Language" data-i18n-attr="aria-label=languageLabel"><button type="button" lang="fi" data-lang-btn="fi" aria-pressed="false">Suomi</button><button type="button" lang="en" data-lang-btn="en" aria-pressed="false">English</button></div>'
+            '<div class="lang needs-js" role="group" aria-label="Language" data-i18n-attr="aria-label=languageLabel"><button type="button" lang="fi" data-lang-btn="fi" aria-pressed="false">Suomi</button><button type="button" lang="en" data-lang-btn="en" aria-pressed="false">English</button></div>'
             '</div></header>\n'
             '<div class="stale" id="stale" hidden><div class="wrap"><svg class="uicon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 3.500 2.500 20h19z"/><path d="M12 10v4.500M12 17.500h.01"/></svg><p id="stale-text"></p></div></div>')
 
@@ -88,7 +88,7 @@ def footer(prefix):
 def document(page, body, prefix='', meta=None):
     meta = meta or PAGES[page]
     skip = f'<a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>'
-    noscript = '<noscript><p class="noscript">JavaScript is needed to show the shortage data. / Saatavuustietojen näyttäminen edellyttää JavaScriptiä.</p></noscript>'
+    noscript = f'<noscript><p class="noscript">JavaScript is needed to show the shortage data. / Saatavuustietojen näyttäminen edellyttää JavaScriptiä. <a href="{prefix}shortages.csv">CSV</a>, <a href="{prefix}data.json">JSON</a>, <a href="https://fimea.fi/en/about_us/open-data">Fimea</a></p></noscript>'
     return (f'<!doctype html>\n<html lang="en" data-page="{page}">\n{head(page, prefix, meta)}\n<body>\n{skip}\n{header(page, prefix)}\n{noscript}\n'
             f'<main id="main" tabindex="-1">\n{body}\n</main>\n{footer(prefix)}\n</body></html>\n')
 
@@ -103,17 +103,19 @@ def search_icon():
 
 def home(count):
     line = f'Fimea lists {count:,} {"package" if count == 1 else "packages"} as short today.'
-    return f'''<section class="hero wrap"><div class="hero-grid"><div>
+    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-text">
 <h1 id="hero-line" data-count="{count}">{line}</h1>
-<p class="lead" id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
-</form></div>
-<section class="hero-cards" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="pkg-list"></div></section>
+</form>
+<p class="lead" id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
+</div>
+<section class="shelf needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
 </div></section>
-<section class="facts-band" aria-labelledby="facts-title"><div class="wrap">
+<section class="wrap newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
+<section class="facts-band needs-js" aria-labelledby="facts-title"><div class="wrap">
 <div class="facts-head"><h2 id="facts-title">This week</h2><p id="facts-since"></p></div>
 <dl class="facts" id="facts"></dl>
 </div></section>
@@ -128,7 +130,7 @@ def home(count):
 
 def shortages():
     return f'''<div class="wrap page-head"><h1 data-i18n="listTitle">Medicine shortages</h1><p class="lead" data-i18n="listIntro">Every package Fimea lists as short or soon to be short. Open a package to see its timeline.</p></div>
-<div class="wrap finder">
+<div class="wrap finder needs-js">
 <form id="finder" role="search" novalidate>
 <label class="sr-only" for="search" data-i18n="searchLabel">Search shortages</label>
 <div class="searchrow">{search_icon()}<input id="search" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"></div>
@@ -147,8 +149,8 @@ def shortages():
 </div></details>
 </form>
 </div>
-<div class="wrap results">
-<div class="list-meta"><p id="result-count" aria-live="polite" aria-atomic="true"></p><button type="button" class="btn-quiet" id="copy-link" data-i18n="copyLink">Copy link to this search</button><span id="copy-status" role="status"></span></div>
+<div class="wrap results needs-js">
+<div class="list-meta"><p id="result-count" aria-live="polite" aria-atomic="true"></p><button type="button" class="btn-quiet" id="copy-link" data-i18n="copyLink">Copy search link</button><span id="copy-status" role="status"></span></div>
 <div id="list" class="pkg-list"><p class="state" id="loading">Loading…</p></div>
 <div class="more"><p id="more-count"></p><button type="button" class="btn" id="more" data-i18n="more" hidden>Show more</button></div>
 {load_error()}
@@ -156,13 +158,13 @@ def shortages():
 
 
 def medicine():
-    return f'''<div class="wrap" id="medicine"><p class="state" id="loading">Loading…</p></div>
+    return f'''<div class="wrap needs-js" id="medicine"><p class="state" id="loading">Loading…</p></div>
 <div class="wrap">{load_error()}</div>'''
 
 
 def trends():
-    return f'''<div class="wrap page-head"><h1 data-i18n="trendsTitle">Trends</h1><p class="lead" data-i18n="trendsIntro">How many packages Fimea lists as short, and how that has changed.</p><p class="data-date" id="data-date"></p></div>
-<div class="wrap trend-grid">
+    return f'''<div class="wrap page-head"><h1 data-i18n="trendsTitle">Trends</h1><p class="lead" data-i18n="trendsIntro">How many packages Fimea lists as short, and how that has changed.</p><p class="data-date needs-js" id="data-date"></p></div>
+<div class="wrap trend-grid needs-js">
 <section class="panel panel-wide" aria-labelledby="chart-title"><h2 id="chart-title" data-i18n="chartTitle">Packages on the list over time</h2><p id="history-note" class="note"></p><div id="chart" class="chart"></div><p id="rss-note" class="note"></p>
 <details class="data-table"><summary data-i18n="tableToggle">Show the chart data as a table</summary><div id="chart-table"></div></details></section>
 <section class="panel" id="week" aria-labelledby="week-title"><h2 id="week-title" data-i18n="weekTitle">This week</h2><p id="week-window" class="note"></p><dl class="mini-facts" id="week-facts"></dl><p><a id="feed-link" href="feed.xml" data-feed data-i18n="feedLink">Follow changes (feed)</a></p></section>
@@ -176,12 +178,11 @@ def trends():
 
 
 def about():
-    return f'''<div class="wrap page-head"><h1 data-i18n="aboutH1">About the data</h1><p class="lead" data-i18n="aboutIntro">What a shortage is, what to do about one, and how this site works.</p></div>
+    return f'''<div class="wrap page-head"><h1 data-i18n="aboutH1">About the data</h1><p class="lead" data-i18n="aboutIntro">The company has told Fimea it cannot deliver this package for a while. Your pharmacy may still have some. Ask your pharmacy what is available.</p></div>
 <div class="wrap about-layout">
 <nav class="toc" aria-labelledby="toc-title"><p id="toc-title" class="toc-title" data-i18n="aboutToc">On this page</p><ul>
-<li><a href="#what-is" data-i18n="helpTitle">What is a shortage?</a></li><li><a href="#what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</a></li><li><a href="#substitution" data-i18n="substTitle">Substitution groups</a></li><li><a href="#how" data-i18n="howTitle2">How the data works</a></li><li><a href="#limits" data-i18n="limitsTitle">What the data cannot tell you</a></li><li><a href="#downloads" data-i18n="downloadsTitle">Downloads</a></li><li><a href="#cite" data-i18n="citeTitle">Cite this site</a></li><li><a href="#privacy" data-i18n="privacyTitle">Privacy</a></li><li><a href="#licence" data-i18n="licenceTitle">Licence</a></li><li><a href="#report" data-i18n="reportTitle">Report a data problem</a></li></ul></nav>
+<li><a href="#what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</a></li><li><a href="#substitution" data-i18n="substTitle">Substitution groups</a></li><li><a href="#how" data-i18n="howTitle2">How the data works</a></li><li><a href="#limits" data-i18n="limitsTitle">What the data cannot tell you</a></li><li><a href="#downloads" data-i18n="downloadsTitle">Downloads</a></li><li><a href="#cite" data-i18n="citeTitle">Cite this site</a></li><li><a href="#privacy" data-i18n="privacyTitle">Privacy</a></li><li><a href="#licence" data-i18n="licenceTitle">Licence</a></li><li><a href="#report" data-i18n="reportTitle">Report a data problem</a></li></ul></nav>
 <div class="prose">
-<section id="what-is" aria-labelledby="h-what-is"><h2 id="h-what-is" data-i18n="helpTitle">What is a shortage?</h2><p data-i18n="help">The company has told Fimea it cannot deliver this package for a while. Your pharmacy may still have some. Ask your pharmacy what is available.</p></section>
 <section id="what-to-do" aria-labelledby="h-what-to-do"><h2 id="h-what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</h2><p data-i18n="doIntro">These steps are general information. They are not medical advice.</p>
 <ul class="steps"><li data-i18n="doCheck">Check the package. The list shows single packages, so compare the strength and pack size with your box.</li><li data-i18n="doAsk">Ask your pharmacy. A pharmacist can check what is available, order it, or suggest another package.</li><li data-i18n="doSubst">Another package may be possible. If your medicine is in a substitution group, your pharmacy can offer an interchangeable one. You or your doctor can decide against a change.</li><li data-i18n="doDoctor">Do not stop or change your medicine on your own. If your pharmacy cannot help, contact your doctor, who can prescribe another medicine.</li><li data-i18n="doUrgent">If you feel unwell, contact health care. In an emergency, call 112.</li></ul></section>
 <section id="substitution" aria-labelledby="h-subst"><h2 id="h-subst" data-i18n="substTitle">Substitution groups</h2><p data-i18n="aboutGroup">Fimea keeps a list of interchangeable medicines with the same active substance and strength and a similar form. A pharmacy can change a medicine to an interchangeable one and tell you which packages are available; you or your doctor can decide against a change. A group does not guarantee that every package fits you.</p><p><a id="about-group-link" href="https://fimea.fi/en/marketing_authorisations/interchangeable_medicinal_products" data-fimea="group" data-i18n="aboutGroupLink">Fimea’s interchangeable medicines</a></p><p><span data-i18n="fimeaSearchText">To check a package in the source, use Fimea’s own search.</span> <a href="https://fimea.fi/en/databases_and_registers/shortages" data-fimea="search" data-i18n="moreInfoLink">Fimea’s shortage search</a></p></section>
@@ -190,7 +191,7 @@ def about():
 <section id="downloads" aria-labelledby="h-downloads"><h2 id="h-downloads" data-i18n="downloadsTitle">Downloads</h2><p data-i18n="downloadsText">The data is free to use with credit to Fimea.</p><ul class="links"><li><a href="shortages.csv" data-i18n="dlCsv">Current shortages as a table (CSV)</a></li><li><a href="data.json" data-i18n="dlJson">Full data with event history (JSON)</a></li><li><a href="feed.xml" data-i18n="dlFeedEn">Changes of the last 14 days, English (Atom feed)</a></li><li><a href="feed-fi.xml" data-i18n="dlFeedFi">Changes of the last 14 days, Finnish (Atom feed)</a></li></ul></section>
 <section id="cite" aria-labelledby="h-cite"><h2 id="h-cite" data-i18n="citeTitle">Cite this site</h2><p id="citation" class="citation"></p><button type="button" class="btn" id="copy-cite" data-i18n="copyCite">Copy citation</button> <span id="copy-status" role="status"></span><p data-i18n="aboutCite">Fimea’s data is licensed under CC BY 4.0. This site selects, joins and transforms it.</p></section>
 <section id="privacy" aria-labelledby="h-privacy"><h2 id="h-privacy" data-i18n="privacyTitle">Privacy</h2><p data-i18n="privacyText">This site has no tracking and no cookies. It uses no analytics, no ads and no outside services. Your language choice is saved on your own device so the site opens in the same language next time. Nothing is sent to anyone.</p></section>
-<section id="licence" aria-labelledby="h-licence"><h2 id="h-licence" data-i18n="licenceTitle">Licence</h2><p data-i18n="licenceText">Code: MIT licence. Data: Fimea, CC BY 4.0, selected, joined and transformed by this site. Font: Atkinson Hyperlegible Next, SIL Open Font License.</p><p><a href="https://github.com/AlejandroRenalias/shortage-radar" data-i18n="aboutGithub">Code, data files and method on GitHub</a></p></section>
+<section id="licence" aria-labelledby="h-licence"><h2 id="h-licence" data-i18n="licenceTitle">Licence</h2><p data-i18n="licenceText">Code: MIT licence. Data: Fimea, CC BY 4.0, selected, joined and transformed by this site. Fonts: Atkinson Hyperlegible Next and Public Sans (digits), SIL Open Font License.</p><p><a href="https://github.com/AlejandroRenalias/shortage-radar" data-i18n="aboutGithub">Code, data files and method on GitHub</a></p></section>
 <section id="report" aria-labelledby="h-report"><h2 id="h-report" data-i18n="reportTitle">Report a data problem</h2><p data-i18n="reportText">If a date, a name or a number looks wrong, tell us. Include the VNR if you can.</p><p><a href="https://github.com/AlejandroRenalias/shortage-radar/issues/new?template=data-problem.yml" data-i18n="reportProblem">Report a data problem</a></p></section>
 </div></div>
 <div class="wrap">{load_error()}</div>'''

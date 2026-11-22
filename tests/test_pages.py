@@ -81,3 +81,38 @@ def test_every_script_and_style_a_page_loads_exists():
     for f in PAGE_FILES:
         for ref in re.findall(r'(?:src|href)="([^"/:#?]+\.(?:js|css|woff2|svg|png))"', out[f]):
             assert (ROOT / 'site' / ref).exists(), (f, ref)
+
+
+def test_without_scripts_dead_controls_are_hidden_and_the_data_files_are_linked():
+    out = render_pages(749)
+    for f in ['shortages.html', 'medicine.html', 'trends.html']:
+        html = out[f]
+        assert 'needs-js' in html
+        noscript = between(html, '<noscript>', '</noscript>')
+        assert 'shortages.csv' in noscript and 'data.json' in noscript and 'fimea.fi' in noscript
+    assert 'class="wrap finder needs-js"' in out['shortages.html'] and 'class="wrap results needs-js"' in out['shortages.html']
+    assert 'class="wrap needs-js" id="medicine"' in out['medicine.html']
+    assert 'class="lang needs-js"' in out['index.html']
+    # The home search is a plain form, so it still works without scripts.
+    assert 'action="shortages.html" method="get"' in out['index.html'] and 'class="bigsearch"' in out['index.html']
+    css = (ROOT / 'site/style.css').read_text(encoding='utf-8')
+    assert 'html:not(.js) .needs-js{display:none}' in css and '[hidden]{display:none!important}' in css
+
+
+def test_home_has_the_form_shelf_before_the_newest_cards_and_about_leads_with_the_answer():
+    out = render_pages(749)
+    home = out['index.html']
+    assert home.index('id="shelf"') < home.index('id="newest"') < home.index('id="facts"')
+    assert home.index('id="q"') < home.index('id="shelf"')
+    about = out['about.html']
+    assert about.index('data-i18n="aboutIntro"') < about.index('class="toc"') < about.index('id="what-to-do"')
+    assert 'id="what-is"' not in about and about.count('<li><a href="#') == 9
+
+
+def test_pages_load_only_small_data_files():
+    root = ROOT / 'site'
+    for name in ['home.js', 'trends.js', 'about.js']:
+        text = (root / name).read_text(encoding='utf-8')
+        assert 'data.json' not in text and 'current.json' not in text, name
+    assert 'data.json' not in (root / 'medicine.js').read_text(encoding='utf-8')
+    assert "p/${vnr.slice(-2)}.json" in (root / 'medicine.js').read_text(encoding='utf-8')

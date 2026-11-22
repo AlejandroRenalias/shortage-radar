@@ -28,6 +28,7 @@ function draw() {
   $('result-count').textContent = t.count(found.length);
   $('list').innerHTML = found.slice(0, visible).map(e => pkgCard(e, now, 2)).join('') || `<p class="state">${esc(filters.q ? t.empty : t.emptyFiltered)}</p>`;
   $('more').hidden = visible >= found.length;
+  $('more').parentElement.hidden = found.length <= PAGE_SIZE;
   $('more-count').textContent = found.length > PAGE_SIZE ? t.moreCount(Math.min(visible, found.length), found.length) : '';
   const n = activeFilters();
   $('filters-count').textContent = n ? ` (${n})` : '';

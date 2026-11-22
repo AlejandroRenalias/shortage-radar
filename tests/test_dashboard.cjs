@@ -92,14 +92,15 @@ test('common forms are understandable and unrecognised forms have a fallback', (
 });
 
 test('every form falls into one of the twelve pictograms, and each pictogram is drawn', () => {
-  const expected = {'tabletti':'tablet', 'purutabletti':'tablet', 'tabletti, kalvopäällysteinen':'film', 'depottabletti':'film', 'kapseli, kova':'capsule', 'depotkapseli, kova':'capsule', 'silmätipat, liuos':'drops', 'oraaliliuos':'liquid', 'oraalisuspensio':'liquid',
-    'injektioneste, liuos':'injection', 'infuusiokonsentraatti, liuosta varten':'injection', 'injektiokuiva-aine ja liuotin, liuosta varten':'injection', 'emulsiovoide':'tube', 'geeli':'tube', 'inhalaatiojauhe':'powder', 'depotlaastari':'patch', 'jauhe oraaliliuosta varten':'powder',
-    'peräpuikko':'suppository', 'suihke':'other', '':'other'};
+  const expected = {'tabletti':'tablet', 'purutabletti':'tablet', 'tabletti, kalvopäällysteinen':'tablet', 'depottabletti':'tablet', 'kapseli, kova':'capsule', 'depotkapseli, kova':'capsule', 'silmätipat, liuos':'drops', 'korvatipat, liuos':'drops', 'oraaliliuos':'liquid', 'oraalisuspensio':'liquid',
+    'shampoo':'liquid', 'injektioneste, liuos':'injection', 'infuusiokonsentraatti, liuosta varten':'injection', 'injektiokuiva-aine ja liuotin, liuosta varten':'injection', 'emulsiovoide':'tube', 'geeli':'tube', 'depotlaastari':'patch', 'jauhe oraaliliuosta varten':'powder', 'rakeet':'powder',
+    'inhalaatiojauhe, kapseli, kova':'inhaler', 'inhalaatiosumute, liuos':'inhaler', 'nenäsumute, liuos':'spray', 'transdermaalisumute, liuos':'spray', 'sumute iholle, liuos':'spray',
+    'peräpuikko':'suppository', 'depotlääkevalmiste, kohtuun':'other', 'implantaatti silmän lasiaiseen, asetin':'other', 'implantaatti':'other', '':'other'};
   for (const [form, kind] of Object.entries(expected)) assert.equal(context.formKind(form), kind, form);
   const kinds = Array.from(vm.runInContext('KINDS', context));
   assert.equal(kinds.length, 12);
   for (const kind of kinds) { assert.match(context.formIcon(kind), /<svg class="ficon"[^>]*aria-hidden="true"/); assert.notEqual(context.kindLabel(kind), undefined); }
-  assert.ok(vm.runInContext("KINDS.every(k => copy.fi['kind_' + k] && copy.en['kind_' + k])", context));
+  assert.ok(vm.runInContext("KINDS.every(k => copy.fi['kind_' + k] && copy.en['kind_' + k] && copy.fi['shelf_' + k] && copy.en['shelf_' + k])", context));
 });
 
 test('dates use fixed abbreviations and Finnish numeric format', () => {
@@ -179,7 +180,9 @@ test('history and delay rendering uses translated dates and explains the sample'
   assert.match(get('delay-headline').textContent, /1 shortage entered/);
   assert.match(get('delay-note').textContent, /does not prove supply returned/);
   assert.match(get('delay-visual').innerHTML, /24 shortages were still listed/);
-  assert.match(get('chart').innerHTML, /font-size="14"[^>]*>0<\/text>/);
+  assert.match(get('chart').innerHTML, /font-size="14"[^>]*>650<\/text>/);
+  assert.match(get('chart').innerHTML, /font-weight="700"[^>]*>751<\/text>/);
+  assert.match(get('chart').innerHTML, /The vertical axis starts at 650\./);
   env.drawTable(history);
   assert.match(get('chart-table').innerHTML, /<td>21 Nov 2026<\/td><td>751<\/td><td>saved by this project<\/td>/);
   vm.runInContext("language='fi'",env);
@@ -211,7 +214,7 @@ test('what to do names the pharmacy and points to Fimea without contact data', (
   const copy = vm.runInContext('copy', context);
   assert.match(copy.en.whatText, /^Ask your pharmacy\./);
   assert.match(copy.fi.whatText, /^Kysy apteekista\./);
-  assert.equal(copy.en.moreInfo('Example Oy'), 'For more information, ask your pharmacy or the company (Example Oy).');
+  assert.equal(copy.en.moreInfo('Example Oy'), 'For more about this package, contact the company (Example Oy).');
   assert.equal(copy.en.moreInfoUrl, 'https://fimea.fi/en/databases_and_registers/shortages');
   assert.equal(copy.fi.moreInfoUrl, 'https://fimea.fi/laakehaut_ja_luettelot/saatavuushairio-uusi');
   assert.doesNotMatch(context.pkgCard({name:'T', atc:'N02', Company:'Example Oy', contact:'CONTACT-PLACEHOLDER'}, 0), /CONTACT-PLACEHOLDER/);
@@ -360,16 +363,6 @@ test('the empty result does not read as "no problem", and the placeholder finds 
   assert.ok(context.searchMatches({name:'Buranagel', substances:'Ibuprofen'}, 'ibuprofeeni'));
 });
 
-test('cards carry a short pharmacy line and the delay headline leads with the count', () => {
-  setLanguage(context, 'en');
-  assert.match(context.pkgCard({name:'T', atc:'N02'}, 0), /<p class="ask">Ask your pharmacy<\/p>/);
-  setLanguage(context, 'fi');
-  assert.match(context.pkgCard({name:'T', atc:'N02'}, 0), /<p class="ask">Kysy apteekista<\/p>/);
-  setLanguage(context, 'en');
-  const copy = vm.runInContext('copy', context);
-  assert.match(copy.en.delayHeadline('15', '156', '78', '10%', '60%'), /^15 of 156 observed shortages stayed listed past the estimate; for 78 we cannot tell yet\. .*10%–60%/);
-});
-
 test('the citation names the data date and the access date', () => {
   const copy = vm.runInContext('copy', context);
   for (const lang of ['en', 'fi']) {
@@ -410,23 +403,90 @@ test('other packages line appears only for positive counts in both languages', (
   setLanguage(context, 'en');
 });
 
+test('"Ask your pharmacy" is said once: by the substitution line on a card, and in What to do on the page', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    setLanguage(context, lang);
+    assert.doesNotMatch(context.pkgCard({name:'T', atc:'N02'}, 0), /class="ask"/);
+    assert.ok(context.pkgCard({name:'T', atc:'N02', other_packages_count:2}, 0).includes('<p class="ask">' + copy[lang].otherPackages));
+    assert.doesNotMatch(context.pkgCard({name:'T', atc:'Q02', other_packages_count:2}, 0), /class="ask"/);
+  }
+  // With the substitution line the advice does not repeat the opening sentence; without it the advice opens with the ask.
+  assert.doesNotMatch(copy.en.whatTextRest, /Ask your pharmacy/); assert.doesNotMatch(copy.fi.whatTextRest, /Kysy apteekista/);
+  assert.match(copy.en.whatText, /^Ask your pharmacy\./); assert.match(copy.fi.whatText, /^Kysy apteekista\./);
+  setLanguage(context, 'en');
+  assert.match(copy.en.delayHeadline('15', '156', '78', '10%', '60%'), /^15 of 156 observed shortages stayed listed past the estimate; for 78 we cannot tell yet\. .*10%–60%/);
+});
+
+test('veterinary packages are told to ask the veterinarian or pharmacy, not given human advice', () => {
+  const copy = vm.runInContext('copy', context);
+  assert.match(copy.en.whatTextVet, /^Ask your veterinarian or pharmacy\./);
+  assert.match(copy.fi.whatTextVet, /^Kysy eläinlääkäriltä tai apteekista\./);
+  for (const text of [copy.en.whatTextVet, copy.fi.whatTextVet]) assert.doesNotMatch(text, /pharmacist or doctor|farmaseutilta tai lääkäriltä/);
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  assert.equal(env.isVet({atc:'QN02'}), true); assert.equal(env.isVet({atc:'N02'}), false);
+  const vet = env.whatMarkup({atc:'QN02BA', Company:'Vet Oy', other_packages_count:3}, 'now');
+  assert.match(vet, /Ask your veterinarian or pharmacy/); assert.doesNotMatch(vet, /pharmacist or doctor|substitution group/);
+  const human = env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:3}, 'now');
+  assert.match(human, /class="callout">Other packages in the same substitution group/); assert.doesNotMatch(human, /<p>Ask your pharmacy/);
+  assert.match(env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:0}, 'now'), /<p>Ask your pharmacy\./);
+});
+
 test('the medicine page opens the right package from a feed link and shows a helpful state for an unknown number', () => {
   const [env] = pageEnv(['medicine.js']);
-  const current = {events:[{NordicArticleNumber:'599361', name:'Rivastor', UnavailableFrom:'2026-11-01'}, {NordicArticleNumber:'111111', name:'Gone', removed_on:'2026-11-10', last_seen:'2026-11-09'}]};
-  const archived = {events:[{NordicArticleNumber:'111111', name:'Gone', removed_on:'2026-11-10', last_seen:'2026-11-09'}, {NordicArticleNumber:'111111', name:'Gone earlier', removed_on:'2026-05-10', last_seen:'2026-05-09'}]};
+  const shard = {snapshot_date:'2026-11-22', events:[{NordicArticleNumber:'599361', name:'Rivastor', UnavailableFrom:'2026-11-01'}, {NordicArticleNumber:'111111', name:'Gone', removed_on:'2026-11-10', last_seen:'2026-11-09'}, {NordicArticleNumber:'111111', name:'Gone earlier', removed_on:'2026-05-10', last_seen:'2026-05-09'}]};
   assert.equal(env.vnrFromSearch('?vnr=599361'), '599361');
   assert.equal(env.vnrFromSearch('?vnr=%20599361%20'), '599361');
   assert.equal(env.vnrFromSearch(''), '');
-  const found = env.lookup('599361', current, null, false);
+  const found = env.lookup('599361', shard);
   assert.equal(found.state, 'now'); assert.equal(found.events[0].name, 'Rivastor');
-  assert.equal(env.lookup('abc', current, null, false).state, 'missing');
-  assert.equal(env.lookup('', current, null, false).state, 'missing');
-  assert.equal(env.lookup('111111', current, null, false).state, 'pending');
-  const left = env.lookup('111111', current, archived, false);
+  assert.equal(env.lookup('abc', shard).state, 'missing');
+  assert.equal(env.lookup('', shard).state, 'missing');
+  const left = env.lookup('111111', shard);
   assert.equal(left.state, 'left'); assert.equal(left.events[0].name, 'Gone');
-  assert.equal(env.lookup('222222', current, archived, false).state, 'missing');
-  assert.equal(env.lookup('222222', current, null, true).state, 'missing');
+  assert.equal(env.lookup('222222', shard).state, 'missing');
   for (const lang of ['en', 'fi']) { const copy = vm.runInContext(`copy.${lang}`, env); assert.match(copy.nfText('222222'), /222222/); assert.ok(copy.nfNone && copy.nfSearch); }
   // Feed entries link to the medicine page by VNR, and the page reads that number.
   assert.match(fs.readFileSync('scripts/changes.py', 'utf8'), /medicine\.html\?vnr=\{e\['NordicArticleNumber'\]\}/);
+});
+
+test('a package that left the list shows when it was listed, not days until the estimate', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const gone = {NordicArticleNumber:'111111', name:'Regiocit', UnavailableFrom:'2026-11-01', EndingDate:'2026-12-20', first_seen:'2026-11-03', last_seen:'2026-11-18', removed_on:'2026-11-19', listed_at_first_capture:false, end_changes:[{seen:'2026-11-03', date:'2026-12-20'}]};
+  const html = env.timelineMarkup(gone, true);
+  assert.match(html, /Last listed/); assert.match(html, /Not on the list on 19 Nov 2026/);
+  assert.match(html, /On the list in our captures from 3 Nov 2026 to 18 Nov 2026\./);
+  assert.doesNotMatch(html, /until the estimate|so far|Today/);
+  assert.match(env.timelineMarkup({...gone, listed_at_first_capture:true}, true), /Already on the list in our first capture on 3 Nov 2026; last listed 18 Nov 2026\./);
+  const label = env.labelMarkup(gone, 'left');
+  assert.match(label, /No longer on the list/); assert.match(label, /last listed on 18 Nov 2026/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.timelineMarkup(gone, true), /Listalla tilannekuvissamme 3\.11\.2026–18\.11\.2026\./);
+});
+
+test('the timeline is one track in time order with evenly spaced markers and the right connectors', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const order = html => Array.from(html.matchAll(/class="tl-item tl-(\w+)/g)).map(m => m[1]);
+  const late = env.timelineMarkup({UnavailableFrom:day(-40), EndingDate:day(-5)}, false);
+  assert.deepEqual(order(late), ['start', 'end', 'today']);
+  assert.match(late, /tl-end seg-done seg-late is-late/); assert.match(late, /tl-today seg-over/); assert.match(late, /Later than estimated/); assert.doesNotMatch(late, /<svg/);
+  const ongoing = env.timelineMarkup({UnavailableFrom:day(-10), EndingDate:day(20)}, false);
+  assert.deepEqual(order(ongoing), ['start', 'today', 'end']); assert.match(ongoing, /tl-end seg-ahead/);
+  const soon = env.timelineMarkup({UnavailableFrom:day(5), EndingDate:day(30)}, false);
+  assert.deepEqual(order(soon), ['today', 'start', 'end']); assert.equal((soon.match(/seg-ahead/g) || []).length, 2);
+  assert.match(env.timelineMarkup({UnavailableFrom:day(-10)}, false), /tl-count-2/);
+});
+
+test('the form shelf counts packages by form and links to the list filtered by that form', () => {
+  const [env] = pageEnv(['home.js']);
+  vm.runInContext("language='en'", env);
+  const html = env.shelfMarkup({'tabletti, kalvopäällysteinen':5, 'tabletti':3, 'silmätipat, liuos':2, 'nenäsumute, liuos':4, 'inhalaatiojauhe':1});
+  assert.match(html, /href="shortages\.html\?form=tablet">[\s\S]*?<span class="shelf-name">Tablets<\/span><span class="shelf-count">8<\/span>/);
+  assert.match(html, /form=spray[\s\S]*?Sprays[\s\S]*?4/); assert.match(html, /form=inhaler[\s\S]*?Inhalers/); assert.match(html, /form=drops/);
+  assert.doesNotMatch(html, /form=capsule/);
+  assert.equal((html.match(/<li>/g) || []).length, 4);
 });

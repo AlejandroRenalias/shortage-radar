@@ -3,4 +3,4 @@ let data;
 function render() { if (data) renderCitation(data); }
 start(render);
 wireCitation();
-loadCurrent().then(d => { data = d; renderChrome(d); render(); }).catch(() => {});
+loadSummary().then(d => { data = d; renderChrome(d); render(); }).catch(() => {});
