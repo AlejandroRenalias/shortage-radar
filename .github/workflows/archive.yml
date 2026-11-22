@@ -2,6 +2,9 @@ name: Archive shortages
 on:
   schedule:
     - cron: '35 4 * * *'
+    - cron: '5 10 * * *'
+    - cron: '35 15 * * *'
+    - cron: '5 21 * * *'
   workflow_dispatch:
     inputs:
       allow_large_drop:
@@ -10,15 +13,24 @@ on:
         default: false
 concurrency:
   group: fimea-data-writes
-  cancel-in-progress: false
+  queue: max
 jobs:
+  freshness:
+    uses: ./.github/workflows/freshness.yml
+    permissions:
+      contents: read
+      actions: read
+      issues: write
   archive:
+    needs: freshness
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
     outputs:
       checked: ${{ steps.check.outputs.date }}
+      changed: ${{ steps.commit.outputs.changed }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -46,6 +58,7 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
       - name: Commit changes
+        id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -57,10 +70,11 @@ jobs:
               if git push origin "HEAD:$GITHUB_REF_NAME"; then break; fi
               if [ "$attempt" = 3 ]; then exit 1; fi
             done
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
   deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: archive
+    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.archive.result == 'success' && (needs.archive.outputs.changed == 'true' || needs.archive.outputs.checked != needs.freshness.outputs.last_checked)
+    needs: [freshness, archive]
     uses: ./.github/workflows/pages.yml
     with:
       last_checked: ${{ needs.archive.outputs.checked }}
@@ -71,7 +85,7 @@ jobs:
       actions: read
       issues: write
   alert:
-    if: always() && github.event_name == 'schedule'
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     needs: [archive, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -86,5 +100,9 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           PIPELINE: archive
-          RESULT: ${{ needs.archive.result == 'success' && needs.deploy.result == 'success' && 'success' || 'failure' }}
-        run: python scripts/pipeline_alert.py
+          RESULT: ${{ needs.archive.result == 'success' && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') && 'success' || 'failure' }}
+        run: |
+          python scripts/pipeline_alert.py
+          if [ '${{ needs.archive.result }}' = success ]; then
+            PIPELINE=archive-stale RESULT=success python scripts/pipeline_alert.py
+          fi

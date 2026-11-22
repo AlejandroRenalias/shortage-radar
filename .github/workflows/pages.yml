@@ -14,6 +14,13 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
+  freshness:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/freshness.yml
+    permissions:
+      contents: read
+      actions: read
+      issues: write
   build:
     permissions:
       contents: read
