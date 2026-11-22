@@ -1,4 +1,8 @@
 (() => {
+  // Old links to the home page with a search go to the list.
+  if (document.documentElement.dataset.page === 'index') {
+    try { const q = (new URLSearchParams(location.search).get('q') || '').trim().slice(0, 100); if (q) location.replace('shortages.html?q=' + encodeURIComponent(q)); } catch (_) {}
+  }
   let saved;
   try { saved = localStorage.getItem('language'); } catch (_) {}
   const language = ['en', 'fi'].includes(saved) ? saved : (navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en';
@@ -7,12 +11,9 @@
   window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       if (document.documentElement.dataset.appReady) return;
-      const list = document.getElementById('list'), updated = document.getElementById('updated');
-      if (updated) updated.textContent = language === 'fi' ? 'Tietojen lataaminen epäonnistui' : 'Unable to load data';
-      if (list) {
-        list.textContent = language === 'fi' ? 'Tietoja ei voitu ladata. ' : 'Data could not be loaded. ';
-        const link = document.createElement('a'); link.href = 'https://fimea.fi/en/about_us/open-data'; link.textContent = language === 'fi' ? 'Fimean avoin data' : 'Fimea open data'; list.append(link);
-      }
+      const error = document.getElementById('load-error'), loading = document.getElementById('loading');
+      if (error) error.hidden = false;
+      if (loading) loading.hidden = true;
       document.documentElement.classList.remove('i18n-pending');
     }, 2000);
   });

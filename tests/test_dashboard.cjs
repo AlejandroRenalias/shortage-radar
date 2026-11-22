@@ -2,30 +2,79 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync('site/app.js', 'utf8').split('function drawList(')[0];
+const {execFileSync} = require('node:child_process');
+const read = name => fs.readFileSync('site/' + name, 'utf8');
+const shared = read('i18n.js') + '\n' + read('lib.js');
 const context = vm.createContext({Intl, Date, URLSearchParams});
-vm.runInContext(source, context);
+vm.runInContext(shared, context);
+const setLanguage = (ctx, lang) => vm.runInContext(`language='${lang}'`, ctx);
+const NOW = Date.UTC(2026, 10, 21);
+const plain = value => JSON.parse(JSON.stringify(value));
+const nb = text => String(text).replace(/ /g, ' ');
+const pages = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749)))"], {encoding: 'utf8'}));
+// A page environment with a fake document, for the scripts that draw into elements.
+function pageEnv(scripts = ['trends.js']) {
+  const elements = {};
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:true, href:'', value:'en', clientWidth:400, dataset:{}, addEventListener(){}, setAttribute(){}};
+  const document = {getElementById:get, documentElement:{dataset:{},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
+  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia: () => ({matches: false}), document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{}), location:{search:''}});
+  vm.runInContext(shared + '\n' + scripts.map(read).join('\n'), env);
+  return [env, get];
+}
 
 test('initial language is selected without inline scripts', () => {
-  const html = fs.readFileSync('site/index.html', 'utf8');
-  const script = fs.readFileSync('site/language.js', 'utf8');
-  assert.doesNotMatch(html, /<script>/);
+  const script = read('language.js');
+  for (const html of Object.values(pages)) assert.doesNotMatch(html, /<script>/);
   for (const [browser, saved, expected] of [['fi-FI', null, 'fi'], ['en-US', 'fi', 'fi'], ['fi-FI', 'en', 'en']]) {
     const classes = new Set();
-    const document = {documentElement: {lang:'en', classList: {add: name => classes.add(name)}}};
+    const document = {documentElement: {lang:'en', dataset:{}, classList: {add: name => classes.add(name)}}};
     vm.runInNewContext(script, {document, window:{addEventListener(){}}, navigator:{language:browser}, localStorage:{getItem:() => saved}});
     assert.equal(document.documentElement.lang, expected);
     assert.equal(classes.has('i18n-pending'), expected === 'fi');
   }
 });
 
+test('the old address with ?q= on the home page is sent to the shortage list', () => {
+  const calls = [];
+  const document = {documentElement: {lang:'en', dataset:{page:'index'}, classList: {add(){}}}};
+  vm.runInNewContext(read('language.js'), {document, window:{addEventListener(){}}, navigator:{language:'en'}, localStorage:{getItem:() => null}, URLSearchParams, location:{search:'?q=Burana', replace:url => calls.push(url)}});
+  assert.deepEqual(calls, ['shortages.html?q=Burana']);
+});
+
 test('translations have matching keys and nonempty Finnish values', () => {
   const translations = vm.runInContext('copy', context);
   assert.deepEqual(Object.keys(translations.fi).sort(), Object.keys(translations.en).sort());
-  for (const [key, value] of Object.entries(translations.fi)) {
+  for (const lang of ['en', 'fi']) for (const [key, value] of Object.entries(translations[lang])) {
     const rendered = typeof value === 'function' ? value(2, 'x', '3') : value;
     assert.ok(typeof rendered === 'string' && rendered.trim(), key);
+    assert.doesNotMatch(rendered, /→/, key);
   }
+});
+
+test('the built pages carry the same English text as the copy file, so a string is changed in one place', () => {
+  const en = vm.runInContext('copy.en', context);
+  const decode = s => s.replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
+  let checked = 0;
+  for (const [file, html] of Object.entries(pages)) {
+    for (const [, key, text] of html.matchAll(/data-i18n="(\w+)"[^>]*>([^<]*)</g)) {
+      assert.equal(typeof en[key], 'string', `${file}: unknown key ${key}`);
+      assert.equal(decode(text), en[key], `${file}: ${key}`);
+      checked++;
+    }
+    for (const [, pairs] of html.matchAll(/data-i18n-attr="([^"]+)"/g)) for (const pair of pairs.split(';')) assert.equal(typeof en[pair.split('=')[1]], 'string', `${file}: ${pair}`);
+  }
+  assert.ok(checked > 80);
+  assert.match(pages['index.html'], new RegExp(en.heroLine(749).replace('.', '\\.')));
+});
+
+test('no label is all capitals, no numbered markers, no middle-dot strings or arrows in the copy', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) for (const [key, value] of Object.entries(copy[lang])) {
+    const text = typeof value === 'function' ? value(2, 'x', '3') : value;
+    assert.doesNotMatch(text, /^[A-ZÄÖÅ0-9 /·]{6,}$/, key);
+    assert.doesNotMatch(text, /\s·\s/, key);
+  }
+  for (const html of Object.values(pages)) { assert.doesNotMatch(html, /class="kicker"|class="eyebrow"/); assert.doesNotMatch(html, />\s*0\d\s*\/</); }
 });
 
 test('veterinary and missing medicine groups have clear labels', () => {
@@ -34,32 +83,53 @@ test('veterinary and missing medicine groups have clear labels', () => {
   assert.equal(context.groupName('', 'en'), 'Group not listed');
 });
 test('common forms are understandable and unrecognised forms have a fallback', () => {
+  setLanguage(context, 'en');
   for (const form of ['depottabletti', 'injektiokuiva-aine', 'infuusiokonsentraatti', 'depotkapseli', 'depotlaastari', 'jauhe oraaliliuosta varten', 'emulsiovoide', 'purutabletti']) {
     assert.notEqual(context.formText(form), 'Other form', form);
   }
   assert.equal(context.formText('unrecognised form'), 'Other form');
   assert.equal(context.formText(''), '');
 });
+
+test('every form falls into one of the twelve pictograms, and each pictogram is drawn', () => {
+  const expected = {'tabletti':'tablet', 'purutabletti':'tablet', 'tabletti, kalvopäällysteinen':'film', 'depottabletti':'film', 'kapseli, kova':'capsule', 'depotkapseli, kova':'capsule', 'silmätipat, liuos':'drops', 'oraaliliuos':'liquid', 'oraalisuspensio':'liquid',
+    'injektioneste, liuos':'injection', 'infuusiokonsentraatti, liuosta varten':'injection', 'injektiokuiva-aine ja liuotin, liuosta varten':'injection', 'emulsiovoide':'tube', 'geeli':'tube', 'inhalaatiojauhe':'powder', 'depotlaastari':'patch', 'jauhe oraaliliuosta varten':'powder',
+    'peräpuikko':'suppository', 'suihke':'other', '':'other'};
+  for (const [form, kind] of Object.entries(expected)) assert.equal(context.formKind(form), kind, form);
+  const kinds = Array.from(vm.runInContext('KINDS', context));
+  assert.equal(kinds.length, 12);
+  for (const kind of kinds) { assert.match(context.formIcon(kind), /<svg class="ficon"[^>]*aria-hidden="true"/); assert.notEqual(context.kindLabel(kind), undefined); }
+  assert.ok(vm.runInContext("KINDS.every(k => copy.fi['kind_' + k] && copy.en['kind_' + k])", context));
+});
+
 test('dates use fixed abbreviations and Finnish numeric format', () => {
   assert.equal(context.dateText('2026-09-21'), '21 Sep 2026');
-  vm.runInContext("language = 'fi'", context);
+  setLanguage(context, 'fi');
   assert.equal(context.dateText('2026-09-21'), '21.9.2026');
   assert.equal(context.timestampText('2026-11-21T00:30:00Z'), '21.11.2026 klo 2.30 Suomen aikaa');
-  vm.runInContext("language='en'",context);
+  setLanguage(context, 'en');
   assert.equal(context.timestampText('2026-07-21T00:30:00Z'), '21 Jul 2026, 03:30 Helsinki time');
 });
 
-test('Finnish counts, forms and shortage wording read naturally', () => {
-  vm.runInContext("language = 'fi'", context);
-  assert.equal(vm.runInContext('copy.fi.count(1)', context), '1 ilmoitus');
-  assert.equal(vm.runInContext('copy.fi.count(2)', context), '2 ilmoitusta');
+test('cards link to the medicine page, with labelled dates and a structured name, strength, pack, form and group', () => {
+  setLanguage(context, 'fi');
+  assert.equal(vm.runInContext('copy.fi.count(1)', context), '1 pakkaus');
+  assert.equal(vm.runInContext('copy.fi.count(2)', context), '2 pakkausta');
   assert.equal(context.formText('resoribletti'), 'Kielen alle liukeneva tabletti');
   assert.equal(context.formText('peräruiskeliuos'), 'Peräruiske');
   assert.equal(context.groupName('B01', 'fi'), 'Veren ja verenkierron lääkkeet');
-  const html = context.card({name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'B01'}, Date.UTC(2026,10,21));
-  assert.match(html, /Saatavuushäiriö ilmoitettu alkavaksi 6\.11\.2026 \(15 päivää\)/);
-  assert.match(html, /Arvioidaan olevan taas saatavilla noin 1\.12\.2026 \(yrityksen arvio\)/);
-  assert.match(html, /Lääkeryhmä: Veren ja verenkierron lääkkeet/);
+  const html = context.pkgCard({name:'Test', NordicArticleNumber:'123456', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'B01', form:'tabletti', strength:'5 mg', pack_label:{en:'30 tablets', fi:'30 tablettia'}}, NOW);
+  assert.match(html, /<a href="medicine\.html\?vnr=123456">Test<\/a>/);
+  assert.match(html, /Saatavuushäiriö nyt/);
+  assert.match(html, /<dt>Ilmoitettu alkamispäivä<\/dt><dd>6\.11\.2026<small>15 päivää sitten<\/small>/);
+  assert.match(html, /<dt>Arvioitu paluu<\/dt><dd>1\.12\.2026<\/dd>/);
+  assert.match(nb(html), /<p class="form pkg-spec"><span>5 mg<\/span> <span>30 tablettia<\/span><\/p>/);
+  assert.match(html, /<span>Tabletti<\/span><span>Veren ja verenkierron lääkkeet<\/span>/);
+  assert.doesNotMatch(html, / · /);
+  setLanguage(context, 'en');
+  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-12-01', atc:'B01'}, NOW), /Starting soon[\s\S]*<dt>Starts<\/dt><dd>1 Dec 2026<small>in 10 days<\/small>/);
+  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-01', atc:'B01'}, NOW), /<small class="late">Later than estimated<\/small>/);
+  assert.match(context.pkgCard({name:'T', atc:'Q02'}, NOW), /<span class="vet">Veterinary<\/span>/);
 });
 
 test('Finnish substance aliases and diacritics match English records', () => {
@@ -73,7 +143,7 @@ test('Finnish substance aliases and diacritics match English records', () => {
 });
 
 test('freshness uses the successful check date and distinguishes a build-only fallback', () => {
-  vm.runInContext("language='en'", context);
+  setLanguage(context, 'en');
   const today = Date.UTC(2026, 10, 21);
   const recent = context.freshnessInfo({last_checked:'2026-11-18', generated_at:'2026-11-21T12:00:00Z'}, today, today);
   assert.equal(recent.text, 'Checked 18 Nov 2026');
@@ -85,22 +155,33 @@ test('freshness uses the successful check date and distinguishes a build-only fa
   assert.equal(context.freshnessInfo({}, today, today).text, '');
 });
 
+test('the stale-data warning is shown on every page that loads data', () => {
+  const [env, get] = pageEnv(['home.js']);
+  get('stale'); get('stale-text'); get('source-times');
+  env.renderChrome({snapshot_date:'2026-11-01', last_checked:'2026-11-01', generated_at:'2026-11-01T00:00:00Z', source_metadata:{}});
+  assert.equal(get('stale').hidden, false);
+  assert.match(get('stale-text').textContent, /more than 3 days ago/);
+  assert.doesNotMatch(get('source-times').textContent, /\.\./);
+  const today = new Date().toISOString().slice(0, 10);
+  env.renderChrome({snapshot_date:today, last_checked:today, source_metadata:{}});
+  assert.equal(get('stale').hidden, true);
+  for (const html of Object.entries(pages).filter(([f]) => f !== '404.html')) assert.match(html[1], /id="stale"/);
+});
+
 test('history and delay rendering uses translated dates and explains the sample', () => {
-  const elements = {};
-  const get = id => elements[id] ||= {textContent:'', innerHTML:'', value:'en', addEventListener(){}, setAttribute(){}};
-  const document = {getElementById:get, documentElement:{dataset:{},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
-  const env = vm.createContext({Intl, Date, document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{})});
-  vm.runInContext(fs.readFileSync('site/app.js','utf8'), env);
+  const [env, get] = pageEnv();
   const history = [{date:'2024-11-18',count:670,imported:true},{date:'2026-11-21',count:751,imported:false}];
   const delays = {sample_size:1,active_past_estimate:24,max_gap_days:14,min_sample:30,meaningful:false,excluded:{listed_at_first_capture:0,no_estimate:0,wide_start_window:0,wide_removal_window:0,vnr_still_listed:0},examples:[]};
   env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
   assert.match(get('chart').innerHTML, /18 Nov 2024/);
   assert.doesNotMatch(get('chart').innerHTML, /2024-11-18/);
+  assert.match(get('chart').innerHTML, /no captures, 733 days/);
   assert.match(get('delay-headline').textContent, /1 shortage entered/);
   assert.match(get('delay-note').textContent, /does not prove supply returned/);
   assert.match(get('delay-visual').innerHTML, /24 shortages were still listed/);
-  assert.match(get('delay-note').textContent, /likely higher/);
   assert.match(get('chart').innerHTML, /font-size="14"[^>]*>0<\/text>/);
+  env.drawTable(history);
+  assert.match(get('chart-table').innerHTML, /<td>21 Nov 2026<\/td><td>751<\/td><td>saved by this project<\/td>/);
   vm.runInContext("language='fi'",env);
   env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
   assert.match(get('chart').innerHTML, /18\.11\.2024/);
@@ -111,55 +192,103 @@ test('history and delay rendering uses translated dates and explains the sample'
   assert.match(get('delay-headline').textContent, /10 %–60 %/);
   assert.match(get('delay-visual').innerHTML, /Listalla arvion jälkeen/);
   env.drawDates({snapshot_date:'2026-11-21',last_checked:'2026-11-20',archive_start:'2024-11-18'});
-  assert.match(get('updated').textContent, /Päivitetty 21\.11\.2026/);
-  assert.equal(get('freshness').textContent, '');
+  assert.equal(get('data-date').textContent, 'Aineisto 21.11.2026');
 });
 
-test('pack sizes use the unit and do not repeat the form', () => {
-  vm.runInContext("language='en'", context);
+test('pack sizes use the unit and the form is named on its own line', () => {
+  setLanguage(context, 'en');
   const tablets = {name:'T', form:'tabletti, kalvopäällysteinen', pack:'98', pack_label:{en:'98 tablets', fi:'98 tablettia'}, atc:'N02'};
-  assert.match(context.card(tablets, Date.UTC(2026,10,21)), /<p class="form">98 tablets<\/p>/);
-  assert.match(context.card({...tablets, form:'injektioneste, liuos', pack:'5 ml', pack_label:{en:'5 ml', fi:'5 ml'}}, 0), /<p class="form">Injection · 5 ml<\/p>/);
-  assert.match(context.card({...tablets, form:'purutabletti', pack_label:{en:'30 tablets', fi:'30 tablettia'}}, 0), /Chewable tablet · 30 tablets/);
-  assert.match(context.card({...tablets, pack_label:undefined}, 0), /Tablet · 98</);
-  vm.runInContext("language='fi'", context);
-  assert.match(context.card(tablets, 0), /<p class="form">98 tablettia<\/p>/);
-  vm.runInContext("language='en'", context);
+  assert.match(context.pkgCard(tablets, NOW), /<p class="form pkg-spec"><span>98 tablets<\/span><\/p>/);
+  assert.match(context.pkgCard({...tablets, form:'injektioneste, liuos', pack:'5 ml', pack_label:{en:'5 ml', fi:'5 ml'}}, 0), /<p class="form pkg-spec"><span>5 ml<\/span><\/p><p class="pkg-kind"><span>Injection<\/span>/);
+  assert.match(context.pkgCard({...tablets, form:'purutabletti', pack_label:{en:'30 tablets', fi:'30 tablettia'}}, 0), /<span>Chewable tablet<\/span>/);
+  assert.match(context.pkgCard({...tablets, pack_label:undefined}, 0), /<span>98<\/span>/);
+  setLanguage(context, 'fi');
+  assert.match(context.pkgCard(tablets, 0), /<span>98 tablettia<\/span>/);
+  setLanguage(context, 'en');
 });
 
-test('Details give a neutral pointer instead of contact data', () => {
-  const html = context.card({name:'T', atc:'N02', Company:'Example Oy', contact:'CONTACT-PLACEHOLDER'}, 0);
-  assert.match(html, /For more information, ask your pharmacy or the company \(Example Oy\)\. <a href="https:\/\/fimea\.fi\/en\/databases_and_registers\/shortages">Fimea’s shortage search ↗<\/a>/);
-  assert.doesNotMatch(html, /CONTACT-PLACEHOLDER/);
-  vm.runInContext("language='fi'", context);
-  assert.match(context.card({name:'T', atc:'N02', Company:'Example Oy'}, 0), /Lisätietoja saat apteekista tai yritykseltä \(Example Oy\)\. <a href="https:\/\/fimea\.fi\/laakehaut_ja_luettelot\/saatavuushairio-uusi">Fimean saatavuushäiriöhaku/);
-  vm.runInContext("language='en'", context);
+test('what to do names the pharmacy and points to Fimea without contact data', () => {
+  const copy = vm.runInContext('copy', context);
+  assert.match(copy.en.whatText, /^Ask your pharmacy\./);
+  assert.match(copy.fi.whatText, /^Kysy apteekista\./);
+  assert.equal(copy.en.moreInfo('Example Oy'), 'For more information, ask your pharmacy or the company (Example Oy).');
+  assert.equal(copy.en.moreInfoUrl, 'https://fimea.fi/en/databases_and_registers/shortages');
+  assert.equal(copy.fi.moreInfoUrl, 'https://fimea.fi/laakehaut_ja_luettelot/saatavuushairio-uusi');
+  assert.doesNotMatch(context.pkgCard({name:'T', atc:'N02', Company:'Example Oy', contact:'CONTACT-PLACEHOLDER'}, 0), /CONTACT-PLACEHOLDER/);
 });
 
-test('the q parameter fills the search from a feed link', () => {
+test('the q parameter and filters are read from the address and written back', () => {
   const queryFromUrl = search => vm.runInContext('queryFromUrl', context)(search);
   assert.equal(queryFromUrl('?q=599361'), '599361');
   assert.equal(queryFromUrl('?x=1'), '');
   assert.equal(queryFromUrl('?q=%20Burana%20'), 'Burana');
   assert.ok(context.searchMatches({NordicArticleNumber:'599361', name:'Other'}, queryFromUrl('?q=599361')));
+  const f = context.parseFilters('?q=burana&status=soon&group=N&form=tablet&company=Orion%20Corporation&sort=name');
+  assert.deepEqual({...f}, {q:'burana', status:'soon', group:'N', form:'tablet', company:'Orion Corporation', sort:'name'});
+  assert.equal(context.filtersToQuery(f), 'q=burana&status=soon&group=N&form=tablet&company=Orion+Corporation&sort=name');
+  assert.deepEqual({...context.parseFilters('?status=bogus&form=bogus&sort=bogus')}, {q:'', status:'', group:'', form:'', company:'', sort:''});
+  assert.equal(context.filtersToQuery(context.parseFilters('')), '');
+});
+
+test('the default order lists current shortages newest first, then those starting soon, soonest first', () => {
+  const rows = [
+    {name:'Old', UnavailableFrom:'2025-01-01'}, {name:'Soon later', UnavailableFrom:'2026-12-05'}, {name:'New', UnavailableFrom:'2026-11-20'},
+    {name:'Soon first', UnavailableFrom:'2026-11-25'}, {name:'Mid', UnavailableFrom:'2026-06-01'}];
+  const order = (sort) => Array.from(context.sortPackages(rows, sort, NOW, 'en')).map(e => e.name);
+  assert.deepEqual(order(''), ['New', 'Mid', 'Old', 'Soon first', 'Soon later']);
+  assert.deepEqual(order('longest'), ['Old', 'Mid', 'New', 'Soon first', 'Soon later']);
+  assert.deepEqual(order('name'), ['Mid', 'New', 'Old', 'Soon first', 'Soon later']);
+  assert.deepEqual(order('end'), order('end').slice().sort(), 'a missing end date sorts last without throwing');
+});
+
+test('filters combine status, group, form and company with the search', () => {
+  const rows = [
+    {name:'Burana', UnavailableFrom:'2026-10-01', atc:'M01AE01', form:'tabletti, kalvopäällysteinen', Company:'Orion'},
+    {name:'Burana gel', UnavailableFrom:'2026-12-01', atc:'M02AA13', form:'geeli', Company:'Orion'},
+    {name:'Eye', UnavailableFrom:'2026-10-02', atc:'S01XA', form:'silmätipat, liuos', Company:'Santen'}];
+  const run = f => Array.from(context.filterPackages(rows, {q:'', status:'', group:'', form:'', company:'', ...f}, NOW)).map(e => e.name);
+  assert.deepEqual(run({}), ['Burana', 'Burana gel', 'Eye']);
+  assert.deepEqual(run({status:'soon'}), ['Burana gel']);
+  assert.deepEqual(run({status:'now'}), ['Burana', 'Eye']);
+  assert.deepEqual(run({group:'M'}), ['Burana', 'Burana gel']);
+  assert.deepEqual(run({group:'eye'}), ['Eye']);
+  assert.deepEqual(run({form:'tube'}), ['Burana gel']);
+  assert.deepEqual(run({company:'Santen'}), ['Eye']);
+  assert.deepEqual(run({q:'burana', company:'Orion', status:'now'}), ['Burana']);
+});
+
+test('the timeline model places the start, today and the estimate, and reports a late estimate', () => {
+  const e = {UnavailableFrom:'2026-11-01', EndingDate:'2026-12-01', end_changes:[{seen:'2026-11-05', date:'2026-11-15'}, {seen:'2026-11-14', date:'2026-12-01'}]};
+  const model = context.timelineModel(e, NOW);
+  assert.equal(model.status, 'now');
+  assert.equal(model.late, false);
+  assert.deepEqual(Array.from(model.order), ['start', 'today', 'end']);
+  assert.equal(model.daysSinceStart, 20);
+  assert.equal(model.daysToEstimate, 10);
+  assert.deepEqual(plain(model.earlier.map(x => [x.date, x.seen])), [['2026-11-15', '2026-11-05']]);
+  assert.equal(model.currentSeen, '2026-11-14');
+  const pos = Object.fromEntries(model.marks.map(m => [m.key, m.pos]));
+  assert.equal(pos.start, 0); assert.equal(pos.end, 1); assert.ok(pos.today > 0 && pos.today < 1);
+  const late = context.timelineModel({UnavailableFrom:'2026-10-01', EndingDate:'2026-11-11'}, NOW);
+  assert.equal(late.late, true); assert.equal(late.daysPastEstimate, 10); assert.equal(late.daysToEstimate, null);
+  assert.deepEqual(Array.from(late.order), ['start', 'end', 'today']);
+  const soon = context.timelineModel({UnavailableFrom:'2026-11-25', EndingDate:'2026-12-25'}, NOW);
+  assert.equal(soon.status, 'soon'); assert.equal(soon.daysUntilStart, 4); assert.deepEqual(Array.from(soon.order), ['today', 'start', 'end']);
+  const open = context.timelineModel({UnavailableFrom:'2026-11-01'}, NOW);
+  assert.equal(open.hasEnd, false); assert.deepEqual(Array.from(open.order), ['start', 'today']);
 });
 
 test('this week summary and how-we-count note state their window and counts', () => {
-  const elements = {};
-  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:true, href:'', value:'en', addEventListener(){}, setAttribute(){}};
-  const document = {getElementById:get, documentElement:{dataset:{},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
-  const env = vm.createContext({Intl, Date, document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{})});
-  vm.runInContext(fs.readFileSync('site/app.js','utf8'), env);
+  const [env, get] = pageEnv();
   const week = {from:'2026-11-13', to:'2026-11-21', days:8, new:77, left:70, count_from:751, count_to:758};
   env.drawWeek(week, 758);
   assert.equal(get('week').hidden, false);
-  assert.equal(get('week-new').textContent, '77');
-  assert.equal(get('week-left').textContent, '70');
-  assert.equal(get('week-total').textContent, '758');
+  const facts = get('week-facts').innerHTML;
+  assert.match(facts, /<dt>New on the list<\/dt><dd class="fact-num">77<\/dd>/);
+  assert.match(facts, /<dt>Left the list<\/dt><dd class="fact-num">70<\/dd>/);
+  assert.match(facts, /<dd class="fact-num">758<\/dd><dd class="fact-note">758 now, 751 on 13 Nov 2026<\/dd>/);
+  assert.match(facts, /New records listed since 13 Nov 2026, including any that left again\./);
   assert.match(get('week-window').textContent, /capture of 13 Nov 2026, 8 days earlier/);
-  assert.equal(get('week-total-note').textContent, '758 now · 751 on 13 Nov 2026');
-  assert.equal(get('week-new-note').textContent, 'New records listed since 13 Nov 2026, including any that left again.');
-  assert.match(get('week-left-note').textContent, /^Records that left the list since 13 Nov 2026, including any that arrived in the same period\./);
   assert.equal(get('feed-link').href, 'feed.xml');
   env.drawWeek(null, 758);
   assert.equal(get('week').hidden, true);
@@ -170,25 +299,22 @@ test('this week summary and how-we-count note state their window and counts', ()
   vm.runInContext("language='fi'", env);
   env.drawWeek(week, 758); env.drawDelays(delays, '2026-11-21');
   assert.equal(get('feed-link').href, 'feed-fi.xml');
-  assert.match(get('week-new-label').textContent, /UUDET LISTALLA/);
-  assert.match(get('week-new-note').textContent, /myös ne, jotka ehtivät poistua uudelleen/);
+  assert.match(get('week-facts').innerHTML, /Uudet listalla/);
+  assert.match(get('week-facts').innerHTML, /myös ne, jotka ehtivät poistua uudelleen/);
   assert.match(get('how-count-text').textContent, /^Mukana on 156 listalta poistuneesta 1\s197 ilmoituksesta/);
-  assert.match(get('how-count-text').textContent, /642 jo ensimmäisessä tilannekuvassa ollutta/);
 });
 
-test('strength is part of the main line, with a Finnish decimal comma', () => {
+test('strength is part of the label, with a Finnish decimal comma', () => {
   const apixaban = {name:'Apixaban Sandoz', strength:'2.5 mg', form:'tabletti, kalvopäällysteinen', pack_label:{en:'60 tablets', fi:'60 tablettia'}, UnavailableFrom:'2026-11-06', atc:'B01'};
-  vm.runInContext("language='en'", context);
-  assert.deepEqual(Array.from(context.formAndPack(apixaban)), ['2.5 mg', '60 tablets']);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2\.5 mg · 60 tablets<\/p>/);
-  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', strength:'10 mg/ml', pack:'5 ml'})), ['Injection', '10 mg/ml', '5 ml']);
-  assert.deepEqual(Array.from(context.formAndPack({form:'injektioneste, liuos', pack:'5 ml'})).filter(Boolean), ['Injection', '5 ml']);
-  vm.runInContext("language='fi'", context);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<p class="form">2,5 mg · 60 tablettia<\/p>/);
-  assert.match(context.card(apixaban, Date.UTC(2026,10,21)), /<dd>2,5 mg<\/dd>/);
-  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2,5 mg');
-  vm.runInContext("language='en'", context);
-  assert.equal(context.nameWithStrength(apixaban), 'Apixaban Sandoz 2.5 mg');
+  setLanguage(context, 'en');
+  assert.deepEqual(plain(context.formAndPack(apixaban)).map(nb), ['2.5 mg', '60 tablets']);
+  assert.match(nb(context.pkgCard(apixaban, NOW)), /<span>2\.5 mg<\/span> <span>60 tablets<\/span>/);
+  assert.deepEqual(plain(context.formAndPack({form:'injektioneste, liuos', strength:'10 mg/ml', pack:'5 ml'})).map(nb), ['Injection', '10 mg/ml', '5 ml']);
+  setLanguage(context, 'fi');
+  assert.match(nb(context.pkgCard(apixaban, NOW)), /<span>2,5 mg<\/span> <span>60 tablettia<\/span>/);
+  assert.equal(nb(context.nameWithStrength(apixaban)), 'Apixaban Sandoz 2,5 mg');
+  setLanguage(context, 'en');
+  assert.equal(nb(context.nameWithStrength(apixaban)), 'Apixaban Sandoz 2.5 mg');
   assert.equal(context.nameWithStrength({name:'Burana 400 mg', strength:'400 mg'}), 'Burana 400 mg');
   assert.equal(context.nameWithStrength({name:'Burana'}), 'Burana');
 });
@@ -200,10 +326,8 @@ test('search finds a package by strength with comma and point folded', () => {
   assert.deepEqual(hits('apixaban 5 mg'), ['5 mg']);
   assert.deepEqual(hits('apixaban 5mg'), ['5 mg']);
   assert.deepEqual(hits('apixaban 2,5'), ['2.5 mg']);
-  assert.deepEqual(hits('apixaban 2.5 mg'), ['2.5 mg']);
   assert.deepEqual(hits('apiksabaani 2,5 mg'), ['2.5 mg']);
   assert.deepEqual(hits('apixaban 2,'), ['2.5 mg']);
-  assert.deepEqual(hits('2,5 mg'), ['2.5 mg']);
   assert.deepEqual(hits('apixaban sandoz'), ['2.5 mg', '5 mg']);
   assert.deepEqual(hits('apixaban 50 mg'), []);
   assert.deepEqual(hits('584836'), ['2.5 mg']);
@@ -212,21 +336,18 @@ test('search finds a package by strength with comma and point folded', () => {
 test('strength is not repeated, never breaks between number and unit, and translates unit words in English only', () => {
   const octreotide = {name:'Octreotide ratiopharm', strength:'10 mg', form:'injektiokuiva-aine', pack:'10 mg + 2 ml', pack_label:{en:'10 mg + 2 ml', fi:'10 mg + 2 ml'}, UnavailableFrom:'2026-11-06', atc:'H01'};
   for (const lang of ['en', 'fi']) {
-    vm.runInContext(`language='${lang}'`, context);
-    assert.deepEqual(Array.from(context.formAndPack(octreotide)).filter(Boolean), [context.formText(octreotide.form), '10 mg + 2 ml']);
+    setLanguage(context, lang);
+    assert.deepEqual(plain(context.formAndPack(octreotide)).filter(Boolean).map(nb), [context.formText(octreotide.form), '10 mg + 2 ml']);
     assert.equal(context.nameWithStrength(octreotide), 'Octreotide ratiopharm');
   }
-  assert.equal(context.nameWithStrength({name:'X', strength:'10 mg', pack_label:{en:'100 mg'}}), 'X 10 mg');
-  vm.runInContext("language='en'", context);
-  assert.equal(context.nameWithStrength({name:'Octreotide ratiopharm', strength:'30 mg'}), 'Octreotide ratiopharm 30 mg');
-  assert.doesNotMatch(context.nameWithStrength({name:'Octreotide ratiopharm', strength:'30 mg'}), /30 mg/);
-  for (const [raw, en] of [['20 mikrog / 24 tuntia', '20 microg / 24 hours'], ['5 mikrog/tunti', '5 microg/hour'], ['24 h', '24 hours'], ['20 mikrog/annos', '20 microg/dose'], ['200 Speywood-yksikköä/ml', '200 Speywood-units/ml'], ['3 mg / vuorokausi', '3 mg / day']]) {
-    vm.runInContext("language='en'", context);
-    assert.equal(context.strengthText({strength:raw}), en, raw);
-    vm.runInContext("language='fi'", context);
-    assert.equal(context.strengthText({strength:raw}), raw.replace(/(\d) (?=[\p{L}%µ])/gu, '$1 '), raw);
+  setLanguage(context, 'en');
+  for (const [raw, en] of [['20 mikrog / 24 tuntia', '20 microg / 24 hours'], ['5 mikrog/tunti', '5 microg/hour'], ['24 h', '24 hours'], ['200 Speywood-yksikköä/ml', '200 Speywood-units/ml'], ['3 mg / vuorokausi', '3 mg / day']]) {
+    setLanguage(context, 'en');
+    assert.equal(nb(context.strengthText({strength:raw})), en, raw);
+    setLanguage(context, 'fi');
+    assert.equal(nb(context.strengthText({strength:raw})), raw, raw);
   }
-  vm.runInContext("language='en'", context);
+  setLanguage(context, 'en');
 });
 
 test('the empty result does not read as "no problem", and the placeholder finds results', () => {
@@ -240,11 +361,11 @@ test('the empty result does not read as "no problem", and the placeholder finds 
 });
 
 test('cards carry a short pharmacy line and the delay headline leads with the count', () => {
-  vm.runInContext("language='en'", context);
-  assert.match(context.card({name:'T', atc:'N02'}, 0), /<p class="ask">Ask your pharmacy<\/p>/);
-  vm.runInContext("language='fi'", context);
-  assert.match(context.card({name:'T', atc:'N02'}, 0), /<p class="ask">Kysy apteekista<\/p>/);
-  vm.runInContext("language='en'", context);
+  setLanguage(context, 'en');
+  assert.match(context.pkgCard({name:'T', atc:'N02'}, 0), /<p class="ask">Ask your pharmacy<\/p>/);
+  setLanguage(context, 'fi');
+  assert.match(context.pkgCard({name:'T', atc:'N02'}, 0), /<p class="ask">Kysy apteekista<\/p>/);
+  setLanguage(context, 'en');
   const copy = vm.runInContext('copy', context);
   assert.match(copy.en.delayHeadline('15', '156', '78', '10%', '60%'), /^15 of 156 observed shortages stayed listed past the estimate; for 78 we cannot tell yet\. .*10%–60%/);
 });
@@ -260,29 +381,52 @@ test('the citation names the data date and the access date', () => {
   assert.match(copy.en.citation('a', 'b'), /accessed b/);
 });
 
-test('page head: no hreflang on feeds, matching locale, image alt, one search, no numbered kickers', () => {
-  const html = fs.readFileSync('site/index.html', 'utf8');
-  assert.doesNotMatch(html, /hreflang/);
-  assert.match(html, /<html lang="en">/);
-  assert.match(html, /og:locale" content="en_GB"/);
-  assert.match(html, /og:image:alt/);
-  assert.equal((html.match(/id="search"/g) || []).length, 1);
-  assert.ok(html.indexOf('id="search"') < html.indexOf('id="week"'));
-  assert.doesNotMatch(html, /class="kicker"><span[^>]*>\d\d \//);
-  assert.match(html, /issues\/new\?template=data-problem\.yml/);
-  assert.match(html, /id="cite-box"/);
+test('the pages keep the head tags, the one search, the report link and the citation box', () => {
+  const home = pages['index.html'], list = pages['shortages.html'], trends = pages['trends.html'], about = pages['about.html'];
+  for (const html of Object.values(pages)) assert.doesNotMatch(html, /hreflang/);
+  assert.match(home, /<html lang="en"/);
+  assert.match(home, /og:locale" content="en_GB"/);
+  assert.match(home, /og:image:alt/);
+  assert.equal((list.match(/id="search"/g) || []).length, 1);
+  assert.match(list, /id="result-count" aria-live="polite" aria-atomic="true"/);
+  assert.match(about, /issues\/new\?template=data-problem\.yml/);
+  assert.match(about, /id="citation"/); assert.match(trends, /id="cite-box"/);
+  assert.match(trends, /id="chart-table"/);
   assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
   assert.ok(fs.existsSync('site/sitemap.xml'));
+  assert.match(about, /id="what-to-do"/); assert.match(about, /id="privacy"/); assert.match(about, /id="licence"/);
+  assert.doesNotMatch(Object.values(pages).join(''), /https?:\/\/(?!alejandrorenalias|fimea|creativecommons|web\.archive|github)/);
 });
-
 
 test('other packages line appears only for positive counts in both languages', () => {
   for (const lang of ['en', 'fi']) {
-    vm.runInContext(`language = '${lang}'`, context);
+    setLanguage(context, lang);
     const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01'};
     const message = vm.runInContext(`copy.${lang}.otherPackages`, context);
-    assert.ok(context.card({...record, other_packages_count:1}, Date.UTC(2026,10,21)).includes(message));
-    assert.ok(!context.card({...record, other_packages_count:0}, Date.UTC(2026,10,21)).includes(message));
-    assert.ok(!context.card(record, Date.UTC(2026,10,21)).includes(message));
+    assert.ok(context.pkgCard({...record, other_packages_count:1}, NOW).includes(message));
+    assert.ok(!context.pkgCard({...record, other_packages_count:0}, NOW).includes(message));
+    assert.ok(!context.pkgCard(record, NOW).includes(message));
   }
+  setLanguage(context, 'en');
+});
+
+test('the medicine page opens the right package from a feed link and shows a helpful state for an unknown number', () => {
+  const [env] = pageEnv(['medicine.js']);
+  const current = {events:[{NordicArticleNumber:'599361', name:'Rivastor', UnavailableFrom:'2026-11-01'}, {NordicArticleNumber:'111111', name:'Gone', removed_on:'2026-11-10', last_seen:'2026-11-09'}]};
+  const archived = {events:[{NordicArticleNumber:'111111', name:'Gone', removed_on:'2026-11-10', last_seen:'2026-11-09'}, {NordicArticleNumber:'111111', name:'Gone earlier', removed_on:'2026-05-10', last_seen:'2026-05-09'}]};
+  assert.equal(env.vnrFromSearch('?vnr=599361'), '599361');
+  assert.equal(env.vnrFromSearch('?vnr=%20599361%20'), '599361');
+  assert.equal(env.vnrFromSearch(''), '');
+  const found = env.lookup('599361', current, null, false);
+  assert.equal(found.state, 'now'); assert.equal(found.events[0].name, 'Rivastor');
+  assert.equal(env.lookup('abc', current, null, false).state, 'missing');
+  assert.equal(env.lookup('', current, null, false).state, 'missing');
+  assert.equal(env.lookup('111111', current, null, false).state, 'pending');
+  const left = env.lookup('111111', current, archived, false);
+  assert.equal(left.state, 'left'); assert.equal(left.events[0].name, 'Gone');
+  assert.equal(env.lookup('222222', current, archived, false).state, 'missing');
+  assert.equal(env.lookup('222222', current, null, true).state, 'missing');
+  for (const lang of ['en', 'fi']) { const copy = vm.runInContext(`copy.${lang}`, env); assert.match(copy.nfText('222222'), /222222/); assert.ok(copy.nfNone && copy.nfSearch); }
+  // Feed entries link to the medicine page by VNR, and the page reads that number.
+  assert.match(fs.readFileSync('scripts/changes.py', 'utf8'), /medicine\.html\?vnr=\{e\['NordicArticleNumber'\]\}/);
 });

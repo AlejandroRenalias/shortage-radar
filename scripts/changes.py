@@ -107,7 +107,7 @@ def feeds(es, snapshots, history):
                  '<author><name>Shortage Radar</name>' + f'<uri>{SITE_URL}</uri></author>', '<rights>Data: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed.</rights>']
         for day, kind, e in entries:
             title, body = _entry_text(e, lang, kind)
-            parts.append(f'<entry><id>{_entry_id(e, kind)}</id><title>{escape(title)}</title><updated>{day}T00:00:00Z</updated><link rel="alternate" type="text/html" href="{SITE_URL}?q={e['NordicArticleNumber']}"/><summary type="text">{escape(body)}</summary></entry>')
+            parts.append(f'<entry><id>{_entry_id(e, kind)}</id><title>{escape(title)}</title><updated>{day}T00:00:00Z</updated><link rel="alternate" type="text/html" href="{SITE_URL}medicine.html?vnr={e['NordicArticleNumber']}"/><summary type="text">{escape(body)}</summary></entry>')
         parts.append('</feed>')
         out[t['file']] = '\n'.join(parts) + '\n'
     return out

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from changes import feeds, week_summary
 from packs import pack_label
+from pages import render_pages
 
 ROOT = Path(__file__).resolve().parents[1]
 # Captures further apart than this are not joined into one continuous series,
@@ -239,6 +240,8 @@ def build():
     (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     for name, text in feeds(es, snapshots, history).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
+    for name, html in render_pages(len(current)).items():
+        (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
 
 

@@ -9,3 +9,9 @@ site/shortages.csv
 site/week.json
 site/feed.xml
 site/feed-fi.xml
+site/index.html
+site/shortages.html
+site/medicine.html
+site/trends.html
+site/about.html
+site/404.html
