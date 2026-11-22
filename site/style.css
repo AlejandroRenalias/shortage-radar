@@ -289,8 +289,8 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .tri-text strong{display:block;font-size:1.0625rem;line-height:1.25}
 .tri-text span{display:block;color:var(--muted);font-size:.9375rem;line-height:1.35}
 .tri-go{color:var(--muted)}
-.triage-vet{margin:12px 0 4px}
-.triage-vet a{display:inline-flex;min-height:44px;align-items:center;font-weight:600}
+.triage-vet{margin:12px 0 6px;line-height:1.5}
+.triage-vet a{font-weight:600}
 .triage .note{margin:0}
 .hero-side{display:grid;gap:20px;align-content:start}
 .hero-side .lead{margin:0}
@@ -358,7 +358,8 @@ html:not(.js) .needs-js{display:none}
 .shelf-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;min-height:330px}
 .shelf-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:96px;height:100%;padding:8px 2px 6px;background:var(--white);border:1px solid var(--line);border-bottom:3px solid var(--line-strong);border-radius:12px;color:var(--ink);text-decoration:none;text-align:center;transition:border-color .15s,background-color .15s}
 .shelf-tile:hover{border-color:var(--green-ink);background:#fff}
-.shelf-name{font-size:.8125rem;font-weight:700;line-height:1.15;overflow-wrap:anywhere}
+/* Long Finnish and English words break only at a hyphen: soft hyphens in the copy, and the browser's own hyphenation where it has it. */
+.shelf-name{font-size:.8125rem;font-weight:700;line-height:1.15;overflow-wrap:normal;word-break:normal;-webkit-hyphens:auto;hyphens:auto;max-width:100%}
 .shelf-count{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .newest{padding-block:20px 8px}
 .newest h2{font-size:1.1875rem;margin-bottom:10px}
