@@ -181,7 +181,7 @@ test('history and delay rendering uses translated dates and explains the sample'
   assert.match(get('delay-note').textContent, /does not prove supply returned/);
   assert.match(get('delay-visual').innerHTML, /24 shortages were still listed/);
   assert.match(get('chart').innerHTML, /font-size="14"[^>]*>650<\/text>/);
-  assert.match(get('chart').innerHTML, /font-weight="700"[^>]*>751<\/text>/);
+  assert.match(get('chart').innerHTML, /font-weight="600"[^>]*>751<\/text>/);
   assert.match(get('chart').innerHTML, /The vertical axis starts at 650\./);
   env.drawTable(history);
   assert.match(get('chart-table').innerHTML, /<td>21 Nov 2026<\/td><td>751<\/td><td>saved by this project<\/td>/);

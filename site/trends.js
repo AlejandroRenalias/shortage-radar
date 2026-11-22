@@ -24,7 +24,7 @@ function drawChart(history, maxGap, width = 400) {
   });
   const mid=(lo+hi)/2, tick=(n,dy)=>`<text x="36" y="${y(n)+dy}" font-size="14" fill="#4a625c" text-anchor="end">${numberText(n)}</text>`;
   const grid=`<path d="M40 ${y(hi)}H${plotRight}M40 ${y(mid)}H${plotRight}M40 150H${plotRight}" stroke="#d3dede" fill="none"/>${tick(hi,5)}${tick(mid,5)}${tick(lo,5)}`;
-  const label=`<text x="${plotRight+8}" y="${(y(last.count)+5).toFixed(1)}" font-size="14" font-weight="700" fill="#0f2a24">${latest}</text>`;
+  const label=`<text x="${plotRight+8}" y="${(y(last.count)+5).toFixed(1)}" font-size="14" font-weight="600" fill="#0f2a24">${latest}</text>`;
   $('chart').innerHTML=`<svg viewBox="0 0 ${width} 170" role="img" aria-label="${esc(t.chartSummary(dateText(history[0].date),dateText(last.date),numberText(last.count),gaps.join(', ')))}">${grid}${svg}${label}</svg><div class="chart-labels"><span>${esc(dateText(history[0].date))}</span><span>${numberText(last.count)}, ${esc(dateText(last.date))}</span></div><div class="chart-labels"><span>${esc(t.savedLegend)}</span><span>${esc(t.importedLegend)}</span></div>${lo>0 ? `<div class="chart-labels"><span>${esc(t.axisNote(numberText(lo)))}</span></div>` : ''}${gaps.length ? `<div class="chart-labels"><span>${esc(gaps.map(g=>t.noCaptures(g)).join('; '))}</span></div>` : ''}`;
 }
 function drawTable(history) {
