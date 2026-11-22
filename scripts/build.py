@@ -12,6 +12,7 @@ from changes import feeds, week_summary
 from packs import pack_label
 from pages import render_pages
 from slices import package_shards, summary
+from triage import level, medicine_name, newly_critical
 
 ROOT = Path(__file__).resolve().parents[1]
 # Captures further apart than this are not joined into one continuous series,
@@ -47,15 +48,19 @@ def read_snapshot(path):
     return rows
 
 
-def match_key(product):
-    """Require known group, strength and form; normalise text without guessing equivalence."""
-    def normalise(value):
-        return ' '.join(unicodedata.normalize('NFKC', value).casefold().split())
-    key = tuple(normalise(product.get(field, '')) for field in ('substitution_group', 'strength', 'form'))
-    return key if all(key) else None
+def group_key(product):
+    """Fimea's substitution group code decides interchangeability; strength and form text are not compared because the
+    register writes them differently inside one group ("20 mg/ml" and "20 mg/g", film-coated tablets and capsules)."""
+    return ' '.join(unicodedata.normalize('NFKC', product.get('substitution_group', '')).split()) or None
 
 
-def register(path, wanted, current_shortages=()):
+def register(path, wanted, current_shortages=(), members=None):
+    """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
+    on the market, not flagged short in the register and not in the current shortage file.
+
+    When `members` is a dict, it is filled with {group: [package]} for every package with a substitution group, for the
+    history of the groups and for the list of alternatives on the medicine page.
+    """
     packages, exact, products, substances = {}, set(), {}, {}
     candidates = []
     current_shortages = set(current_shortages)
@@ -65,7 +70,8 @@ def register(path, wanted, current_shortages=()):
             unit = el.find('Pakkauskokoyksikko')
             package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '', unit.get('value', '') if unit is not None else '')
             old_vnrs = {x.text for x in el.findall('VanhaVNR') if x.text}
-            candidates.append((el.get('Laakevalmiste-ref'), vnr, old_vnrs, el.findtext('Kaupanolo/Kaupan'), el.findtext('SaatavuushairioTiedot/Saatavuushairio')))
+            candidates.append((el.get('Laakevalmiste-ref'), vnr, old_vnrs, el.findtext('Kaupanolo/Kaupan'), el.findtext('SaatavuushairioTiedot/Saatavuushairio'),
+                               el.findtext('Kaupanolo/Kauppaantulopaiva'), el.findtext('Kaupanolo/Kaupastapoistumispaiva'), package[2], package[4]))
             if vnr in wanted:
                 packages[vnr] = package
                 exact.add(vnr)
@@ -77,22 +83,27 @@ def register(path, wanted, current_shortages=()):
             el.clear()
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
-            products[el.get('id')] = {'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else ''}
+            products[el.get('id')] = {'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
             el.clear()
         elif el.tag == 'Laakeaine':
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
             el.clear()
     available = {}
-    for ref, vnr, old_vnrs, market, shortage in candidates:
-        key = match_key(products.get(ref, {}))
+    for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit in candidates:
+        product = products.get(ref, {})
+        key = group_key(product)
         if key and vnr and market == '1' and shortage == '0' and not ({vnr} | old_vnrs) & current_shortages:
             available.setdefault(key, set()).add(vnr)
+        if key and vnr and members is not None:
+            members.setdefault(key, []).append({'vnr': vnr, 'old': old_vnrs, 'market': market, 'short': shortage == '1', 'entry': entry, 'exit': exit_,
+                                                'name': product['name'], 'strength': product['strength'], 'pack': pack, 'pack_label': pack_label(pack, unit, product['form']), 'company': product['holder']})
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
-            key = match_key(products[ref])
+            product = {k: v for k, v in products[ref].items() if k != 'holder'}
+            key = group_key(product)
             count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
-            result[vnr] = dict(products[ref], current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, products[ref]['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
+            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
     return result
 
 
@@ -192,6 +203,37 @@ def load_snapshots():
     return [(day, read_snapshot(paths[day])) for day in sorted(paths)], set(earlier)
 
 
+def read_triage_counts():
+    path = ROOT / 'data/triage-counts.json'
+    return json.loads(path.read_text(encoding='utf-8'))['counts'] if path.exists() else []
+
+
+def group_lists(current, members, current_vnrs):
+    """{group: {'available': [...], 'short': [...]}} for the groups of current shortages: the other packages on the market,
+    split into those a pharmacy can usually give and those that are short too. Small, so it goes with the medicine pages."""
+    def item(p):
+        return {k: p[k] for k in ('vnr', 'name', 'strength', 'pack_label', 'company')}
+    def listed(p):
+        return bool(({p['vnr']} | p['old']) & current_vnrs)
+    out = {}
+    for g in sorted({e['substitution_group'] for e in current if e.get('substitution_group')}):
+        packs = sorted((p for p in members.get(g, []) if p['market'] == '1'), key=lambda p: (p['name'].casefold(), p['strength'], p['pack']))
+        out[g] = {'available': [item(p) for p in packs if not listed(p) and not p['short']],
+                  'short': [dict(item(p), listed=listed(p)) for p in packs if listed(p) or p['short']]}
+    return out
+
+
+def critical_events(snapshots, members, products):
+    """Newly critical groups, newest first, with names for people: the medicine, its strength and the packages listed."""
+    out = []
+    for ev in newly_critical(snapshots, members):
+        listed = [dict(vnr=v, **{k: products.get(v, {}).get(k, '') for k in ('name', 'strength', 'substances', 'form', 'pack_label')}) for v in ev['vnrs']]
+        first = next((x for x in listed if x['name']), {})
+        out.append(dict(ev, medicine=medicine_name(first.get('substances', '')) or first.get('name', ''), strength=first.get('strength', ''), form=first.get('form', ''),
+                        packages=[{k: x[k] for k in ('vnr', 'name', 'strength', 'pack_label')} for x in listed]))
+    return sorted(out, key=lambda x: (x['date'], x['group']), reverse=True)
+
+
 def read_rss_counts():
     path = ROOT / 'data/snapshots/imported/rss-counts.json'
     return json.loads(path.read_text(encoding='utf-8'))['captures'] if path.exists() else []
@@ -205,11 +247,14 @@ def build():
     for h in history:
         h['imported'] = h['date'] in imported
     current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
-    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs)
+    members = {}
+    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members)
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
         if e['removed_on'] is None:
             e.setdefault('other_packages_count', 0)
+            e['impact'] = level(e)
+            e['medicine'] = medicine_name(e.get('substances', ''))
         else:
             e.pop('other_packages_count', None)
     current = [e for e in es if e['removed_on'] is None]
@@ -222,34 +267,37 @@ def build():
     register_metadata = ROOT / 'data/source/register-metadata.json'
     if register_metadata.exists():
         metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
-    output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata}
+    critical = critical_events(snapshots, members, products)
+    output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata,
+              'newly_critical': critical, 'triage_counts': read_triage_counts()}
     output['generated_at'] = datetime.now(timezone.utc).isoformat()
     output['last_checked'] = os.environ.get('LAST_CHECKED') or None
-    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market']
+    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact']
     with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(csv_columns)
         for e in current:
-            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else ''])
+            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else '', e.get('substitution_group', ''), e['impact']])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current
-    history_data = {k: output[k] for k in ('history', 'delays', 'rss_counts', 'max_gap_days')}
+    history_data = {k: output[k] for k in ('history', 'delays', 'rss_counts', 'max_gap_days', 'newly_critical', 'triage_counts')}
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     meta = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     shard_dir = ROOT / 'site/p'
     shard_dir.mkdir(exist_ok=True)
-    for name, shard in package_shards(es, meta).items():
+    for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs)).items():
         (shard_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    (ROOT / 'site/summary.json').write_text(json.dumps(summary(current, meta), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    home = summary(current, meta)
+    (ROOT / 'site/summary.json').write_text(json.dumps(home, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    for name, text in feeds(es, snapshots, history).items():
+    for name, text in feeds(es, snapshots, history, critical).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
-    for name, html in render_pages(len(current)).items():
+    for name, html in render_pages(len(current), home['impact']).items():
         (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
-    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)}")
+    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)}")
 
 
 if __name__ == '__main__':

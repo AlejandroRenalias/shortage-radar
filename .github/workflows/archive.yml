@@ -51,6 +51,15 @@ jobs:
             python scripts/archive.py
           fi
           echo "date=$(date +%F)" >> "$GITHUB_OUTPUT"
+      - name: Record impact triage counts
+        # The register has no history, so the counts are kept with the register of the day. A failure here does not stop the archive.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TZ: Europe/Helsinki
+        run: |
+          python scripts/fetch_register.py
+          python scripts/record_triage.py
       - name: Preserve rejected download
         if: failure() && steps.check.outcome == 'failure'
         uses: actions/upload-artifact@v7
@@ -64,7 +73,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/snapshots data/source/metadata.json
+          git add data/snapshots data/source/metadata.json data/triage-counts.json
           if ! git diff --cached --quiet; then
             git commit -m 'Update Fimea shortage data'
             for attempt in 1 2 3; do

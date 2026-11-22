@@ -101,19 +101,66 @@ def search_icon():
     return '<svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m16.500 16.500 4 4"/></svg>'
 
 
-def home(count):
+IMPACT_ICONS = {
+    'substitute': '<path d="M4 8h14l-3.500-3.500M20 16H6l3.500 3.500"/>',
+    'critical': '<path d="M5 4.500h14a1.500 1.500 0 0 1 1.500 1.500v9a1.500 1.500 0 0 1-1.500 1.500h-7.500L7 20v-3.500H5A1.500 1.500 0 0 1 3.500 15V6A1.500 1.500 0 0 1 5 4.500z"/><path d="M8 9h8M8 12.500h5"/>',
+    'nogroup': '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.500 12h7"/>',
+}
+IMPACT_NAMES = {'substitute': 'Substitute usually available', 'critical': 'No interchangeable product on the market', 'nogroup': 'No substitution group'}
+IMPACT_NOTES = {'substitute': 'Other packages in the same substitution group are on the market.', 'critical': 'Talk to your pharmacist or doctor early.',
+                'nogroup': 'Often hospital medicines or medicines from one company. Ask your pharmacist.'}
+
+
+def triage_bar(impact):
+    """Human medicines split by impact, as one bar. The list below it carries the same numbers in words."""
+    total = sum(impact.get(k, 0) for k in IMPACT_NAMES) or 1
+    x, parts = 0.0, []
+    for key in IMPACT_NAMES:
+        width = 100 * impact.get(key, 0) / total
+        if width:
+            parts.append(f'<rect class="tb-{key}" x="{x:.2f}" y="0" width="{width:.2f}" height="12"/>')
+            # The critical part also carries a hatch, so the bar does not rely on colour alone.
+            if key == 'critical':
+                parts.append(f'<rect fill="url(#tb-hatch)" x="{x:.2f}" y="0" width="{width:.2f}" height="12"/>')
+        x += width
+    return ('<svg class="triage-bar" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><pattern id="tb-hatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.2" height="3" fill="#fff" fill-opacity=".55"/></pattern></defs>'
+            + ''.join(parts) + '</svg>')
+
+
+def triage_list(impact):
+    rows = []
+    for key, name in IMPACT_NAMES.items():
+        n = impact.get(key, 0)
+        rows.append(f'<li><a class="tri tri-{key}" href="shortages.html?impact={key}"><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS[key]}</svg>'
+                    f'<span class="tri-num">{n:,}</span><span class="tri-text"><strong data-i18n="impact_{key}">{name}</strong><span data-i18n="triageNote_{key}">{IMPACT_NOTES[key]}</span></span>'
+                    '<svg class="uicon tri-go" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></a></li>')
+    return ''.join(rows)
+
+
+def home(count, impact=None):
     line = f'Fimea lists {count:,} {"package" if count == 1 else "packages"} as short today.'
+    impact = impact or {}
+    sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
+    answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the pharmacy can usually give a substitute.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
+    vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
     return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-text">
 <h1 id="hero-line" data-count="{count}">{line}</h1>
+{answer}
+<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'critical', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
+<div id="triage-bar">{triage_bar(impact)}</div>
+<ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
+<p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a> <span data-i18n="triageVetNote">Substitution groups are for human medicines.</span></p>
+<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
+</section></div>
+<div class="hero-side">
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
 <p class="lead" id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
-</div>
 <section class="shelf needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
-</div></section>
+</div></div></section>
 <section class="wrap newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
 <section class="facts-band needs-js" aria-labelledby="facts-title"><div class="wrap">
 <div class="facts-head"><h2 id="facts-title">This week</h2><p id="facts-since"></p></div>
@@ -137,6 +184,12 @@ def shortages():
 <p class="hint" id="search-hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 <details class="filters" id="filters"><summary><span data-i18n="filters">Filters</span><span id="filters-count"></span></summary>
 <div class="filter-grid">
+<fieldset class="seg seg-impact"><legend data-i18n="impactFilter">Impact</legend>
+<label><input type="radio" name="impact" value="" checked><span data-i18n="impactAll">All</span></label>
+<label><input type="radio" name="impact" value="critical"><span data-i18n="impact_critical">No interchangeable product on the market</span></label>
+<label><input type="radio" name="impact" value="substitute"><span data-i18n="impact_substitute">Substitute usually available</span></label>
+<label><input type="radio" name="impact" value="nogroup"><span data-i18n="impact_nogroup">No substitution group</span></label>
+<label><input type="radio" name="impact" value="vet"><span data-i18n="impact_vet">Veterinary medicines</span></label></fieldset>
 <fieldset class="seg"><legend data-i18n="filterStatus">Status</legend>
 <label><input type="radio" name="status" value="" checked><span data-i18n="statusAll">All</span></label>
 <label><input type="radio" name="status" value="now"><span data-i18n="statusNow">Shortage now</span></label>
@@ -150,6 +203,8 @@ def shortages():
 </form>
 </div>
 <div class="wrap results needs-js">
+<p class="crit-callout" id="crit-callout" hidden><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS['critical']}</svg><span id="crit-callout-text"></span> <a href="shortages.html?impact=critical" id="crit-show" data-i18n="critShow">Show them by medicine</a></p>
+<p class="crit-intro" id="crit-intro" data-i18n="critIntro" hidden>One row for each medicine and form. Open a row to see its packages. Talk to your pharmacist or doctor early about these medicines.</p>
 <div class="list-meta"><p id="result-count" aria-live="polite" aria-atomic="true"></p><button type="button" class="btn-quiet" id="copy-link" data-i18n="copyLink">Copy search link</button><span id="copy-status" role="status"></span></div>
 <div id="list" class="pkg-list"><p class="state" id="loading">Loading…</p></div>
 <div class="more"><p id="more-count"></p><button type="button" class="btn" id="more" data-i18n="more" hidden>Show more</button></div>
@@ -171,6 +226,7 @@ def trends():
 <section class="panel" aria-labelledby="longest-title"><h2 id="longest-title" data-i18n="longestTitle">Longest running current shortages</h2><p class="note" data-i18n="longestNote">Time since the reported start date.</p><ol id="longest-list" class="longest"></ol></section>
 <section class="panel" aria-labelledby="group-title"><h2 id="group-title" data-i18n="byGroup">By medicine group</h2><p class="note" data-i18n="byGroupNote">Packages on the list, by medicine group.</p><div id="atc"></div></section>
 <section class="panel" aria-labelledby="company-title"><h2 id="company-title" data-i18n="byCompany">By company</h2><p class="note" data-i18n="byCompanyNote">The ten companies with the most packages on the list.</p><div id="company"></div></section>
+<section class="panel panel-wide" id="new-crit" aria-labelledby="new-crit-title"><h2 id="new-crit-title" data-i18n="newCritTitle">Newly without an interchangeable product</h2><p class="note" data-i18n="newCritIntro">Days when the last available package of a substitution group went short, so no interchangeable product was left on the market.</p><ol id="new-crit-list" class="crit-events"></ol><p id="new-crit-method" class="note"></p><div id="triage-record"></div><p><a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p></section>
 <section class="panel panel-wide" aria-labelledby="delay-title"><h2 id="delay-title" data-i18n="delayTitle">Did shortages leave the list by the estimated date?</h2><p id="delay-headline" class="big-note"></p><div id="delay-visual"></div><p id="delay-note" class="note">Needs more weeks of data.</p><div class="how-count" id="how-count" hidden><h3 data-i18n="howTitle">How we count</h3><p id="how-count-text"></p></div><div id="delay-list"></div></section>
 <section class="panel panel-wide cite" id="cite-box" aria-labelledby="cite-title" hidden><h2 id="cite-title" data-i18n="citeTitle">Cite this site</h2><p class="note" data-i18n="citeIntro">Use the data date and the source when you cite these figures.</p><p id="citation" class="citation"></p><button type="button" class="btn" id="copy-cite" data-i18n="copyCite">Copy citation</button> <span id="copy-status" role="status"></span></section>
 </div>
@@ -181,11 +237,18 @@ def about():
     return f'''<div class="wrap page-head"><h1 data-i18n="aboutH1">About the data</h1><p class="lead" data-i18n="aboutIntro">The company has told Fimea it cannot deliver this package for a while. Your pharmacy may still have some. Ask your pharmacy what is available.</p></div>
 <div class="wrap about-layout">
 <nav class="toc" aria-labelledby="toc-title"><p id="toc-title" class="toc-title" data-i18n="aboutToc">On this page</p><ul>
-<li><a href="#what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</a></li><li><a href="#substitution" data-i18n="substTitle">Substitution groups</a></li><li><a href="#how" data-i18n="howTitle2">How the data works</a></li><li><a href="#limits" data-i18n="limitsTitle">What the data cannot tell you</a></li><li><a href="#downloads" data-i18n="downloadsTitle">Downloads</a></li><li><a href="#cite" data-i18n="citeTitle">Cite this site</a></li><li><a href="#privacy" data-i18n="privacyTitle">Privacy</a></li><li><a href="#licence" data-i18n="licenceTitle">Licence</a></li><li><a href="#report" data-i18n="reportTitle">Report a data problem</a></li></ul></nav>
+<li><a href="#what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</a></li><li><a href="#substitution" data-i18n="substTitle">Substitution groups</a></li><li><a href="#impact" data-i18n="impactTitle">What the impact label means</a></li><li><a href="#how" data-i18n="howTitle2">How the data works</a></li><li><a href="#limits" data-i18n="limitsTitle">What the data cannot tell you</a></li><li><a href="#downloads" data-i18n="downloadsTitle">Downloads</a></li><li><a href="#cite" data-i18n="citeTitle">Cite this site</a></li><li><a href="#privacy" data-i18n="privacyTitle">Privacy</a></li><li><a href="#licence" data-i18n="licenceTitle">Licence</a></li><li><a href="#report" data-i18n="reportTitle">Report a data problem</a></li></ul></nav>
 <div class="prose">
 <section id="what-to-do" aria-labelledby="h-what-to-do"><h2 id="h-what-to-do" data-i18n="pathAdvice">What to do if your medicine is short</h2><p data-i18n="doIntro">These steps are general information. They are not medical advice.</p>
 <ul class="steps"><li data-i18n="doCheck">Check the package. The list shows single packages, so compare the strength and pack size with your box.</li><li data-i18n="doAsk">Ask your pharmacy. A pharmacist can check what is available, order it, or suggest another package.</li><li data-i18n="doSubst">Another package may be possible. If your medicine is in a substitution group, your pharmacy can offer an interchangeable one. You or your doctor can decide against a change.</li><li data-i18n="doDoctor">Do not stop or change your medicine on your own. If your pharmacy cannot help, contact your doctor, who can prescribe another medicine.</li><li data-i18n="doUrgent">If you feel unwell, contact health care. In an emergency, call 112.</li></ul></section>
 <section id="substitution" aria-labelledby="h-subst"><h2 id="h-subst" data-i18n="substTitle">Substitution groups</h2><p data-i18n="aboutGroup">Fimea keeps a list of interchangeable medicines with the same active substance and strength and a similar form. A pharmacy can change a medicine to an interchangeable one and tell you which packages are available; you or your doctor can decide against a change. A group does not guarantee that every package fits you.</p><p><a id="about-group-link" href="https://fimea.fi/en/marketing_authorisations/interchangeable_medicinal_products" data-fimea="group" data-i18n="aboutGroupLink">Fimea’s interchangeable medicines</a></p><p><span data-i18n="fimeaSearchText">To check a package in the source, use Fimea’s own search.</span> <a href="https://fimea.fi/en/databases_and_registers/shortages" data-fimea="search" data-i18n="moreInfoLink">Fimea’s shortage search</a></p></section>
+<section id="impact" aria-labelledby="h-impact"><h2 id="h-impact" data-i18n="impactTitle">What the impact label means</h2><p data-i18n="impactAbout">Each shortage gets one label. It tells you whether a pharmacy can usually change the package to an interchangeable one. The label comes from Fimea’s substitution groups and its basic register.</p>
+<ul class="impact-levels"><li class="impact-substitute"><svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">{IMPACT_ICONS['substitute']}</svg><span data-i18n="aboutImpact_substitute">Substitute usually available: other packages in the same substitution group are on the market and not short. The pharmacy can usually offer one.</span></li>
+<li class="impact-critical"><svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">{IMPACT_ICONS['critical']}</svg><span data-i18n="aboutImpact_critical">No interchangeable product on the market: the package has a substitution group, but no other package in it is on the market without a shortage. This does not mean that there is no treatment. Talk to your pharmacist or doctor early.</span></li>
+<li class="impact-nogroup"><svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">{IMPACT_ICONS['nogroup']}</svg><span data-i18n="aboutImpact_nogroup">No substitution group: the pharmacy cannot change the medicine on its own. This is common for hospital medicines and medicines from one company. Ask your pharmacist.</span></li>
+<li class="impact-vet"><svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="6.500" cy="10.500" r="1.800"/><circle cx="10" cy="6" r="1.800"/><circle cx="14.500" cy="6" r="1.800"/><circle cx="18" cy="10.500" r="1.800"/><path d="M12 12c-2.500 0-4.500 2.800-4.500 5 0 1.500 1.200 2.500 2.500 2.500.8 0 1.300-.4 2-.4s1.200.4 2 .4c1.300 0 2.500-1 2.500-2.500 0-2.200-2-5-4.500-5z"/></svg><span data-i18n="aboutImpact_vet">Veterinary medicines: substitution groups are for human medicines. They are counted apart.</span></li></ul>
+<h3 data-i18n="impactCaveatsTitle">Limits of the label</h3>
+<ul class="steps"><li data-i18n="impactCaveat1">“On the market” means that the register lists the package as marketed in Finland. It is not a stock check. Your pharmacy may not have it today.</li><li data-i18n="impactCaveat2">A substitute can also be short in your area, or run out when many people need it at once.</li><li data-i18n="impactCaveat3">Combining strengths, such as two 10 mg tablets for one 20 mg tablet, or changing to another medicine is your doctor’s decision.</li><li data-i18n="impactCaveat4">The label is information, not medical advice. Ask a pharmacist or doctor about your medicines.</li></ul></section>
 <section id="how" aria-labelledby="h-how"><h2 id="h-how" data-i18n="howTitle2">How the data works</h2><h3 data-i18n="aboutSourceTitle">Where the data comes from</h3><p data-i18n="aboutSource">The list comes from Fimea, the Finnish Medicines Agency, which publishes it as open data. The archive checks Fimea’s file every day. {ARCHIVE_NOTE}</p><p data-i18n="howUpdate">A scheduled job checks Fimea’s file four times a day and saves a dated copy when it changes. The site is rebuilt from these copies every day.</p><h3 data-i18n="aboutRecordTitle">What one record is</h3><p data-i18n="aboutRecord">One record is one medicine package. The company that holds the marketing authorisation reported it to Fimea. A medicine can have several packages, so the counts are records, not medicines.</p></section>
 <section id="limits" aria-labelledby="h-limits"><h2 id="h-limits" data-i18n="limitsTitle">What the data cannot tell you</h2><p data-i18n="aboutLimits">A record that leaves the list is not proof that the medicine is back in supply. The history from before this site started saving the file comes from the Internet Archive and has gaps. Dates in the history are capture dates, not exact event dates.</p><p><strong data-i18n="noticeTitle">Not medical advice.</strong> <span data-i18n="aboutAdvice">This site does not tell you what to take or whether a medicine is available. Ask a pharmacist or doctor about your medicines.</span></p></section>
 <section id="downloads" aria-labelledby="h-downloads"><h2 id="h-downloads" data-i18n="downloadsTitle">Downloads</h2><p data-i18n="downloadsText">The data is free to use with credit to Fimea.</p><ul class="links"><li><a href="shortages.csv" data-i18n="dlCsv">Current shortages as a table (CSV)</a></li><li><a href="data.json" data-i18n="dlJson">Full data with event history (JSON)</a></li><li><a href="feed.xml" data-i18n="dlFeedEn">Changes of the last 14 days, English (Atom feed)</a></li><li><a href="feed-fi.xml" data-i18n="dlFeedFi">Changes of the last 14 days, Finnish (Atom feed)</a></li></ul></section>
@@ -202,11 +265,12 @@ def not_found():
 <p><a class="btn" href="/shortage-radar/shortages.html" data-i18n="nfSearch">Search the shortage list</a> <a class="btn-quiet" href="/shortage-radar/index.html" data-i18n="navHome">Home</a></p></div>'''
 
 
-def render_pages(count):
-    """Return {file name: html} for every page; `count` is the number of current shortages, shown in the home headline."""
+def render_pages(count, impact=None):
+    """Return {file name: html} for every page; `count` is the number of current shortages, shown in the home headline,
+    and `impact` the counts by impact level ({'substitute': n, ...}) for the triage on the home page."""
     out = {}
     for key, meta in PAGES.items():
-        body = {'index': lambda: home(count), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine}[key]()
+        body = {'index': lambda: home(count, impact), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine}[key]()
         meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'

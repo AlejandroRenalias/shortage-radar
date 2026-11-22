@@ -1,4 +1,4 @@
-// Home: one sentence on today's situation, a search, a shelf of forms, the newest packages, three facts and three paths.
+// Home: one sentence on today's situation, the impact triage, a search, a shelf of forms, the newest packages, three facts and three paths.
 let data, week = null;
 function started(rows, now) { return rows.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now); }
 // Counts for the form shelf, from the raw form text counted at build time.
@@ -19,10 +19,27 @@ function factsMarkup() {
   if (oldest) facts.push([t.factLongest, t.days(daysBetween(parsedDate(oldest.UnavailableFrom).valueOf(), now)), t.factLongestNote(nameWithStrength(oldest), dateText(oldest.UnavailableFrom))]);
   return facts.map(([label, value, note]) => `<div class="fact"><dt>${esc(label)}</dt><dd class="fact-num">${esc(value)}</dd><dd class="fact-note">${esc(note)}</dd></div>`).join('');
 }
+// Counts by impact level: from summary.json once it is loaded, else from the numbers built into the page.
+function impactCounts() {
+  if (data && data.impact) return data.impact;
+  const raw = ($('triage') && $('triage').dataset.impact) || '';
+  return Object.fromEntries(raw.split(',').filter(Boolean).map(pair => { const [key, n] = pair.split(':'); return [key, Number(n) || 0]; }));
+}
+function triageMarkup(counts) {
+  const t = copy[language];
+  return ['substitute', 'critical', 'nogroup'].map(k => `<li><a class="tri tri-${k}" href="shortages.html?impact=${k}">${uiIcon(k, 24)}<span class="tri-num">${numberText(counts[k] || 0)}</span><span class="tri-text"><strong>${esc(t['impact_' + k])}</strong><span>${esc(t['triageNote_' + k])}</span></span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon tri-go"')}</a></li>`).join('');
+}
 function renderHome() {
   const t = copy[language], hero = $('hero-line'), now = todayUTC();
   const n = data ? data.total : Number(hero.dataset.count);
   if (Number.isFinite(n)) hero.textContent = t.heroLine(n);
+  const counts = impactCounts();
+  if (Number.isFinite(counts.substitute)) {
+    $('hero-answer').textContent = t.heroAnswer(counts.substitute);
+    $('triage-list').innerHTML = triageMarkup(counts);
+    $('triage-vet').textContent = t.triageVet(counts.vet || 0);
+    $('triage-vet').parentElement.hidden = !counts.vet;
+  }
   $('shelf').innerHTML = data ? shelfMarkup(data.forms) : '';
   $('newest').innerHTML = data ? sortPackages(data.newest, '', now).slice(0, 3).map(e => pkgCard(e, now)).join('') : '';
   $('facts').innerHTML = data ? factsMarkup() : '';

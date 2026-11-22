@@ -1,0 +1,14 @@
+{
+ "note": "Impact triage counts of the latest snapshot, computed with the basic register of the day it was recorded. substitute: other packages in the substitution group are on the market and not short; critical: a group without such packages; nogroup: no substitution group; vet: veterinary medicines.",
+ "counts": [
+  {
+   "date": "2026-11-22",
+   "register_date": "2026-11-22",
+   "total": 749,
+   "substitute": 531,
+   "critical": 60,
+   "nogroup": 119,
+   "vet": 39
+  }
+ ]
+}
