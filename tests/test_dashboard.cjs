@@ -624,6 +624,27 @@ test('the line from the reported start to today is hatched when a gap lies insid
   assert.match(fs.readFileSync(require('node:path').join(__dirname, '../site/style.css'), 'utf8'), /\.seg-unknown\)::before\{background:repeating-linear-gradient/);
 });
 
+test('every stretch of the timeline line is hatched when a gap overlaps it, including an estimated end inside a gap', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  // Reported start before the gap, estimated end inside it, today after it: start -> end -> today. Both stretches touch the gap.
+  const e = {NordicArticleNumber:'1', UnavailableFrom:day(-300), EndingDate:day(-150), first_seen:day(-300), last_seen:day(0), removed_on:null, gaps:[{from:day(-200), to:day(-100), days:100}]};
+  const html = env.timelineMarkup(e, false);
+  assert.match(html, /tl-end seg-unknown/); assert.match(html, /tl-today seg-unknown/); assert.doesNotMatch(html, /seg-over|seg-done/);
+  // The gap lies between the reported start and the estimate only: the stretch after the estimate is known and stays solid.
+  const early = env.timelineMarkup({...e, gaps:[{from:day(-290), to:day(-200), days:90}]}, false);
+  assert.match(early, /tl-end seg-unknown/); assert.match(early, /tl-today seg-over/);
+  // The gap lies after the estimate only: the first stretch is solid, the overrun is hatched.
+  const late = env.timelineMarkup({...e, gaps:[{from:day(-100), to:day(-50), days:50}]}, false);
+  assert.match(late, /tl-end seg-done/); assert.match(late, /tl-today seg-unknown/);
+  // A gap that ends before the reported start touches no stretch.
+  assert.doesNotMatch(env.timelineMarkup({...e, gaps:[{from:day(-500), to:day(-400), days:100}]}, false), /seg-unknown/);
+  // The future stretch stays dashed, not hatched.
+  const ahead = env.timelineMarkup({UnavailableFrom:day(-100), EndingDate:day(50), gaps:[{from:day(-60), to:day(-30), days:30}]}, false);
+  assert.match(ahead, /tl-today seg-unknown/); assert.match(ahead, /tl-end seg-ahead/);
+});
+
 test('no text calls a reported start a "longest running" or "so far" listing', () => {
   const copy = vm.runInContext('copy', context);
   for (const lang of ['en', 'fi']) {
