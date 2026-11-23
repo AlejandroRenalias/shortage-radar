@@ -2,7 +2,8 @@
 const PAGE_SIZE = 12;
 const rows = [...document.querySelectorAll('#eu-body tr[data-type]')];
 const input = $('eu-q'), select = $('eu-type'), status = $('eu-status'), shown = $('eu-shown'), pager = $('eu-pager'), heading = $('eu-table-title');
-let matching = rows, page = 1;
+let matching = rows, page = pageFromUrl(location.search);   // a reload or a shared link keeps the page
+let reset = false;   // true once the visitor changes a filter: the next list starts at page 1
 function pageButton(label, target, extra = {}) {
   const b = document.createElement('button');
   b.type = 'button'; b.textContent = label; b.dataset.page = target;
@@ -11,9 +12,15 @@ function pageButton(label, target, extra = {}) {
   if (extra.disabled) b.disabled = true;
   return b;
 }
+// replaceState keeps Back simple: one page of the list is one history entry, not a dozen.
+function syncUrl() {
+  const search = pageToUrl(location.search, page);
+  if (search !== location.search) history.replaceState(null, '', location.pathname + search + location.hash);
+}
 function render() {
   const pages = pageCount(matching.length, PAGE_SIZE);
   page = clampPage(page, pages);
+  syncUrl();
   const first = (page - 1) * PAGE_SIZE, visible = new Set(matching.slice(first, first + PAGE_SIZE));
   rows.forEach(tr => { tr.hidden = !visible.has(tr); });
   shown.textContent = matching.length ? `Showing ${first + 1}–${first + visible.size} of ${matching.length}${matching.length < rows.length ? ` (${rows.length} in all)` : ''}.` : 'No packages match.';
@@ -30,7 +37,8 @@ function render() {
 function filter() {
   const q = fold(input.value.trim()), type = select.value, when = status.value;
   matching = rows.filter(tr => (!type || tr.dataset.type === type) && (!when || tr.dataset.status === when) && (!q || fold(tr.dataset.text).includes(q)));
-  page = 1;
+  if (reset) page = 1;
+  reset = true;
   render();
 }
 // The pages are in English only; their content carries lang="en", so the page language the visitor chose stays on the menu and footer.

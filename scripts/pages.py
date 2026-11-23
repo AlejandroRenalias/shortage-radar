@@ -5,6 +5,8 @@ and tests/test_pages.py checks that the two agree, so a string is only ever chan
 """
 from html import escape
 
+from critical_charts import hero_art
+
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 PREVIEW = SITE_URL + 'preview.png'
 PREVIEW_ALT = 'Shortage Radar / Saatavuustutka: medicine shortages in Finland'
@@ -138,7 +140,7 @@ def home(count, impact=None):
     sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
     answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the pharmacy can usually give a substitute.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
-    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-text">
+    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head"><div class="hero-text">
 <h1 id="hero-line" data-count="{count}">{line}</h1>
 {answer}
 <form class="bigsearch" action="shortages.html" method="get" role="search">
@@ -146,12 +148,14 @@ def home(count, impact=None):
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
-<p class="lead" id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
-</div>
+</div>{hero_art()}</div>
 <section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'critical', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
 <ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
-<p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a> <span data-i18n="triageVetNote">Substitution groups are for human medicines.</span></p>
-<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
+<p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a></p>
+<details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">Notes: what these numbers mean</summary>
+<p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
+<p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
+<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p></details>
 </section></div></section>
 <section class="wrap home-section needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
 <section class="wrap home-section newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
