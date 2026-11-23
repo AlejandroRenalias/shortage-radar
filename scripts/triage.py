@@ -83,8 +83,9 @@ def is_available_alternative(p, listed, day, register_day=False):
     3. on the register's own day, the register's flags agree: market flag `Kaupan` is 1 and shortage flag `Saatavuushairio` is 0.
 
     The register describes only today and has no past flags, so 3 is the only difference between the current view
-    (`register_day` true: the impact levels, the medicine page and the latest capture of the history) and the earlier captures of the history
-    (`register_day` false). It is written here once. On 23 Nov 2026 nine register packages have an entry date and no exit date
+    (`register_day` true: the impact levels, the medicine page, and the capture of the history dated the same day as the register's `Ajopvm`)
+    and every other capture of the history (`register_day` false). It is written here once. In the other captures `on_market` reads the market dates;
+    a package with no entry date has no dates to read, so today's market flag decides for it. On 23 Nov 2026 nine register packages have an entry date and no exit date
     while the flag says they are not on the market; the flag wins on the register's day. An empty shortage flag is not "0", so it does not count.
     """
     if ({p['vnr']} | p['old']) & listed or not on_market(p, day):
@@ -94,13 +95,13 @@ def is_available_alternative(p, listed, day, register_day=False):
 
 def group_states(day, rows, members, alias, register_day=False):
     """{group: True when no member is an available alternative} for every group with a package listed in this capture.
-    `register_day` is true for the capture the register describes (the latest); see is_available_alternative."""
+    `register_day` is true only for a capture dated the same day as the register; see is_available_alternative."""
     listed = {r['NordicArticleNumber'] for r in rows}
     groups = {alias[v] for v in listed if v in alias}
     return {g: not any(is_available_alternative(p, listed, day, register_day) for p in members[g]) for g in groups}
 
 
-def newly_critical(snapshots, members):
+def newly_critical(snapshots, members, register_date=None):
     """Events when a substitution group lost its last available alternative.
 
     `members` maps a group code to its register packages ({'vnr', 'old', 'market', 'entry', 'exit', ...}).
@@ -115,7 +116,7 @@ def newly_critical(snapshots, members):
             for v in {p['vnr']} | p['old']:
                 alias.setdefault(v, g)
     days = [d for d, _ in snapshots]
-    raw = [group_states(d, rows, members, alias, i == len(days) - 1) for i, (d, rows) in enumerate(snapshots)]
+    raw = [group_states(d, rows, members, alias, d == register_date) for d, rows in snapshots]
     listed = [{r['NordicArticleNumber'] for r in rows} for _, rows in snapshots]
     stable, out = None, []
     for i, day in enumerate(days):

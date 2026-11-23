@@ -219,6 +219,41 @@ test('the stale-file banner names the file and its date, in English and Finnish'
   assert.equal(get('stale-text').textContent, 'Fimean saatavuushäiriötiedosto on muuttunut viimeksi 6.11.2026, yli 2 päivää sitten. Lista voi olla vanhentunut. Fimean perusrekisterin päiväys on 5.11.2026, yli 2 päivää sitten. Tiedot vaihtokelpoisista valmisteista voivat olla vanhentuneita.');
 });
 
+// A direct link to an EU list page: the page's own script runs against a fake document, and source.json is what the build wrote next to it.
+async function directLink(script, meta) {
+  const elements = {};
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:true, href:'', value:'', options:[], children:[], clientWidth:400, dataset:{}, open:false, addEventListener(){}, setAttribute(){}, append(){}, replaceChildren(){}, focus(){}, scrollIntoView(){}, classList:{toggle(){}, add(){}, remove(){}}};
+  const requested = [];
+  const document = {getElementById:get, documentElement:{dataset:{page:'critical'},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[], createElement:()=>get('x' + Math.random()), addEventListener(){}};
+  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia:() => ({matches:false}), document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}},
+    fetch:url => { requested.push(url); return Promise.resolve({ok:true, json:() => Promise.resolve(meta)}); }, location:{search:''}});
+  vm.runInContext(shared + '\n' + read(script), env);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  return [get, requested];
+}
+
+test('the stale warning also shows on the EU list page, a code page and the methods page, from the same build’s source.json', async () => {
+  const meta = {snapshot_date:'2026-11-23', last_checked:'2026-11-23', generated_at:new Date().toISOString(), source_metadata:{shortages_last_modified:'Fri, 20 Nov 2026 09:00:00 GMT', register_date:'2026-11-19'}};
+  // critical.html loads critical.js; critical-<code>.html and critical-methods.html load common.js.
+  for (const script of ['critical.js', 'common.js']) {
+    const [get, requested] = await directLink(script, meta);
+    assert.deepEqual(requested, ['source.json'], script);
+    assert.equal(get('stale').hidden, false, script);
+    assert.match(get('stale-text').textContent, /shortage file has not changed since 20 Nov 2026.*register is dated 19 Nov 2026/, script);
+  }
+  const fresh = JSON.parse(JSON.stringify(meta)); fresh.source_metadata = {shortages_last_modified:new Date().toUTCString(), register_date:new Date().toISOString().slice(0, 10)}; fresh.last_checked = fresh.snapshot_date = new Date().toISOString().slice(0, 10);
+  const [get] = await directLink('common.js', fresh);
+  assert.equal(get('stale').hidden, true);
+  // The built EU pages carry the banner element, and load one of the two scripts.
+  const out = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');sys.path.insert(0,'tests');import test_critical as t;from critical_pages import render_critical;e,p,d=t.fixture();m=t.matches_of(e,p,d);import critical as C;r=C.current_rows(e,m);print(json.dumps(render_critical({'eu':t.EU,'rows':r,'counts':C.counts(r),'history':C.history(e,m,[]),'archive_start':'2026-09-15','snapshot_date':'2026-11-23','source_metadata':t.SOURCES})))"], {encoding:'utf8', maxBuffer:256*1024*1024}));
+  const names = Object.keys(out);
+  assert.ok(names.includes('critical.html') && names.includes('critical-methods.html') && names.some(n => /^critical-[A-Z0-9]+\.html$/.test(n)));
+  for (const name of names) {
+    assert.match(out[name], /id="stale"/, name);
+    assert.match(out[name], name === 'critical.html' ? /src="critical\.js"/ : /src="common\.js"/, name);
+  }
+});
+
 test('the home page shows when Fimea’s file changed and when Shortage Radar checked, next to the headline', () => {
   const [env, get] = pageEnv(['home.js']);
   get('hero-fresh'); get('hero-file'); get('hero-checked'); get('source-times'); get('stale'); get('stale-text');

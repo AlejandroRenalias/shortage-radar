@@ -34,7 +34,7 @@ jobs:
       changed: ${{ steps.commit.outputs.changed }}
       pages_current: ${{ steps.pages_status.outputs.current }}
       register: ${{ steps.register.outcome }}
-      age: ${{ steps.age.outcome }}
+      age: ${{ steps.age.outputs.status }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -152,5 +152,7 @@ jobs:
             PIPELINE=archive-stale RESULT=success python scripts/pipeline_alert.py
             # The register step and the age check continue on error; their outcome opens or closes the issue entry here.
             PIPELINE=register-source RESULT=${{ needs.archive.outputs.register == 'failure' && 'failure' || 'success' }} python scripts/pipeline_alert.py
-            PIPELINE=source-stale RESULT=${{ needs.archive.outputs.age == 'failure' && 'failure' || 'success' }} python scripts/pipeline_alert.py
+            # Stale opens the alert, fresh closes it; unknown (a missing or unreadable date, or a step that did not finish) leaves it as it is.
+            if [ '${{ needs.archive.outputs.age }}' = stale ]; then PIPELINE=source-stale RESULT=failure python scripts/pipeline_alert.py; fi
+            if [ '${{ needs.archive.outputs.age }}' = fresh ]; then PIPELINE=source-stale RESULT=success python scripts/pipeline_alert.py; fi
           fi

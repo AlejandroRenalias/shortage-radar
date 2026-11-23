@@ -51,12 +51,42 @@ def test_identical_content_with_a_new_last_modified_updates_only_the_file_time(r
     assert [p.name for p in (root / 'data/snapshots').iterdir()] == ['2026-11-01.txt']
 
 
-def test_missing_last_modified_header_does_not_erase_the_stored_time(repository, monkeypatch):
+def test_missing_header_keeps_the_stored_time_only_for_the_same_bytes(repository, monkeypatch):
     root, metadata = repository
     metadata.write_text('{"shortages_last_modified": "stored", "snapshot_date": "2026-11-01"}' + chr(10), encoding='utf-8')
-    monkeypatch.setattr(archive, 'download', lambda _: (content(700), None))
+    monkeypatch.setattr(archive, 'download', lambda _: (content(751), None))
     archive.main('2026-11-02')
-    assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'stored', 'snapshot_date': '2026-11-02'}
+    assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'stored', 'snapshot_date': '2026-11-01'}
+
+
+def test_new_bytes_without_a_header_do_not_get_the_old_files_time(repository, monkeypatch):
+    """Content A with Last-Modified 19 Nov, then content B on 23 Nov with no header: B's time is unknown, not A's."""
+    root, metadata = repository
+    metadata.write_text('{"shortages_last_modified": "Thu, 19 Nov 2026 10:00:00 GMT", "snapshot_date": "2026-11-01"}' + chr(10), encoding='utf-8')
+    monkeypatch.setattr(archive, 'download', lambda _: (content(700), None))
+    archive.main('2026-11-23')
+    assert json.loads(metadata.read_text()) == {'shortages_last_modified': None, 'snapshot_date': '2026-11-23'}
+    # The same bytes again, still without a header, stay unknown instead of becoming a time.
+    archive.main('2026-11-24')
+    assert json.loads(metadata.read_text())['shortages_last_modified'] is None
+
+
+def test_versions_saved_in_the_same_minute_all_survive(repository, monkeypatch):
+    """Three accepted versions at 10:30:01, :11 and :21 UTC: A and B are both kept; only the newest is the day's snapshot."""
+    from datetime import datetime, timezone
+    root, _ = repository
+    versions = {1: content(700), 11: content(710), 21: content(720)}
+    for second, data in versions.items():
+        monkeypatch.setattr(archive, 'download', lambda _, data=data: (data, f'at {second}'))
+        archive.main('2026-11-02', now=datetime(2026, 11, 2, 10, 30, second, tzinfo=timezone.utc))
+    kept = sorted(p.read_bytes() for p in (root / 'data/snapshots/superseded').iterdir())
+    assert kept == sorted([versions[1], versions[11]])
+    assert (root / 'data/snapshots/2026-11-02.txt').read_bytes() == versions[21]
+    # A replacement in the very same second keeps distinct bytes apart too.
+    monkeypatch.setattr(archive, 'download', lambda _: (content(730), None))
+    archive.main('2026-11-02', now=datetime(2026, 11, 2, 10, 30, 21, tzinfo=timezone.utc))
+    assert versions[21] in [p.read_bytes() for p in (root / 'data/snapshots/superseded').iterdir()]
+    assert len(list((root / 'data/snapshots/superseded').iterdir())) == 3
 
 
 def test_same_day_refetch_with_changed_content_does_not_fail_and_keeps_both_versions(repository, monkeypatch, capsys):
@@ -69,12 +99,13 @@ def test_same_day_refetch_with_changed_content_does_not_fail_and_keeps_both_vers
     monkeypatch.setattr(archive, 'download', lambda _: (content(720), 'second'))
     archive.main('2026-11-02', now=datetime(2026, 11, 2, 10, 5, tzinfo=timezone.utc))
     assert (root / 'data/snapshots/2026-11-02.txt').read_bytes() == content(720)
-    assert (root / 'data/snapshots/superseded/2026-11-02T1005Z.txt').read_bytes() == content(700)
+    superseded = list((root / 'data/snapshots/superseded').iterdir())
+    assert len(superseded) == 1 and superseded[0].name.startswith('2026-11-02T100500Z-') and superseded[0].read_bytes() == content(700)
     assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'second', 'snapshot_date': '2026-11-02'}
     assert 'Same-day refetch' in capsys.readouterr().out
     # A third run with the same content changes nothing.
     archive.main('2026-11-02', now=datetime(2026, 11, 2, 15, 35, tzinfo=timezone.utc))
-    assert sorted(p.name for p in (root / 'data/snapshots/superseded').iterdir()) == ['2026-11-02T1005Z.txt']
+    assert [p.name for p in (root / 'data/snapshots/superseded').iterdir()] == [superseded[0].name]
     # Snapshots read by the site are only the day files.
     assert [p.name for p in sorted((root / 'data/snapshots').glob('????-??-??.txt'))] == ['2026-11-01.txt', '2026-11-02.txt']
 

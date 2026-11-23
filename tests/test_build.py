@@ -142,6 +142,8 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     current = json.loads((tmp_path / 'site/current.json').read_text(encoding='utf-8'))
     history = json.loads((tmp_path / 'site/history.json').read_text(encoding='utf-8'))
     assert len(current['events']) == 1 and 'history' not in current
+    source = json.loads((tmp_path / 'site/source.json').read_text(encoding='utf-8'))      # for the EU list pages, which load no other data
+    assert source['last_checked'] == '2026-11-02' and set(source) == {'archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked'}
     assert history['first_capture_count'] == 1 and 'events' not in history
     assert len(data['events']) == 1 and data['history'] == history['history']
     raw = (tmp_path / 'site/shortages.csv').read_bytes()

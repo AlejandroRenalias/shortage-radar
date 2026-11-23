@@ -125,3 +125,29 @@ def test_one_definition_of_an_available_alternative():
     # Dates count in both readings.
     assert not is_available_alternative(dict(p, entry='2026-12-01'), set(), '2026-11-23', True)
     assert not is_available_alternative(dict(p, exit='2026-11-03'), set(), '2026-11-23', True)
+
+
+def test_register_flags_apply_only_to_the_capture_of_the_registers_date():
+    """A listed 17 Nov, A+B 18 Nov, A 19 Nov. B is short in the register of 23 Nov. That flag describes 23 Nov, so it must
+    not decide the 19 Nov capture: by the dates B is an alternative on 19 Nov, so the loss on 18 Nov (A and B both listed) is not confirmed."""
+    members = {'42': [dict(pack('A'), shortage_flag='0'), dict(pack('B'), shortage_flag='1')]}
+    shots = captures(['2026-11-17', '2026-11-18', '2026-11-19'], [['A'], ['A', 'B'], ['A']])
+    assert newly_critical(shots, members, '2026-11-23') == []
+    assert newly_critical(shots, members) == []
+    # The same flag in a register dated 19 Nov does describe the 19 Nov capture: B is short there, so the loss holds in two captures.
+    assert [e['date'] for e in newly_critical(shots, members, '2026-11-19')] == ['2026-11-18']
+
+
+def test_the_flag_is_read_only_in_the_capture_dated_like_the_register():
+    members = {'42': [dict(pack('A'), shortage_flag='0'), dict(pack('B'), shortage_flag='1')]}
+    from triage import group_states
+    rows = [{'NordicArticleNumber': 'A'}]
+    alias = {'A': '42', 'B': '42'}
+    assert group_states('2026-11-23', rows, members, alias, True) == {'42': True}      # the register's day: B is flagged short
+    assert group_states('2026-11-22', rows, members, alias, False) == {'42': False}    # any other day: the dates make B an alternative
+
+
+def test_market_flag_decides_a_package_without_an_entry_date_in_every_capture():
+    """The public text says so: on_market reads the dates, and today's market flag only where there is no entry date."""
+    assert on_market({'market': '1', 'entry': '', 'exit': ''}, '2026-01-01')
+    assert not on_market({'market': '0', 'entry': '', 'exit': ''}, '2026-01-01')

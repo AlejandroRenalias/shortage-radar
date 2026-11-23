@@ -16,6 +16,7 @@ from packs import pack_label
 from pages import render_pages
 from removed import removed_index
 from slices import package_shards, summary
+from source_age import register_date
 from triage import is_available_alternative, level, medicine_name, newly_critical
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -254,10 +255,10 @@ def group_lists(current, members, current_vnrs, day=None):
     return out
 
 
-def critical_events(snapshots, members, products):
+def critical_events(snapshots, members, products, register_date=None):
     """Newly critical groups, newest first, with names for people: the medicine, its strength and the packages listed."""
     out = []
-    for ev in newly_critical(snapshots, members):
+    for ev in newly_critical(snapshots, members, register_date):
         listed = [dict(vnr=v, **{k: products.get(v, {}).get(k, '') for k in ('name', 'strength', 'substances', 'form', 'pack_label')}) for v in ev['vnrs']]
         first = next((x for x in listed if x['name']), {})
         out.append(dict(ev, medicine=medicine_name(first.get('substances', '')) or first.get('name', ''), strength=first.get('strength', ''), form=first.get('form', ''),
@@ -299,7 +300,9 @@ def build():
     register_metadata = ROOT / 'data/source/register-metadata.json'
     if register_metadata.exists():
         metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
-    critical = critical_events(snapshots, members, products)
+    # The register's own run date: the history reads the register's flags only for the capture of that day.
+    register_path = ROOT / 'data/source/register.xml'
+    critical = critical_events(snapshots, members, products, metadata.get('register_date') or (register_date(register_path) if register_path.exists() else None))
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata,
               'newly_critical': critical, 'triage_counts': read_triage_counts()}
     output['generated_at'] = datetime.now(timezone.utc).isoformat()
@@ -318,6 +321,8 @@ def build():
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     meta = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
+    # The pages that load no other data (the EU list pages, 404) read this for the freshness banner and footer, from the same build.
+    (ROOT / 'site/source.json').write_text(json.dumps(meta, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     shard_dir = ROOT / 'site/p'
     shard_dir.mkdir(exist_ok=True)
     for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs)).items():

@@ -370,6 +370,8 @@ function start(render) {
 const fetchJson = url => fetch(url).then(r => { if (!r.ok) throw Error(url); return r.json(); });
 let currentPromise;
 const loadCurrent = () => currentPromise || (currentPromise = fetchJson('current.json'));
+// The small file with the source dates of this build, for pages that load no other data (the EU list pages).
+const loadSource = () => fetchJson('source.json');
 let summaryPromise;
 const loadSummary = () => summaryPromise || (summaryPromise = fetchJson('summary.json'));
 function showLoadError() {

@@ -7,6 +7,7 @@ this script gives the maintainer the same answer: it exits 1 and prints one line
 pipeline issue (scripts/pipeline_alert.py) from that.
 """
 import json
+import os
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
@@ -63,13 +64,36 @@ def read_metadata(folder=None):
     return out
 
 
+def unknown_files(metadata):
+    """The files whose date is missing or unreadable: their age is not known."""
+    return [file for file, day in (('shortages', http_day(metadata.get('shortages_last_modified'))), ('register', iso_day(metadata.get('register_date')))) if not day]
+
+
+def status(metadata, today=None):
+    """'stale' when a known date is more than STALE_DAYS old (evidence of staleness, even if the other file is unknown);
+    'fresh' only when both dates are known and recent; else 'unknown', which proves nothing either way."""
+    if stale_reasons(metadata, today):
+        return 'stale'
+    return 'unknown' if unknown_files(metadata) else 'fresh'
+
+
 def main():
-    reasons = stale_reasons(read_metadata())
+    metadata = read_metadata()
+    reasons = stale_reasons(metadata)
+    unknown = unknown_files(metadata)
     names = {'shortages': 'Fimea shortage file (Last-Modified)', 'register': 'Fimea basic register (Ajopvm)'}
     for r in reasons:
         print(f"::warning::{names[r['file']]} is {r['days']} days old (dated {r['date']}); the limit is {STALE_DAYS} days.")
-    if not reasons:
+    for file in unknown:
+        print(f"::warning::The age of the {names[file]} is unknown: no readable date.")
+    result = 'stale' if reasons else 'unknown' if unknown else 'fresh'
+    if result == 'fresh':
         print(f'Both source files are at most {STALE_DAYS} days old.')
+    # The workflow opens the stale alert on 'stale', closes it only on 'fresh', and leaves it as it is on 'unknown'.
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+            f.write(f'status={result}\n')
+    print(f'status={result}')
     return 1 if reasons else 0
 
 
