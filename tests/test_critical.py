@@ -1,4 +1,5 @@
 import io
+import re
 from datetime import date, timedelta
 import json
 import sys
@@ -162,8 +163,8 @@ def test_upcoming_notices_are_counted_apart_from_ongoing_ones():
     assert counts['ongoing']['exact'] == 1 and counts['upcoming']['exact'] == 2
     assert [r['status'] for r in rows if r['match_type'] == 'exact'] == ['ongoing', 'upcoming', 'upcoming']   # ongoing first
     page = render_critical({'eu': EU, 'rows': rows, 'counts': counts, 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {}})['critical.html']
-    assert 'saved on <strong>23 Nov 2026</strong>' in page and 'Starts later' in page and 'on 30 Nov 2026' in page and 'on 7 Dec 2026' in page
-    assert 'Not counted above: 2 packages' in page
+    assert 'Fimea file saved' in page and '>23 Nov 2026<' in page and 'Starts later' in page and 'on 30 Nov 2026' in page and 'on 7 Dec 2026' in page
+    assert 'Exact matches that start later' in page and 'checked that start later: 2 exact match' in page
     assert 'data-status="upcoming"' in page and 'id="eu-status"' in page
 
 
@@ -428,3 +429,45 @@ def test_mitomycin_start_after_a_666_day_gap_is_unknown():
     # A shortage first seen after a long gap is not a new alert.
     events = [dict(mito, removed_on=None, first_seen='2026-11-20', first_seen_after='2026-09-20')]
     assert C.new_alerts(events, matches, [('2026-09-20', [])], '2026-11-15') == []
+
+
+def _two_row_page_data(rows):
+    return {'eu': EU, 'rows': rows, 'counts': C.counts(rows), 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {}}
+
+
+def test_headline_tile_and_atc_chart_count_exact_matches_only():
+    events, products, details = fixture()
+    products['111120'], details['111120'] = product('A02BC05', 'Esomep9', 'Esomeprazole'), detail(['1055'], substances=['Esomeprazole'])   # route does not fit
+    events.append(event('111120', '2026-11-20', '2026-11-23'))
+    rows = C.current_rows(events, matches_of(events, products, details))
+    counts = C.counts(rows)
+    checked, exact = sum(counts['ongoing'][t] for t in C.TYPES), counts['ongoing']['exact']
+    assert checked > exact > 0
+    page = render_critical(_two_row_page_data(rows))['critical.html']
+    assert f'<span class="eu-num">{exact:,}</span><span class="eu-tile-label">Ongoing exact matches</span>' in page
+    assert f'of {checked:,} ongoing packages checked' in page
+    groups = page[page.index('<caption>Exact matches by ATC group'):]
+    groups = groups[:groups.index('</table>')]
+    assert sum(int(m) for m in re.findall(r'<td>(\d+)</td>', groups)) == exact     # ongoing and starts-later columns add up to the exact matches
+
+
+def test_route_icon_uses_the_real_route_group():
+    import critical_charts as charts
+    assert charts.route_kind(['into the front chamber of the eye']) == 'eye'      # Miochol-E, 019235
+    assert charts.route_kind(['into a vein', 'into a muscle']) == 'injection'
+    assert charts.route_kind(['by mouth']) == 'oral' and charts.route_kind(['in the nose']) == 'other'
+    assert charts.route_kind(['into a vein', 'by mouth']) == 'other' and charts.route_kind([]) == 'other'
+    assert 'Injection' not in charts.route_label(['into the front chamber of the eye']) and 'Into the eye' in charts.route_label(['into the front chamber of the eye'])
+    rows = [{'status': 'ongoing', 'match_type': 'exact', 'product_routes': ['into the front chamber of the eye']}, {'status': 'ongoing', 'match_type': 'route-mismatch', 'product_routes': ['by mouth']}]
+    assert charts.route_counts(rows) == {'injection': 0, 'oral': 0, 'eye': 1, 'other': 0}
+
+
+def test_timeline_strip_hatches_a_notice_that_vanished_for_a_capture():
+    import critical_charts as charts
+    n = {'name': 'Esomep', 'strength': '', 'first_seen': '2026-09-15', 'last_seen': '2026-11-20', 'removed_on': None, 'listed_at_first_capture': False, 'start_unknown': False,
+         'gaps': [], 'unseen': [{'from': '2026-10-01', 'to': '2026-10-10'}]}
+    svg = charts.timeline_strip([n], '2026-09-15', '2026-11-23')
+    assert svg.count('class="eu-tl-gap"><title>') == 1     # the legend swatch has the class too, but no title
+    assert 'Not listed in the captures 2026-10-01 to 2026-10-10: unknown' in svg
+    steady = dict(n, unseen=[])
+    assert 'class="eu-tl-gap"><title>' not in charts.timeline_strip([steady], '2026-09-15', '2026-11-23')
