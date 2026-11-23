@@ -18,6 +18,7 @@ from statistics import median
 from xml.sax.saxutils import escape
 
 from changes import date_text
+from gaps import MAX_GAP_DAYS, days_between as _days, is_gap
 
 ROOT = Path(__file__).resolve().parents[1]
 FOLDER = ROOT / 'data/critical'
@@ -239,10 +240,6 @@ def json_data(rows, meta, source_metadata, snapshot_date):
             'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=text) for r in rows]}
 
 
-def _days(a, b):
-    return (date.fromisoformat(b) - date.fromisoformat(a)).days
-
-
 def shortages(events, capture_days=()):
     """Join the notices of a VNR that are one shortage: the notice edited (a changed start, end or notification date shows
     up in the archive as a removal and a new notice in the same capture), and the notice that vanishes for some captures and
@@ -276,12 +273,12 @@ def shortages(events, capture_days=()):
             out.append(current)
     for n in out:
         n.pop('_last')
-        n['gaps'] = [{'from': a, 'to': b, 'days': _days(a, b)} for a, b in zip(days, days[1:]) if n['first_seen'] <= a and b <= n['last_seen'] and _days(a, b) > MAX_GAP_DAYS]
+        n['gaps'] = [{'from': a, 'to': b, 'days': _days(a, b)} for a, b in zip(days, days[1:]) if n['first_seen'] <= a and b <= n['last_seen'] and is_gap(a, b)]
         n['days_between_captures'] = _days(n['first_seen'], n['last_seen'])
         # The start is known only if the capture just before the first sighting is close: after a long gap the shortage may have begun any time in it.
         before = n['first_seen_after']
         n['start_gap_days'] = _days(before, n['first_seen']) if before else None
-        n['start_unknown'] = n['listed_at_first_capture'] or before is None or n['start_gap_days'] > MAX_GAP_DAYS
+        n['start_unknown'] = n['listed_at_first_capture'] or before is None or is_gap(before, n['first_seen'])
     return out
 
 
@@ -329,7 +326,6 @@ def new_alerts(events, matches, snapshots, since):
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 TAG_BASE = 'tag:alejandrorenalias.github.io,2026:shortage-radar/critical/'
 ALERT_DAYS = 30
-MAX_GAP_DAYS = 14  # captures further apart than this (more than 14 days) tell nothing about the days between them
 ALERT_MAX = 100
 FEED_TITLE = 'Critical medicines in Finland: new shortages'
 FEED_SUBTITLE = 'New shortage notices in Fimea’s file for packages that match the EU Union list of critical medicines by ATC code and route.'

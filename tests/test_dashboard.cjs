@@ -586,6 +586,77 @@ test('a package that left the list shows when it was listed, not days until the 
   assert.match(env.timelineMarkup(gone, true), /Listalla tilannekuvissamme 3\.11\.2026–18\.11\.2026\./);
 });
 
+test('a notice seen on both sides of a long gap says it was not observed in between', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const spans = [{first_seen:'2024-11-18', last_seen:'2024-11-18'}, {first_seen:'2026-09-15', last_seen:'2026-11-23'}];
+  const e = {NordicArticleNumber:'114636', UnavailableFrom:day(-100), EndingDate:day(100), first_seen:'2024-11-18', last_seen:'2026-11-23', removed_on:null, listed_at_first_capture:true, spans, gaps:[{from:'2024-11-18', to:'2026-09-15', days:666}]};
+  for (const archive of [false, true]) {
+    const html = env.timelineMarkup(e, archive);
+    assert.match(html, /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+    assert.match(html, /On the list in our capture of 15 Sep 2026|On the list in our captures from 15 Sep 2026 to 23 Nov 2026\./);
+    assert.doesNotMatch(html, /from 18 Nov 2024 to 23 Nov 2026/);
+  }
+  assert.doesNotMatch(env.timelineMarkup({...e, gaps:[], spans:[spans[1]], listed_at_first_capture:false}, false), /Not observed/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.timelineMarkup(e, false), /Ei havaintoja välillä 18\.11\.2024–15\.9\.2026\./);
+  const gone = {...e, removed_on:'2026-12-01', last_seen:'2024-11-18', spans:[spans[0]], gaps:[], removed_after_gap:true};
+  vm.runInContext("language='en'", env);
+  assert.match(env.timelineMarkup({...gone, removed_on:'2026-09-15'}, true), /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+});
+
+test('the line from the reported start to today is hatched when a gap lies inside it, and the count says what it counts', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const base = {NordicArticleNumber:'114636', UnavailableFrom:day(-1028), EndingDate:day(100), first_seen:'2024-11-18', last_seen:day(0), removed_on:null};
+  const gap = {from:'2024-11-18', to:'2026-09-15', days:666};
+  const hatched = env.timelineMarkup({...base, gaps:[gap]}, false);
+  assert.match(hatched, /tl-today seg-unknown/); assert.doesNotMatch(hatched, /seg-done|seg-now/);
+  assert.match(hatched, /Days since the reported start: 1,028/); assert.doesNotMatch(hatched, /so far/);
+  const solid = env.timelineMarkup({...base, gaps:[]}, false);
+  assert.match(solid, /seg-done seg-now/); assert.doesNotMatch(solid, /seg-unknown/);
+  // A gap that ended before the reported start does not touch the stretch.
+  assert.match(env.timelineMarkup({...base, UnavailableFrom:'2026-10-01', gaps:[gap]}, false), /seg-done/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.timelineMarkup({...base, gaps:[gap]}, false), /Päiviä ilmoitetusta alkamispäivästä: 1\s?028/);
+  assert.match(fs.readFileSync(require('node:path').join(__dirname, '../site/style.css'), 'utf8'), /\.seg-unknown\)::before\{background:repeating-linear-gradient/);
+});
+
+test('every stretch of the timeline line is hatched when a gap overlaps it, including an estimated end inside a gap', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  // Reported start before the gap, estimated end inside it, today after it: start -> end -> today. Both stretches touch the gap.
+  const e = {NordicArticleNumber:'1', UnavailableFrom:day(-300), EndingDate:day(-150), first_seen:day(-300), last_seen:day(0), removed_on:null, gaps:[{from:day(-200), to:day(-100), days:100}]};
+  const html = env.timelineMarkup(e, false);
+  assert.match(html, /tl-end seg-unknown/); assert.match(html, /tl-today seg-unknown/); assert.doesNotMatch(html, /seg-over|seg-done/);
+  // The gap lies between the reported start and the estimate only: the stretch after the estimate is known and stays solid.
+  const early = env.timelineMarkup({...e, gaps:[{from:day(-290), to:day(-200), days:90}]}, false);
+  assert.match(early, /tl-end seg-unknown/); assert.match(early, /tl-today seg-over/);
+  // The gap lies after the estimate only: the first stretch is solid, the overrun is hatched.
+  const late = env.timelineMarkup({...e, gaps:[{from:day(-100), to:day(-50), days:50}]}, false);
+  assert.match(late, /tl-end seg-done/); assert.match(late, /tl-today seg-unknown/);
+  // A gap that ends before the reported start touches no stretch.
+  assert.doesNotMatch(env.timelineMarkup({...e, gaps:[{from:day(-500), to:day(-400), days:100}]}, false), /seg-unknown/);
+  // The future stretch stays dashed, not hatched.
+  const ahead = env.timelineMarkup({UnavailableFrom:day(-100), EndingDate:day(50), gaps:[{from:day(-60), to:day(-30), days:30}]}, false);
+  assert.match(ahead, /tl-today seg-unknown/); assert.match(ahead, /tl-end seg-ahead/);
+});
+
+test('no text calls a reported start a "longest running" or "so far" listing', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    const t = copy[lang];
+    assert.equal(t.longestTitle, lang === 'en' ? 'Earliest reported starts' : 'Varhaisimmat ilmoitetut alkamispäivät');
+    for (const key of ['longestTitle', 'longestNote', 'sortLongest', 'factLongest', 'tlDuration']) {
+      const text = typeof t[key] === 'function' ? t[key](3, '1 Jan 2026') : t[key];
+      assert.doesNotMatch(text, /longest running|so far|pisimpään|tähän mennessä/i, key);
+    }
+  }
+});
+
 test('the timeline is one track in time order with evenly spaced markers and the right connectors', () => {
   const [env] = pageEnv(['medicine.js']);
   vm.runInContext("language='en'", env);

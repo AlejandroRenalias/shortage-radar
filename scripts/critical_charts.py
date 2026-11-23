@@ -140,11 +140,11 @@ def timeline_strip(notices, archive_start, snapshot_date):
         unknown = n['listed_at_first_capture'] or n['start_unknown']
         cls = 'eu-tl-bar eu-tl-unknown' if unknown else 'eu-tl-bar'
         name = ' '.join(p for p in (n['name'], n['strength']) if p)
-        label = f'{name}: first seen {n["first_seen"]}, ' + ('still listed' if n['removed_on'] is None else f'last seen {n["last_seen"]}') + (', start unknown' if unknown else '')
+        label = f'{name}: first seen {n["first_seen"]}, ' + ('still listed' if n['removed_on'] is None else f'last seen {n["last_seen"]}') + (', start unknown' if unknown else '') + ''.join(f', not observed between {g["from"]} and {g["to"]}' for g in n['gaps'])
         parts.append(f'<rect x="{x0:.1f}" y="{y}" width="{x1 - x0:.1f}" height="12" rx="3" class="{cls}"><title>{E(label)}</title></rect>')
         for g in n['gaps']:
             gx0, gx1 = x(g['from']), x(g['to'])
-            parts.append(f'<rect x="{gx0:.1f}" y="{y}" width="{max(gx1 - gx0, 2):.1f}" height="12" class="eu-tl-gap"><title>No capture {E(g["from"])} to {E(g["to"])}: unknown</title></rect>')
+            parts.append(f'<rect x="{gx0:.1f}" y="{y}" width="{max(gx1 - gx0, 2):.1f}" height="12" class="eu-tl-gap"><title>Not observed between {E(g["from"])} and {E(g["to"])}</title></rect>')
         for u in n['unseen']:
             ux0, ux1 = x(u['from']), x(u['to'])
             parts.append(f'<rect x="{ux0:.1f}" y="{y}" width="{max(ux1 - ux0, 2):.1f}" height="12" class="eu-tl-gap"><title>Not listed in the captures {E(u["from"])} to {E(u["to"])}: unknown</title></rect>')
