@@ -17,3 +17,12 @@ site/about.html
 site/404.html
 site/p/
 site/summary.json
+data/source/*.xlsx
+data/source/*.csv
+data/source/*.xml
+site/critical.html
+site/critical-*.html
+site/critical.csv
+site/critical.json
+site/critical-feed.xml
+site/critical-feed.json

@@ -1,0 +1,300 @@
+atc,description,route,date_of_inclusion,source_row
+A02BC05,ESOMEPRAZOLE,intravenous use,2023-12-01,17
+A03BA01,ATROPINE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,19
+A03FA01,METOCLOPRAMIDE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,21
+A07AA12,FIDAXOMICIN,oral use,2023-12-01,23
+A07BA01,MEDICINAL CHARCOAL,oral use,2023-12-01,25
+A10AB01,INSULIN HUMAN (fast-acting),"intramuscular use, intravenous use, subcutaneous use",2023-12-01,27
+A10AB05,INSULIN ASPART,"intravenous use, subcutaneous use",2025-12-01,28
+A10AC01,INSULIN HUMAN (intermediate-acting),"intramuscular use, intravenous use, subcutaneous use",2023-12-01,29
+A10AD01,INSULIN HUMAN (intermediate - or long-acting combined with fast-acting),"intramuscular use, intravenous use, subcutaneous use",2023-12-01,30
+A10AE06,INSULIN DEGLUDEC,subcutaneous use,2025-12-01,31
+A12CC02,MAGNESIUM SULFATE,"intravenous use, intramuscular use",2023-12-01,33
+A16AB02,IMIGLUCERASE,intravenous use,2023-12-01,35
+B01AA03,WARFARIN,oral use,2023-12-01,38
+B01AB01,HEPARIN,"haemodialysis use, intraarterial use, intravenous use, subcutaneous use",2023-12-01,39
+B01AB02,ANTITHROMBIN III,intravenous use,2023-12-01,40
+B01AC04,CLOPIDOGREL,oral use,2023-12-01,41
+B01AC16,EPTIFIBATIDE,intravenous use,2023-12-01,42
+B01AD02,ALTEPLASE,intravenous use,2023-12-01,43
+B01AD11,TENECTEPLASE,intravenous use,2023-12-01,44
+B01AE07,DABIGATRAN,oral use,2023-12-01,45
+B02AA02,TRANEXAMIC ACID,"oral use, intravenous use",2023-12-01,47
+B02BA01,PHYTOMENADIONE,"intramuscular use, intravenous use, oral use",2023-12-01,49
+B02BB01,HUMAN FIBRINOGEN,intravenous use,2023-12-01,50
+B02BD01,HUMAN PROTHROMBIN COMPLEX,intravenous use,2024-12-16,51
+B02BD02,HUMAN COAGULATION FACTOR VIII,intravenous use,2023-12-01,52
+B02BD03,FACTOR VIII INHIBITOR BYPASSING ACTIVITY,intravenous use,2025-12-01,53
+B02BD04,HUMAN COAGULATION FACTOR IX,intravenous use,2023-12-01,54
+B02BD05,HUMAN COAGULATION FACTOR VII,intravenous use,2024-12-16,55
+B02BD07,HUMAN COAGULATION FACTOR XIII,intravenous use,2024-12-16,56
+B02BD08,EPTACOG ALFA,intravenous use,2024-12-16,57
+B03BA03,HYDROXOCOBALAMIN,"intravenous use, intramuscular use, subcutaneous use, oral use",2023-12-01,59
+B05AA01,ALBUMIN,intravenous use,2023-12-01,61
+B05AA02,PLASMA PROTEIN FRACTION,intravenous use,2023-12-01,62
+B05BB01,POTASSIUM CHLORIDE,intravenous use,2023-12-01,64
+B05BC01,MANNITOL,intravenous use,2023-12-01,65
+B05XA01,POTASSIUM CHLORIDE,intravenous use,2023-12-01,67
+B05XA05,MAGNESIUM SULFATE,intravenous use,2023-12-01,68
+B06AB01,HUMAN HEMIN,intravenous use,2023-12-01,70
+B06AC01,COMPLEMENT C1 ESTERASE INHIBITOR,"intravenous use, subcutaneous use",2023-12-01,71
+C01AA05,DIGOXIN,"oral use, intravenous use",2023-12-01,74
+C01BB01,LIDOCAINE,parenteral use,2023-12-01,76
+C01BB02,MEXILETINE,oral use,2023-12-01,77
+C01BC04,FLECAINIDE,oral use,2023-12-01,78
+C01BD01,AMIODARONE,intravenous use,2023-12-01,79
+C01CA02,ISOPRENALINE,intravenous use,2023-12-01,81
+C01CA03,NOREPINEPHRINE,intravenous use,2023-12-01,82
+C01CA04,DOPAMINE,intravenous use,2023-12-01,83
+C01CA07,DOBUTAMINE,intravenous use,2023-12-01,84
+C01CA24,EPINEPHRINE,"endotracheopulmonary use, intracardiac use, intraosseous use, intramuscular use, intravenous use, subcutaneous use",2023-12-01,85
+C01CA26,EPHEDRINE,"intravenous use, intramuscular use, subcutaneous use",2023-12-01,86
+C01CE02,MILRINONE,intravenous use,2023-12-01,87
+C01DA02,GLYCERYL TRINITRATE,"intravenous use, sublingual use",2023-12-01,89
+C01EB10,ADENOSINE,intravenous use,2023-12-01,91
+C02AB01,METHYLDOPA (levorotatory),oral use,2023-12-01,93
+C02AB02,METHYLDOPA (racemic),oral use,2023-12-01,94
+C02AC01,CLONIDINE,"intramuscular use, intravenous use, subcutaneous use, oral use",2023-12-01,95
+C02DD01,SODIUM NITROPRUSSIDE,intravenous use,2023-12-01,97
+C03CA01,FUROSEMIDE,"intravenous use, intramuscular use",2023-12-01,99
+C07AA05,PROPRANOLOL,oral use,2023-12-01,101
+C07AG01,LABETALOL,intravenous use,2023-12-01,102
+C08CA06,NIMODIPINE,"intravenous use, intracisternal use",2023-12-01,104
+C08DA01,VERAPAMIL,intravenous use,2023-12-01,106
+G02AB01,METHYLERGOMETRINE,"intramuscular use, intrauterine use, intravenous use, subcutaneous use",2023-12-01,109
+G03XB01,MIFEPRISTONE,oral use,2023-12-01,111
+H01BA01,ARGIPRESSIN,"intramuscular use, intravenous use, subcutaneous use",2025-12-01,114
+H01BA02,DESMOPRESSIN,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,115
+H01BB02,OXYTOCIN,"intramuscular use, intravenous use",2023-12-01,116
+H01BB03,CARBETOCIN,"intramuscular use, intravenous use",2023-12-01,117
+H02AA02,FLUDROCORTISONE,oral use,2023-12-01,119
+H02AB04,METHYLPREDNISOLONE,"intraarticular use, intrabursal use, intradermal use, intralesional use, intramuscular use, intravenous use, periarticular use, rectal use",2023-12-01,120
+H02AB06,PREDNISOLONE,oral use,2023-12-01,121
+H02AB09,HYDROCORTISONE,"intraarticular use, intramuscular use, intravenous use, oral use",2023-12-01,122
+H03BA02,PROPYLTHIOURACIL,oral use,2023-12-01,124
+H03BB01,CARBIMAZOLE,oral use,2023-12-01,125
+H03BB02,THIAMAZOLE,oral use,2023-12-01,126
+H04AA01,GLUCAGON,"intramuscular use, intravenous use, nasal use, subcutaneous use",2023-12-01,128
+J01AA02,DOXYCYCLINE,oral use,2023-12-01,131
+J01CA01,AMPICILLIN,"intramuscular use, intravenous use",2023-12-01,133
+J01CA04,AMOXICILLIN,"oral use, intravenous use, intramuscular use",2023-12-01,134
+J01CE01,BENZYLPENICILLIN,"intraarticular use, intramuscular use, intrapleural use, intrathecal use, intravenous use",2023-12-01,135
+J01CE02,PHENOXYMETHYLPENICILLIN,oral use,2023-12-01,136
+J01CE08,BENZATHINE BENZYLPENICILLIN,intramuscular use,2023-12-01,137
+J01CF02,CLOXACILLIN,"intravenous use, intramuscular use",2023-12-01,138
+J01CF05,FLUCLOXACILLIN,"inhalation use, intraarticular use, intramuscular use, intrapleural use, intravenous use, oral use",2023-12-01,139
+J01CR02,"AMOXICILLIN, CLAVULANIC ACID","oral use, intravenous use",2023-12-01,140
+J01CR05,"PIPERACILLIN, TAZOBACTAM",intravenous use,2023-12-01,141
+J01DC02,CEFUROXIME,oral use,2023-12-01,143
+J01DD01,CEFOTAXIME,"intramuscular use, intravenous use",2023-12-01,144
+J01DD02,CEFTAZIDIME,"intramuscular use, intravenous use",2023-12-01,145
+J01DD04,CEFTRIAXONE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,146
+J01DD08,CEFIXIME,oral use,2023-12-01,147
+J01DD52,"CEFTAZIDIME, AVIBACTAM",intravenous use,2023-12-01,148
+J01DF01,AZTREONAM,"intramuscular use, intravenous use",2023-12-01,149
+J01DH56,"CILASTATIN SODIUM, IMIPENEM, RELEBACTAM",intravenous use,2023-12-01,150
+J01DI54,"TAZOBACTAM, CEFTOLOZANE",intravenous use,2023-12-01,151
+J01EA01,TRIMETHOPRIM,oral use,2023-12-01,153
+J01EE01,CO-TRIMOXAZOLE,"oral use, intravenous use",2023-12-01,154
+J01FA01,ERYTHROMYCIN,intravenous use,2023-12-01,156
+J01FA09,CLARITHROMYCIN,intravenous use,2023-12-01,157
+J01FA10,AZITHROMYCIN,"intravenous use, oral use",2023-12-01,158
+J01FF01,CLINDAMYCIN,"intramuscular use, intravenous use",2023-12-01,159
+J01GB01,TOBRAMYCIN,"inhalation use, intramuscular use, intravenous use",2023-12-01,161
+J01GB03,GENTAMICIN,"intramuscular use, intravenous use, subconjunctival use",2023-12-01,162
+J01GB06,AMIKACIN,"intramuscular use, intravenous use",2023-12-01,163
+J01MA02,CIPROFLOXACIN,intravenous use,2023-12-01,165
+J01MA12,LEVOFLOXACIN,intravenous use,2023-12-01,166
+J01XA01,VANCOMYCIN,"intraperitoneal use, intravenous use, oral use",2023-12-01,168
+J01XA02,TEICOPLANIN,"intramuscular use, intravenous use",2023-12-01,169
+J01XB01,COLISTIN,"inhalation use, intrathecal use, intravenous use",2023-12-01,170
+J01XD01,METRONIDAZOLE,intravenous use,2023-12-01,171
+J01XX01,FOSFOMYCIN,intravenous use,2023-12-01,172
+J02AA01,AMPHOTERICIN B,intravenous use,2023-12-01,174
+J02AC01,FLUCONAZOLE,intravenous use,2025-12-01,175
+J02AC04,POSACONAZOLE,intravenous use,2023-12-01,176
+J02AC05,ISAVUCONAZOLE,"intravenous use, oral use",2024-12-16,177
+J04AB02,RIFAMPICIN,oral use,2023-12-01,179
+J04AB04,RIFABUTIN,oral use,2023-12-01,180
+J04AC01,ISONIAZID,oral use,2023-12-01,181
+J04AK01,PYRAZINAMIDE,oral use,2025-12-01,182
+J04AK02,ETHAMBUTOL,oral use,2023-12-01,183
+J04AK05,BEDAQUILINE,oral use,2023-12-01,184
+J04AM02,"ISONIAZID, RIFAMPICIN",oral use,2023-12-01,185
+J04BA02,DAPSONE,oral use,2023-12-01,187
+J05AB01,ACICLOVIR,intravenous use,2023-12-01,189
+J05AB06,GANCICLOVIR,intravenous use,2023-12-01,190
+J05AB14,VALGANCICLOVIR,oral use,2023-12-01,191
+J05AD01,FOSCARNET,intravenous use,2023-12-01,192
+J05AF01,ZIDOVUDINE,"intravenous use, oral use",2023-12-01,193
+J05AF05,LAMIVUDINE,oral use,2023-12-01,194
+J05AF06,ABACAVIR,oral use,2023-12-01,195
+J05AF09,EMTRICITABINE,oral use,2023-12-01,196
+J05AG01,NEVIRAPINE,oral use,2023-12-01,197
+J05AR02,"ABACAVIR, LAMIVUDINE",oral use,2023-12-01,198
+J06BA01,HUMAN NORMAL IMMUNOGLOBULIN,"intravenous use, subcutaneous use",2023-12-01,200
+J06BA02,HUMAN NORMAL IMMUNOGLOBULIN,intravenous use,2023-12-01,201
+J06BB01,HUMAN ANTI-D IMMUNOGLOBULIN,"intramuscular use, intravenous use",2023-12-01,202
+J06BB02,HUMAN TETANUS IMMUNOGLOBULIN,"intramuscular use, subcutaneous use",2023-12-01,203
+J06BB04,HUMAN HEPATITIS B IMMUNOGLOBULIN,"intramuscular use, intravenous use, subcutaneous use",2024-12-16,204
+J06BB05,HUMAN RABIES IMMUNOGLOBULIN,intramuscular use,2023-12-01,205
+J07AE01,CHOLERA VACCINE (inactivated),oral use,2023-12-01,207
+J07AH07,MENINGOCOCCAL GROUP C VACCINE,intramuscular use,2023-12-01,208
+J07AH09,MENINGOCOCCAL GROUP B VACCINE,intramuscular use,2023-12-01,209
+J07AJ51,"DIPHTHERIA, TETANUS, PERTUSSIS VACCINE (inactivated, whole cell)","intramuscular use, subcutaneous use",2023-12-01,210
+J07AJ52,"DIPHTHERIA, TETANUS, PERTUSSIS VACCINE (purified antigen)","intramuscular use, subcutaneous use",2023-12-01,211
+J07AM51,"DIPHTHERIA, TETANUS VACCINE","intramuscular use, subcutaneous use",2023-12-01,212
+J07AP03,TYPHOID VACCINE (polysaccharide),"intramuscular use, subcutaneous use",2023-12-01,213
+J07BA02,"ENCEPHALITIS (Japanese, whole virus, inactivated)",intramuscular use,2023-12-01,215
+J07BB01,"INFLUENZA VACCINE (various forms, strains)",intramuscular use,2023-12-01,216
+J07BB02,"INFLUENZA VACCINE (various forms, strains)","intramuscular use, subcutaneous use",2023-12-01,217
+J07BC01,HEPATITIS B VACCINE,"intramuscular use, subcutaneous use",2023-12-01,218
+J07BC02,HEPATITIS A VACCINE,"intramuscular use, subcutaneous use",2023-12-01,219
+J07BC20,HEPATITIS A AND B VACCINE,"intramuscular use, subcutaneous use",2024-12-16,220
+J07BD52,"MEASLES, MUMPS, RUBELLA VACCINE","intramuscular use, subcutaneous use",2023-12-01,221
+J07BD54,"MEASLES, MUMPS, RUBELLA, VARICELLA VACCINE","intramuscular use, subcutaneous use",2023-12-01,222
+J07BF03,POLIOMYELITIS VACCINE (trivalent),"intramuscular use, subcutaneous use",2023-12-01,223
+J07BG01,RABIES VACCINE,"intradermal use, intramuscular use, subcutaneous use",2023-12-01,224
+J07BH02,ROTAVIRUS PENTAVALENT VACCINE,oral use,2024-12-16,225
+J07BK01,VARICELLA VACCINE (live),"intramuscular use, subcutaneous use",2023-12-01,226
+J07BL01,YELLOW FEVER VACCINE,"intramuscular use, subcutaneous use",2023-12-01,227
+J07BM01,PAPILLOMAVIRUS VACCINE,intramuscular use,2024-12-16,228
+J07BM02,PAPILLOMAVIRUS VACCINE,intramuscular use,2024-12-16,229
+J07BM03,HUMAN PAPILLOMAVIRUS VACCINE (9-valent),intramuscular use,2023-12-01,230
+J07CA01,"DIPHTHERIA, TETANUS, POLIOMYELITIS VACCINE","intramuscular use, subcutaneous use",2023-12-01,232
+J07CA02,"DIPHTHERIA, TETANUS, PERTUSSIS, POLIOMYELITIS VACCINE","intramuscular use, subcutaneous use",2023-12-01,233
+J07CA06,"DIPHTHERIA, TETANUS, PERTUSSIS VACCINE","intramuscular use, subcutaneous use",2023-12-01,234
+J07CA12,"DIPHTHERIA, TETANUS, PERTUSSIS, POLIOMYELITIS, HEPATITIS B VACCINE",intramuscular use,2023-12-01,235
+L01AA01,CYCLOPHOSPHAMIDE,"intramuscular use, intravenous use, oral use",2023-12-01,238
+L01AA02,CHLORAMBUCIL,oral use,2023-12-01,239
+L01AA03,MELPHALAN,"intraarterial use, intravenous use, oral use",2023-12-01,240
+L01AA06,IFOSFAMIDE,"intraarterial use, intravenous use",2023-12-01,241
+L01AB01,BUSULFAN,"intravenous use, oral use, subcutaneous use",2023-12-01,242
+L01AB02,TREOSULFAN,intravenous use,2023-12-01,243
+L01AC01,THIOTEPA,"intramuscular use, intrapericardial use, intraperitoneal use, intrapleural use, intravascular use, intravenous use",2024-12-16,244
+L01AX04,DACARBAZINE,intravenous use,2023-12-01,245
+L01BA01,METHOTREXATE,"epidural use, intraarterial use, intraarticular use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intrathecal use, intravenous use, oral use, periarticular use, perineural use, rectal use, retrobulbar use, subconjunctival use, subcutaneous use, transdermal use",2023-12-01,247
+L01BB02,MERCAPTOPURINE,oral use,2023-12-01,248
+L01BB03,TIOGUANINE,oral use,2023-12-01,249
+L01BB05,FLUDARABINE,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, oral use, perineural use, retrobulbar use",2023-12-01,250
+L01BC01,CYTARABINE,"intramuscular use, intrathecal use, intravenous use, subcutaneous use",2023-12-01,251
+L01BC02,FLUOROURACIL,"intraarterial use, intraarticular use, intramuscular use, intraperitoneal use, intrapleural use, intravenous use",2024-12-16,252
+L01BC05,GEMCITABINE,intravenous use,2023-12-01,253
+L01CA01,VINBLASTINE,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, perineural use, retrobulbar use",2023-12-01,255
+L01CA02,VINCRISTINE,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, perineural use, retrobulbar use",2023-12-01,256
+L01CB01,ETOPOSIDE,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, oral use, perineural use, retrobulbar use",2023-12-01,257
+L01CD01,PACLITAXEL,intravenous use,2023-12-01,258
+L01CE01,TOPOTECAN,"intravenous use, oral use",2023-12-01,259
+L01DB01,DOXORUBICIN,"intravenous use, intravesical use",2023-12-01,261
+L01DB02,DAUNORUBICIN,intravenous use,2023-12-01,262
+L01DB03,EPIRUBICIN,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, intravesical use, perineural use, retrobulbar use",2023-12-01,263
+L01DB06,IDARUBICIN,intravenous use,2023-12-01,264
+L01DB07,MITOXANTRONE,"intrapleural use, intravenous use",2024-12-16,265
+L01DC01,BLEOMYCIN,"intraarterial use, intramuscular use, intraperitoneal use, intrapleural use, intratumoral use, intravenous use, subcutaneous use",2023-12-01,266
+L01DC03,MITOMYCIN,"intravenous use, intravesical use",2023-12-01,267
+L01EA03,NILOTINIB,oral use,2023-12-01,269
+L01EC02,DABRAFENIB,oral use,2024-12-16,270
+L01EC03,ENCORAFENIB,oral use,2024-12-16,271
+L01EE01,TRAMETINIB,oral use,2024-12-16,272
+L01EL01,IBRUTINIB,oral use,2024-12-16,273
+L01FA03,OBINUTUZUMAB,intravenous use,2024-12-16,275
+L01FB01,INOTUZUMAB OZOGAMICIN,intravenous use,2024-12-16,276
+L01FC01,DARATUMUMAB,"intravenous use, subcutaneous use",2024-12-16,277
+L01FF01,NIVOLUMAB,"intravenous use, subcutaneous use",2025-12-01,278
+L01FF02,PEMBROLIZUMAB,intravenous use,2025-12-01,279
+L01FF03,DURVALUMAB,intravenous use,2024-12-16,280
+L01FX02,GEMTUZUMAB OZOGAMICIN,intravenous use,2024-12-16,281
+L01FX05,BRENTUXIMAB VEDOTIN,intravenous use,2024-12-16,282
+L01FX17,SACITUZUMAB GOVITECAN,intravenous use,2024-12-16,283
+L01XA01,CISPLATIN,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, perineural use, retrobulbar use",2023-12-01,285
+L01XA02,CARBOPLATIN,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, perineural use, retrobulbar use",2023-12-01,286
+L01XA03,OXALIPLATIN,"epidural use, intrabursal use, intracoronary use, intradiscal use, intramuscular use, intravenous use, perineural use, retrobulbar use",2023-12-01,287
+L01XB01,PROCARBAZINE,oral use,2023-12-01,288
+L01XF01,TRETINOIN,oral use,2023-12-01,289
+L01XJ01,VISMODEGIB,oral use,2024-12-16,290
+L01XX05,HYDROXYCARBAMIDE,oral use,2023-12-01,291
+L01XX23,MITOTANE,oral use,2024-12-16,292
+L01XX24,PEGASPARGASE,"intramuscular use, intravenous use",2023-12-01,293
+L02BA01,TAMOXIFEN,oral use,2023-12-01,295
+L03AB11,PEGINTERFERON ALFA-2A,subcutaneous use,2023-12-01,297
+L03AX03,BCG VACCINE (various forms),intravesical use,2023-12-01,298
+L03AX13,GLATIRAMER,"intraarticular use, intravenous use, periarticular use, subcutaneous use, transdermal use",2023-12-01,299
+L03AX16,PLERIXAFOR,subcutaneous use,2023-12-01,300
+L04AA03,ANTILYMPHOCYTE IMMUNOGLOBULIN (horse),intravenous use,2023-12-01,302
+L04AA04,ANTITHYMOCYTE IMMUNOGLOBULIN (rabbit),intravenous use,2024-12-16,303
+L04AC02,BASILIXIMAB,intravenous use,2023-12-01,304
+L04AC03,ANAKINRA,subcutaneous use,2023-12-01,305
+L04AD01,CICLOSPORIN,"intravenous use, oral use",2023-12-01,306
+L04AD02,TACROLIMUS,"intravenous use, oral use",2023-12-01,307
+L04AH01,SIROLIMUS,oral use,2023-12-01,308
+L04AX02,THALIDOMIDE,oral use,2023-12-01,309
+L04AX03,METHOTREXATE,oral use,2023-12-01,310
+M01CC01,PENICILLAMINE,oral use,2023-12-01,313
+M03AB01,SUXAMETHONIUM,"intramuscular use, intraosseous use, intravenous use",2023-12-01,315
+M03AC04,ATRACURIUM,intravenous use,2023-12-01,316
+M03AC09,ROCURONIUM,intravenous use,2023-12-01,317
+M03AC11,CISATRACURIUM,intravenous use,2023-12-01,318
+M03CA01,DANTROLENE,intravenous use,2023-12-01,320
+N01AH01,FENTANYL,"epidural use, intramuscular use, intravenous use",2023-12-01,323
+N01AH03,SUFENTANIL,"epidural use, intravenous use",2023-12-01,324
+N01AH06,REMIFENTANIL,"intramuscular use, intravenous use",2023-12-01,325
+N01AX03,KETAMINE,"intramuscular use, intravenous use",2023-12-01,326
+N01AX10,PROPOFOL,intravenous use,2023-12-01,327
+N01AX14,ESKETAMINE,"intramuscular use, intravenous use",2023-12-01,328
+N02AA01,MORPHINE,"epidural use, intramuscular use, intravenous use, subcutaneous use",2023-12-01,330
+N02BE01,PARACETAMOL,intravenous use,2023-12-01,332
+N03AA02,PHENOBARBITAL,"intramuscular use, intravenous use, oral use",2023-12-01,334
+N03AB02,PHENYTOIN,"intramuscular use, intravenous use, oral use",2023-12-01,335
+N03AD01,ETHOSUXIMIDE,oral use,2023-12-01,336
+N03AE01,CLONAZEPAM,oral use,2023-12-01,337
+N03AF01,CARBAMAZEPINE,oral use,2023-12-01,338
+N03AG01,VALPROIC ACID,"intravenous use, oral use",2023-12-01,339
+N03AG04,VIGABATRIN,oral use,2023-12-01,340
+N04AA02,BIPERIDEN,"intramuscular use, intravenous use",2023-12-01,342
+N05AD01,HALOPERIDOL,"intraarticular use, intramuscular use, intravascular use, intravenous use, oral use",2023-12-01,344
+N05AH03,OLANZAPINE,intramuscular use,2023-12-01,345
+N05AN01,LITHIUM,oral use,2023-12-01,346
+N05BA01,DIAZEPAM,"intramuscular use, intravenous use, rectal use",2023-12-01,348
+N05BA06,LORAZEPAM,"intramuscular use, intravenous use",2023-12-01,349
+N05CD08,MIDAZOLAM,"intramuscular use, intravenous use, subcutaneous use, rectal use",2023-12-01,351
+N05CM18,DEXMEDETOMIDINE,"intravenous use, subcutaneous use",2023-12-01,352
+N06AX27,ESKETAMINE,nasal use,2023-12-01,354
+N06BC01,CAFFEINE,"intravenous use, oral use",2023-12-01,356
+N07AA01,NEOSTIGMINE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,358
+N07XX02,RILUZOLE,oral use,2023-12-01,360
+P01AB01,METRONIDAZOLE,intravenous use,2023-12-01,363
+P01CX01,PENTAMIDINE,"inhalation use, intramuscular use, intravenous use",2023-12-01,365
+P02CA03,ALBENDAZOLE,oral use,2023-12-01,367
+R03AC02,SALBUTAMOL,"inhalation use, nasal use, oral use",2023-12-01,370
+R03BB01,IPRATROPIUM,"inhalation use, oral use",2023-12-01,372
+R03CA02,EPHEDRINE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,374
+R03CC02,SALBUTAMOL,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,375
+R05CB01,ACETYLCYSTEINE,intravenous use,2023-12-01,377
+R05CB13,DORNASE ALFA (DESOXYRIBONUCLEASE),inhalation use,2025-12-01,378
+S01EB01,PILOCARPINE,ocular use,2023-12-01,381
+S01EB09,ACETYLCHOLINE,intraocular use,2023-12-01,382
+S01EC01,ACETAZOLAMIDE,oral use,2023-12-01,383
+S01FA04,CYCLOPENTOLATE,ocular use,2023-12-01,385
+S01LA01,VERTEPORFIN,intravenous use,2023-12-01,387
+S02AA15,CIPROFLOXACIN,auricular use,2023-12-01,389
+S03AA07,CIPROFLOXACIN,auricular use,2023-12-01,391
+V03AB06,SODIUM THIOSULFATE,intravenous use,2023-12-01,394
+V03AB14,PROTAMINE,intravenous use,2023-12-01,395
+V03AB15,NALOXONE,"intramuscular use, intravenous use, subcutaneous use",2023-12-01,396
+V03AB17,METHYLTHIONINIUM,intravenous use,2023-12-01,397
+V03AB23,ACETYLCYSTEINE,intravenous use,2023-12-01,398
+V03AB25,FLUMAZENIL,intravenous use,2023-12-01,399
+V03AB33,HYDROXOCOBALAMIN,"intramuscular use, intravenous use, oral use, subcutaneous use",2023-12-01,400
+V03AB34,FOMEPIZOLE,intravenous use,2023-12-01,401
+V03AB35,SUGAMMADEX,intravenous use,2023-12-01,402
+V03AB37,IDARUCIZUMAB,intravenous use,2023-12-01,403
+V03AC01,DEFEROXAMINE,"intramuscular use, intraperitoneal use, intravenous use, subcutaneous use",2023-12-01,404
+V03AE01,POLYSTYRENE SULFONIC ACID,oral use,2023-12-01,405
+V03AF01,MESNA,"intravenous use, oral use",2023-12-01,406
+V03AF02,DEXRAZOXANE,intravenous use,2023-12-01,407
+V03AF03,FOLINIC ACID,"intramuscular use, intravenous use",2023-12-01,408
+V03AF07,RASBURICASE,intravenous use,2023-12-01,409
+V04CF01,TUBERCULIN,intradermal use,2023-12-01,411
+V09GA04,"ALBUMIN (Technetium, 99mTc)",intravenous use,2023-12-01,413
+V09GB02,"ALBUMIN (Iodine, 125I)","intradermal use, intratumoral use, intravenous use, subcutaneous use",2023-12-01,414
+V10XX03,RADIUM (223RA) DICHLORIDE,intravenous use,2024-12-16,416

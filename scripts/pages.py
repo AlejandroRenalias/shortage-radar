@@ -17,16 +17,19 @@ PAGES = {
                   'description': 'Search and filter every medicine package that Fimea lists as short in Finland, with start dates and the company’s estimated end dates.', 'form_action': "'none'"},
     'trends': {'file': 'trends.html', 'nav': 'navTrends', 'icon': 'chart', 'title': 'Shortage trends in Finland | Shortage Radar',
                'description': 'How many medicine shortages Finland has had over time, what changed this week, and which groups and companies are most affected.', 'form_action': "'none'"},
+    'critical': {'file': 'critical.html', 'nav': 'navEuList', 'icon': 'shield', 'own': True, 'title': 'Critical medicines in Finland | Shortage Radar',
+                 'description': 'Medicines on the EU Union list of critical medicines that Fimea lists as short in Finland.', 'form_action': "'none'"},
     'about': {'file': 'about.html', 'nav': 'navAbout', 'icon': 'info', 'title': 'About the data | Shortage Radar',
               'description': 'What a medicine shortage is, what to do about one, and how this site gets and uses Fimea’s open data.', 'form_action': "'none'"},
     'medicine': {'file': 'medicine.html', 'nav': None, 'icon': None, 'title': 'Medicine | Shortage Radar',
                  'description': 'One medicine package on Fimea’s shortage list: status, timeline and what to do.', 'form_action': "'self'"},
 }
-NAV_LABELS = {'navHome': 'Home', 'navShortages': 'Shortages', 'navTrends': 'Trends', 'navAbout': 'About'}
+NAV_LABELS = {'navHome': 'Home', 'navShortages': 'Shortages', 'navEuList': 'EU list', 'navTrends': 'Trends', 'navAbout': 'About'}
 NAV_ICONS = {
     'home': '<path d="M3.500 11 12 4l8.500 7M6 9.500V20h12V9.500"/>',
     'list': '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
     'chart': '<path d="M4 20V4M4 20h16M8 15l3-4 3 2 5-7"/>',
+    'shield': '<path d="M12 3.500 5 6.500v5c0 4.500 3 7.500 7 9 4-1.500 7-4.500 7-9v-5z"/><path d="M12 9v6M9 12h6"/>',
     'info': '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.500h.01"/>',
 }
 MARK = '<svg class="mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="#00875a"/><path d="M16 8v16M8 16h16" stroke="#fff" stroke-width="3.500" stroke-linecap="round"/></svg>'
@@ -255,15 +258,20 @@ def not_found():
 <p><a class="btn" href="/shortage-radar/shortages.html" data-i18n="nfSearch">Search the shortage list</a> <a class="btn-quiet" href="/shortage-radar/index.html" data-i18n="navHome">Home</a></p></div>'''
 
 
-def render_pages(count, impact=None):
+def render_pages(count, impact=None, critical=None):
     """Return {file name: html} for every page; `count` is the number of current shortages, shown in the home headline,
     and `impact` the counts by impact level ({'substitute': n, ...}) for the triage on the home page."""
     out = {}
     for key, meta in PAGES.items():
+        if meta.get('own'):
+            continue
         body = {'index': lambda: home(count, impact), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine}[key]()
         meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'
     nf = {'file': '404.html', 'title': 'Page not found | Shortage Radar', 'description': 'The page you requested could not be found.', 'form_action': "'none'", 'script': 'common.js'}
     out['404.html'] = document('404', not_found(), prefix, nf)
+    if critical:
+        from critical_pages import render_critical  # imported here: that module imports this one
+        out.update(render_critical(critical))
     return out

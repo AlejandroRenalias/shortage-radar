@@ -8,7 +8,8 @@ import unicodedata
 from statistics import median
 from pathlib import Path
 
-from changes import feeds, week_summary
+import critical as eu_list
+from changes import _shift, feeds, week_summary
 from packs import pack_label
 from pages import render_pages
 from slices import package_shards, summary
@@ -19,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # and removal windows or first sightings wider than this are not used for delays.
 MAX_GAP_DAYS = 14
 MIN_DELAY_SAMPLE = 30
+# Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
+PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
 
 
@@ -54,12 +57,14 @@ def group_key(product):
     return ' '.join(unicodedata.normalize('NFKC', product.get('substitution_group', '')).split()) or None
 
 
-def register(path, wanted, current_shortages=(), members=None):
+def register(path, wanted, current_shortages=(), members=None, details=None):
     """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
     on the market, not flagged short in the register and not in the current shortage file.
 
     When `members` is a dict, it is filled with {group: [package]} for every package with a substitution group, for the
     history of the groups and for the list of alternatives on the medicine page.
+    When `details` is a dict, it is filled with {vnr: {'routes', 'eu_flag', 'form_id', 'substances'}} for the wanted VNRs:
+    what the critical medicines join needs and the other pages do not.
     """
     packages, exact, products, substances = {}, set(), {}, {}
     candidates = []
@@ -83,7 +88,8 @@ def register(path, wanted, current_shortages=(), members=None):
             el.clear()
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
-            products[el.get('id')] = {'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
+            routes = [(x.get('id', ''), x.get('value', '')) for x in el.findall('Antoreitti')]
+            products[el.get('id')] = {'routes': routes, 'eu_flag': (el.findtext('EUKriittinenValmiste') or '').strip(), 'form_id': form.get('id', '') if form is not None else '', 'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
             el.clear()
         elif el.tag == 'Laakeaine':
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
@@ -100,10 +106,13 @@ def register(path, wanted, current_shortages=(), members=None):
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
-            product = {k: v for k, v in products[ref].items() if k != 'holder'}
+            product = {k: v for k, v in products[ref].items() if k not in PRIVATE}
             key = group_key(product)
             count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
-            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
+            names = list(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))
+            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(names), other_packages_count=count)
+            if details is not None:
+                details[vnr] = dict({k: products[ref][k] for k in ('routes', 'eu_flag', 'form_id')}, substances=names)
     return result
 
 
@@ -248,7 +257,8 @@ def build():
         h['imported'] = h['date'] in imported
     current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
     members = {}
-    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members)
+    details = {}
+    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details)
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
         if e['removed_on'] is None:
@@ -295,9 +305,15 @@ def build():
     (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     for name, text in feeds(es, snapshots, history, critical).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
-    for name, html in render_pages(len(current), home['impact']).items():
+    eu = eu_list.load_eu_list()
+    matches = eu_list.match_all(es, products, details, eu, eu_list.load_routes(), eu_list.load_forms(), eu_list.load_ingredient_rules())
+    rows = eu_list.current_rows(es, matches)
+    alerts = eu_list.new_alerts(es, matches, snapshots, _shift(history[-1]['date'], eu_list.ALERT_DAYS))
+    eu_list.write_outputs(ROOT / 'site', rows, eu['meta'], metadata, history[-1]['date'], alerts)
+    critical_data = {'eu': eu, 'rows': rows, 'counts': eu_list.counts(rows), 'history': eu_list.history(es, matches, [d for d, _ in snapshots]), 'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata}
+    for name, html in render_pages(len(current), home['impact'], critical_data).items():
         (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
-    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)}")
+    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)} eu_list={eu_list.counts(rows)} eu_alerts={len(alerts)}")
 
 
 if __name__ == '__main__':

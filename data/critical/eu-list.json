@@ -1,0 +1,10 @@
+{
+  "title": "Union list of critical medicines - version 2.1 (revision 2)",
+  "version": "2.1",
+  "reference": "EMA/229885/2026",
+  "published": "2026-11-04",
+  "source_url": "https://www.ema.europa.eu/en/documents/other/union-list-critical-medicines-en.xlsx",
+  "retrieved": "2026-11-23",
+  "rows": 299,
+  "note": "source_row is the row number in the first sheet of the EMA workbook."
+}
