@@ -1,0 +1,96 @@
+{
+ "register_day": "2026-11-23",
+ "packages": 18440,
+ "groups": 7899,
+ "shortage_vnrs": 757,
+ "shortage_vnrs_found_in_register": 757,
+ "scopes": {
+  "all": {
+   "groups": 7899,
+   "unsure_groups": 3831,
+   "unsure_reasons": {
+    "biological_several_products": 19,
+    "no_marketing_authorisation_record": 8,
+    "product_substances_inconsistent": 4,
+    "register_group_disagrees": 62,
+    "route_not_stated": 2598,
+    "several_products_no_register_group": 603,
+    "strength_not_stated": 766,
+    "veterinary": 848,
+    "vnr_listed_twice": 74
+   },
+   "single_package_groups": 4142,
+   "groups_with_several_active_substances": 1393,
+   "groups_with_parallel_import": 628,
+   "groups_with_parallel_distribution": 373,
+   "merges_different_substance": [],
+   "merges_different_strength": [],
+   "merges_different_form": [],
+   "merges_different_route": []
+  },
+  "on_market": {
+   "groups": 4648,
+   "unsure_groups": 1047,
+   "unsure_reasons": {
+    "biological_several_products": 11,
+    "no_marketing_authorisation_record": 5,
+    "register_group_disagrees": 60,
+    "route_not_stated": 20,
+    "several_products_no_register_group": 157,
+    "strength_not_stated": 314,
+    "veterinary": 673,
+    "vnr_listed_twice": 42
+   },
+   "single_package_groups": 2270,
+   "groups_with_several_active_substances": 792,
+   "groups_with_parallel_import": 351,
+   "groups_with_parallel_distribution": 335,
+   "merges_different_substance": [],
+   "merges_different_strength": [],
+   "merges_different_form": [],
+   "merges_different_route": []
+  },
+  "in_current_shortage": {
+   "groups": 549,
+   "unsure_groups": 74,
+   "unsure_reasons": {
+    "register_group_disagrees": 17,
+    "route_not_stated": 2,
+    "several_products_no_register_group": 8,
+    "strength_not_stated": 19,
+    "veterinary": 34,
+    "vnr_listed_twice": 13
+   },
+   "single_package_groups": 112,
+   "groups_with_several_active_substances": 70,
+   "groups_with_parallel_import": 96,
+   "groups_with_parallel_distribution": 62,
+   "merges_different_substance": [],
+   "merges_different_strength": [],
+   "merges_different_form": [],
+   "merges_different_route": []
+  }
+ },
+ "shortage_file": "2026-11-23.txt",
+ "register_groups": {
+  "register_groups": 1685,
+  "register_groups_spanning_several_medicine_groups": 363,
+  "differences_among_those": {
+   "device": 60,
+   "form": 147,
+   "routes": 47,
+   "strength": 57,
+   "substances": 131
+  }
+ },
+ "alternatives": {
+  "no_register_group / group_alt": 22,
+  "no_register_group / group_none": 78,
+  "no_register_group / unsure": 20,
+  "register_alt / group_alt": 453,
+  "register_alt / group_none": 46,
+  "register_alt / unsure": 38,
+  "register_none / group_none": 59,
+  "register_none / unsure": 2
+ }
+}
