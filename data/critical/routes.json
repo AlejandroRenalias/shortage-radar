@@ -1,0 +1,539 @@
+{
+ "note": "Fimea Antoreitti id to the EU list route terms it satisfies. A route with no EU term has an empty list. \"injection\" routes also satisfy \"parenteral use\". English labels are plain-language glosses, not Fimea text. Ids not in this table are treated as unclear.",
+ "routes": {
+  "1055": {
+   "fi": "Suun kautta",
+   "en": "by mouth",
+   "eu": [
+    "oral use"
+   ],
+   "injection": false
+  },
+  "1047": {
+   "fi": "Laskimoon",
+   "en": "into a vein",
+   "eu": [
+    "intravenous use",
+    "intravascular use"
+   ],
+   "injection": true
+  },
+  "1069": {
+   "fi": "Ihon alle",
+   "en": "under the skin",
+   "eu": [
+    "subcutaneous use"
+   ],
+   "injection": true
+  },
+  "1036": {
+   "fi": "Lihakseen",
+   "en": "into a muscle",
+   "eu": [
+    "intramuscular use"
+   ],
+   "injection": true
+  },
+  "1002": {
+   "fi": "Iholle",
+   "en": "on the skin",
+   "eu": [],
+   "injection": false
+  },
+  "1020": {
+   "fi": "Inhalaatioon",
+   "en": "inhalation",
+   "eu": [
+    "inhalation use"
+   ],
+   "injection": false
+  },
+  "1052": {
+   "fi": "Sumutukseen",
+   "en": "nebulisation",
+   "eu": [
+    "inhalation use"
+   ],
+   "injection": false
+  },
+  "1053": {
+   "fi": "Silmän pinnalle",
+   "en": "on the eye surface",
+   "eu": [
+    "ocular use"
+   ],
+   "injection": false
+  },
+  "15": {
+   "fi": "Ophthalmic",
+   "en": "on the eye surface",
+   "eu": [
+    "ocular use"
+   ],
+   "injection": false
+  },
+  "1073": {
+   "fi": "Ihon läpi",
+   "en": "through the skin",
+   "eu": [
+    "transdermal use"
+   ],
+   "injection": false
+  },
+  "1070": {
+   "fi": "Kielen alle",
+   "en": "under the tongue",
+   "eu": [
+    "sublingual use"
+   ],
+   "injection": false
+  },
+  "1051": {
+   "fi": "Nenään",
+   "en": "in the nose",
+   "eu": [
+    "nasal use"
+   ],
+   "injection": false
+  },
+  "1000": {
+   "fi": "Korvaan",
+   "en": "in the ear",
+   "eu": [
+    "auricular use"
+   ],
+   "injection": false
+  },
+  "1064": {
+   "fi": "Peräsuoleen",
+   "en": "in the rectum",
+   "eu": [
+    "rectal use"
+   ],
+   "injection": false
+  },
+  "1048": {
+   "fi": "Virtsarakkoon",
+   "en": "into the bladder",
+   "eu": [
+    "intravesical use"
+   ],
+   "injection": false
+  },
+  "1046": {
+   "fi": "Kohdun sisään",
+   "en": "into the womb",
+   "eu": [
+    "intrauterine use"
+   ],
+   "injection": false
+  },
+  "1015": {
+   "fi": "Hemodialyysiin",
+   "en": "into haemodialysis",
+   "eu": [
+    "haemodialysis use"
+   ],
+   "injection": false
+  },
+  "1007": {
+   "fi": "Henkitorveen tai keuhkoputkiin",
+   "en": "into the windpipe or bronchi",
+   "eu": [
+    "endotracheopulmonary use"
+   ],
+   "injection": false
+  },
+  "1008": {
+   "fi": "Epiduraalitilaan",
+   "en": "epidural",
+   "eu": [
+    "epidural use"
+   ],
+   "injection": true
+  },
+  "1044": {
+   "fi": "Selkäydinnesteeseen",
+   "en": "into spinal fluid",
+   "eu": [
+    "intrathecal use"
+   ],
+   "injection": true
+  },
+  "1085": {
+   "fi": "Takimmaiseen pikkuaivo-selkäydinsammioon",
+   "en": "into the cisterna magna",
+   "eu": [
+    "intracisternal use"
+   ],
+   "injection": true
+  },
+  "1060": {
+   "fi": "Hermoa ympäröivään kudokseen",
+   "en": "around a nerve",
+   "eu": [
+    "perineural use"
+   ],
+   "injection": true
+  },
+  "1024": {
+   "fi": "Nivelen sisään",
+   "en": "into a joint",
+   "eu": [
+    "intraarticular use"
+   ],
+   "injection": true
+  },
+  "1059": {
+   "fi": "Niveltä ympäröivään kudokseen",
+   "en": "around a joint",
+   "eu": [
+    "periarticular use"
+   ],
+   "injection": true
+  },
+  "1025": {
+   "fi": "Limapussin sisään",
+   "en": "into a bursa",
+   "eu": [
+    "intrabursal use"
+   ],
+   "injection": true
+  },
+  "1040": {
+   "fi": "Vatsaonteloon",
+   "en": "into the abdominal cavity",
+   "eu": [
+    "intraperitoneal use"
+   ],
+   "injection": true
+  },
+  "1041": {
+   "fi": "Keuhkopussiin",
+   "en": "into the pleural space",
+   "eu": [
+    "intrapleural use"
+   ],
+   "injection": true
+  },
+  "1023": {
+   "fi": "Valtimoon",
+   "en": "into an artery",
+   "eu": [
+    "intraarterial use",
+    "intravascular use"
+   ],
+   "injection": true
+  },
+  "1030": {
+   "fi": "Sepelvaltimoon",
+   "en": "into a coronary artery",
+   "eu": [
+    "intracoronary use"
+   ],
+   "injection": true
+  },
+  "1026": {
+   "fi": "Sydämen sisään",
+   "en": "into the heart",
+   "eu": [
+    "intracardiac use"
+   ],
+   "injection": true
+  },
+  "1031": {
+   "fi": "Ihon sisään",
+   "en": "into the skin",
+   "eu": [
+    "intradermal use"
+   ],
+   "injection": true
+  },
+  "1038": {
+   "fi": "Luuytimeen",
+   "en": "into bone marrow",
+   "eu": [
+    "intraosseous use"
+   ],
+   "injection": true
+  },
+  "1045": {
+   "fi": "Kasvaimeen",
+   "en": "into a tumour",
+   "eu": [
+    "intratumoral use"
+   ],
+   "injection": true
+  },
+  "1033": {
+   "fi": "Kudosvaurioon, leesioon",
+   "en": "into a lesion",
+   "eu": [
+    "intralesional use"
+   ],
+   "injection": true
+  },
+  "1068": {
+   "fi": "Sidekalvon alle",
+   "en": "under the conjunctiva",
+   "eu": [
+    "subconjunctival use"
+   ],
+   "injection": true
+  },
+  "1037": {
+   "fi": "Silmän sisään",
+   "en": "into the eye",
+   "eu": [
+    "intraocular use"
+   ],
+   "injection": true
+  },
+  "1049": {
+   "fi": "Silmän lasiaiseen",
+   "en": "into the vitreous of the eye",
+   "eu": [
+    "intraocular use"
+   ],
+   "injection": true
+  },
+  "1092": {
+   "fi": "Silmän etukammion sisään",
+   "en": "into the front chamber of the eye",
+   "eu": [
+    "intraocular use"
+   ],
+   "injection": true
+  },
+  "1097": {
+   "fi": "Verkkokalvoon",
+   "en": "into the retina",
+   "eu": [
+    "intraocular use"
+   ],
+   "injection": true
+  },
+  "1056": {
+   "fi": "Suuonteloon",
+   "en": "in the mouth",
+   "eu": [],
+   "injection": false
+  },
+  "1067": {
+   "fi": "Kertavaleluun paikallisesti",
+   "en": "single local instillation",
+   "eu": [],
+   "injection": false
+  },
+  "1075": {
+   "fi": "Emättimeen",
+   "en": "in the vagina",
+   "eu": [],
+   "injection": false
+  },
+  "1079": {
+   "fi": "Infiltraatio",
+   "en": "infiltration",
+   "eu": [],
+   "injection": false
+  },
+  "17": {
+   "fi": "Topical",
+   "en": "on the skin or a surface",
+   "eu": [],
+   "injection": false
+  },
+  "1090": {
+   "fi": "Kehonulkoisesti",
+   "en": "outside the body",
+   "eu": [],
+   "injection": false
+  },
+  "1009": {
+   "fi": "Kudosvaurion päälle",
+   "en": "on a tissue injury",
+   "eu": [],
+   "injection": false
+  },
+  "1063": {
+   "fi": "Kertavaleluun",
+   "en": "single instillation",
+   "eu": [],
+   "injection": false
+  },
+  "1054": {
+   "fi": "Silmiin ja sieraimiin",
+   "en": "in the eyes and nostrils",
+   "eu": [],
+   "injection": false
+  },
+  "1081": {
+   "fi": "Keuhkoon",
+   "en": "into the lung",
+   "eu": [],
+   "injection": false
+  },
+  "1012": {
+   "fi": "Maha-suolikanavaan",
+   "en": "into the gut",
+   "eu": [],
+   "injection": false
+  },
+  "1013": {
+   "fi": "Mahalaukkuun",
+   "en": "into the stomach",
+   "eu": [],
+   "injection": false
+  },
+  "1021": {
+   "fi": "Suoleen",
+   "en": "into the intestine",
+   "eu": [],
+   "injection": false
+  },
+  "1086": {
+   "fi": "Posken limakalvolle",
+   "en": "on the cheek lining",
+   "eu": [],
+   "injection": false
+  },
+  "1089": {
+   "fi": "Limakalvon alle",
+   "en": "under a mucous membrane",
+   "eu": [],
+   "injection": false
+  },
+  "1003": {
+   "fi": "Hammaslääkintään",
+   "en": "dental use",
+   "eu": [],
+   "injection": false
+  },
+  "1074": {
+   "fi": "Virtsaputkeen",
+   "en": "into the urethra",
+   "eu": [],
+   "injection": false
+  },
+  "1057": {
+   "fi": "Nieluun",
+   "en": "in the throat",
+   "eu": [],
+   "injection": false
+  },
+  "1050": {
+   "fi": "Kurkunpäähän",
+   "en": "into the larynx",
+   "eu": [],
+   "injection": false
+  },
+  "1027": {
+   "fi": "Paisuvaiskudokseen",
+   "en": "into erectile tissue",
+   "eu": [],
+   "injection": false
+  },
+  "1098": {
+   "fi": "Aivokammioon",
+   "en": "into a brain ventricle",
+   "eu": [],
+   "injection": false
+  },
+  "1096": {
+   "fi": "Rauhaseen",
+   "en": "into a gland",
+   "eu": [],
+   "injection": false
+  },
+  "1091": {
+   "fi": "Luukalvolle",
+   "en": "on the bone membrane",
+   "eu": [],
+   "injection": false
+  },
+  "1133": {
+   "fi": "Aivokuorukkaan",
+   "en": "into the brain cortex",
+   "eu": [],
+   "injection": false
+  },
+  "1034": {
+   "fi": "Imusuoneen",
+   "en": "into a lymph vessel",
+   "eu": [],
+   "injection": false
+  },
+  "1005": {
+   "fi": "Kohdunkaulakanavaan",
+   "en": "into the cervical canal",
+   "eu": [],
+   "injection": false
+  },
+  "1004": {
+   "fi": "Kastoon",
+   "en": "dipping",
+   "eu": [],
+   "injection": false
+  },
+  "1080": {
+   "fi": "Implantointiin",
+   "en": "implantation",
+   "eu": [],
+   "injection": false
+  },
+  "1095": {
+   "fi": "Kasvaimen ympärille",
+   "en": "around a tumour",
+   "eu": [],
+   "injection": false
+  },
+  "1100": {
+   "fi": "Kudosvaurion ympäristöön",
+   "en": "around a tissue injury",
+   "eu": [],
+   "injection": false
+  },
+  "1035": {
+   "fi": "Maitorauhaseen",
+   "en": "into the udder",
+   "eu": [],
+   "injection": false
+  },
+  "1017": {
+   "fi": "Munaan",
+   "en": "into an egg",
+   "eu": [],
+   "injection": false
+  },
+  "1018": {
+   "fi": "Rehuun sekoitettuna",
+   "en": "mixed in feed",
+   "eu": [],
+   "injection": false
+  },
+  "1019": {
+   "fi": "Mehiläispesään",
+   "en": "in a beehive",
+   "eu": [],
+   "injection": false
+  },
+  "1077": {
+   "fi": "Siipeen",
+   "en": "into the wing",
+   "eu": [],
+   "injection": false
+  },
+  "1088": {
+   "fi": "Juomaveteen sekoitettuna",
+   "en": "mixed in drinking water",
+   "eu": [],
+   "injection": false
+  }
+ },
+ "unclear": {
+  "1065": {
+   "fi": "Antoreitti ei oleellinen",
+   "en": "route not relevant"
+  }
+ }
+}

@@ -8,7 +8,7 @@ MIN_BYTES = 1_000_000
 
 
 def main():
-    data, modified = download('https://data.pilvi.fimea.fi/avoin-data/Perusrekisteri.xml')
+    data, modified = download('https://data.pilvi.fimea.fi/avoin-data/Perusrekisteri2026.xml')
     if len(data) < MIN_BYTES:
         raise ValueError('Register is unexpectedly small')
     parser = ET.iterparse(io.BytesIO(data), events=('start', 'end'))

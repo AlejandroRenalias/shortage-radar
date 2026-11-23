@@ -27,11 +27,13 @@ def test_every_page_is_built_with_the_same_header_and_footer():
         assert out[f].count('<footer') == 1 and out[f].count('data-lang-btn="fi"') == 1
 
 
-def test_navigation_marks_the_current_page_and_lists_four_pages():
+def test_navigation_marks_the_current_page_and_lists_five_pages():
     out = render_pages(749)
     for key, meta in PAGES.items():
+        if meta.get('own'):
+            continue
         nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
-        assert nav.count('<a ') == 4
+        assert nav.count('<a ') == 5
         current = re.findall(r'<a href="([^"]+)" aria-current="page"', nav)
         assert current == ([meta['file']] if meta['nav'] else [])
     assert 'href="about.html#what-to-do"' in out['index.html']
@@ -70,10 +72,10 @@ def test_404_page_uses_absolute_paths_for_the_project_site():
     assert 'rel="canonical"' not in html
 
 
-def test_sitemap_lists_the_four_indexable_pages():
+def test_sitemap_lists_the_indexable_pages():
     root = ET.parse(ROOT / 'site/sitemap.xml').getroot()
     urls = [e.text for e in root.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-    assert urls == [SITE_URL, SITE_URL + 'shortages.html', SITE_URL + 'trends.html', SITE_URL + 'about.html']
+    assert urls == [SITE_URL, SITE_URL + 'shortages.html', SITE_URL + 'trends.html', SITE_URL + 'critical.html', SITE_URL + 'critical-methods.html', SITE_URL + 'about.html']
 
 
 def test_every_script_and_style_a_page_loads_exists():

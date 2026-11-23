@@ -1,0 +1,275 @@
+"""Critical medicines in Finland: join the Fimea shortage file to the EU Union list of critical medicines.
+
+Published facts only. A shortage package (VNR) is matched to the EU list by its ATC level 5 code, and then by route:
+
+- `exact`: the ATC code is on the list and one of the package's routes (Fimea `Antoreitti`) fits a route of that list row.
+- `route-mismatch`: the ATC code is on the list, but no route of the package fits. When Fimea gives no usable route the note
+  says "route unclear"; the match type is not guessed in the package's favour.
+- `unmatched`: the VNR is not in the Fimea register, so its ATC code is not known.
+
+Fimea's own flag `EUKriittinenValmiste` is only a cross-check: where it disagrees, the note says so.
+"""
+import csv
+import hashlib
+import json
+from datetime import date, datetime
+from pathlib import Path
+from statistics import median
+from xml.sax.saxutils import escape
+
+from changes import date_text
+
+ROOT = Path(__file__).resolve().parents[1]
+FOLDER = ROOT / 'data/critical'
+TYPES = ('exact', 'route-mismatch', 'unmatched')
+TYPE_NAMES = {'exact': 'Exact match', 'route-mismatch': 'Route does not fit', 'unmatched': 'Not in the register'}
+SOURCE_CREDIT = ('EU list: European Medicines Agency (EMA), Union list of critical medicines, version {version} ({reference}), {published}. '
+                 'Shortages and register: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed by Shortage Radar.')
+# Rows of a captured notice that the history keeps.
+EVENT_KEYS = ('NordicArticleNumber', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Company', 'first_seen', 'last_seen', 'removed_on', 'listed_at_first_capture')
+
+
+def load_eu_list(folder=FOLDER):
+    """{'meta': {...}, 'rows': {atc: row}}; the pinned list copy with the sheet row of every entry."""
+    meta = json.loads((folder / 'eu-list.json').read_text(encoding='utf-8'))
+    with (folder / 'eu-list.csv').open(encoding='utf-8', newline='') as f:
+        rows = {r['atc']: {'atc': r['atc'], 'description': r['description'], 'route': r['route'], 'included': r['date_of_inclusion'], 'row': int(r['source_row'])} for r in csv.DictReader(f)}
+    return {'meta': meta, 'rows': rows}
+
+
+def load_routes(folder=FOLDER):
+    return json.loads((folder / 'routes.json').read_text(encoding='utf-8'))
+
+
+def load_forms(folder=FOLDER):
+    with (folder / 'forms.csv').open(encoding='utf-8', newline='') as f:
+        return {r['id']: r['name_en'] for r in csv.DictReader(f)}
+
+
+def list_routes(text):
+    return [x.strip() for x in text.split(',') if x.strip()]
+
+
+def route_fit(product_routes, list_route, table):
+    """Does one of the package's Fimea routes fit a route of the EU list row? Returns (status, labels).
+
+    `product_routes` is a list of (Fimea route id, Finnish text); `table` is the routes.json content.
+    status is `fits`, `no` or `unclear`; `unclear` when the package has no route, or only routes that
+    say nothing or that the table does not know. No keyword rules: only the table decides.
+    """
+    wanted = set(list_routes(list_route))
+    known, fits = [], False
+    for rid, _ in product_routes:
+        entry = table['routes'].get(rid)
+        if entry is None:
+            continue
+        known.append(entry['en'])
+        if wanted & set(entry['eu']) or ('parenteral use' in wanted and entry['injection']):
+            fits = True
+    if fits:
+        return 'fits', known
+    return ('no' if known else 'unclear'), known
+
+
+def note_for(match_type, status, flag, record):
+    """The note shown with a match, in plain words."""
+    parts = []
+    if match_type == 'unmatched':
+        return 'This VNR is not in the Fimea register, so its ATC code and route are not known.'
+    if match_type == 'exact':
+        parts.append('The ATC code is on the list and the route fits.')
+    elif status == 'unclear':
+        parts.append('The ATC code is on the list. Route unclear: Fimea gives no usable route for this product, so no route match is made.')
+    else:
+        parts.append(f"The ATC code is on the list, but the route does not fit. Product route: {', '.join(record['product_routes'])}. List route: {record['list_route']}.")
+    if flag == '0':
+        parts.append('Fimea does not flag this product as EU-critical; the ATC code and route match the list.' if match_type == 'exact'
+                     else 'Fimea does not flag this product as EU-critical.')
+    elif flag == '1' and match_type != 'exact':
+        parts.append('Fimea flags this product as EU-critical.')
+    return ' '.join(parts)
+
+
+def classify(vnr, product, detail, eu, table, forms):
+    """One match record for a VNR, or None when the VNR is in the register but its ATC code is not on the list and Fimea does not flag it.
+
+    Packages that Fimea flags as EU-critical although their ATC code is not on the list get the type `flag-only`; they
+    are kept out of the three counts and shown apart.
+    """
+    if product is None:
+        return {'vnr': vnr, 'match_type': 'unmatched', 'atc': '', 'name': '', 'strength': '', 'form': '', 'form_en': '', 'substances': '', 'pack': '', 'product_routes': [],
+                'fimea_flag': '', 'list_row': None, 'list_route': '', 'note': note_for('unmatched', None, None, {})}
+    flag = detail.get('eu_flag', '')
+    row = eu['rows'].get(product.get('atc', ''))
+    labels = [table['routes'][rid]['en'] for rid, _ in detail.get('routes', []) if rid in table['routes']]
+    base = {'vnr': vnr, 'atc': product.get('atc', ''), 'name': product.get('name', ''), 'strength': product.get('strength', ''), 'form': product.get('form', ''),
+            'form_en': forms.get(detail.get('form_id', ''), ''), 'substances': product.get('substances', ''), 'pack': product.get('pack', ''),
+            'product_routes': labels, 'fimea_flag': flag}
+    if row is None:
+        if flag != '1':
+            return None
+        return dict(base, match_type='flag-only', list_row=None, list_route='', note='Fimea flags this product as EU-critical, but its ATC code is not on the EU list.')
+    status, _ = route_fit(detail.get('routes', []), row['route'], table)
+    match_type = 'exact' if status == 'fits' else 'route-mismatch'
+    record = dict(base, match_type=match_type, route_status={'fits': 'fits', 'no': 'does not fit', 'unclear': 'unclear'}[status], list_row=row['row'], list_route=row['route'], list_description=row['description'])
+    record['note'] = note_for(match_type, status, flag, record)
+    return record
+
+
+def match_all(events, products, details, eu, table, forms):
+    """{vnr: record} for every VNR of the events (current or gone) that is on the list, flagged by Fimea, or not in the register."""
+    out = {}
+    for vnr in sorted({e['NordicArticleNumber'] for e in events}):
+        record = classify(vnr, products.get(vnr), details.get(vnr, {}), eu, table, forms)
+        if record:
+            out[vnr] = record
+    return out
+
+
+def current_rows(events, matches):
+    """One row per current shortage VNR that has a match record; the latest notice of the VNR supplies the dates."""
+    latest = {}
+    for e in events:
+        if e['removed_on'] is None and e['NordicArticleNumber'] in matches:
+            old = latest.get(e['NordicArticleNumber'])
+            if old is None or (e['DateOfTheNotification'], e['UnavailableFrom']) > (old['DateOfTheNotification'], old['UnavailableFrom']):
+                latest[e['NordicArticleNumber']] = e
+    rows = []
+    for vnr, e in latest.items():
+        rows.append(dict(matches[vnr], company=e['Company'], start=e['UnavailableFrom'], end=e['EndingDate'], notified=e['DateOfTheNotification'], first_seen=e['first_seen']))
+    return sorted(rows, key=lambda r: ({'exact': 0, 'route-mismatch': 1, 'unmatched': 2, 'flag-only': 3}[r['match_type']], r['atc'], r['name'], r['vnr']))
+
+
+def counts(rows):
+    out = dict.fromkeys(TYPES, 0)
+    out['flag-only'] = 0
+    for r in rows:
+        out[r['match_type']] += 1
+    out['disagree'] = sum(1 for r in rows if r['match_type'] in ('exact', 'route-mismatch') and r['fimea_flag'] in ('0', '1') and (r['fimea_flag'] == '1') != (r['match_type'] == 'exact'))
+    return out
+
+
+def credit(meta):
+    return SOURCE_CREDIT.format(version=meta['version'], reference=meta['reference'], published=meta['published'])
+
+
+def csv_rows(rows, meta):
+    """CSV lines for the download: every current match, with the list version, the list row and the source credit."""
+    header = ['VNR', 'ATC', 'name', 'strength', 'form', 'active substances', 'company', 'start date', 'estimated end date', 'notification date', 'match type',
+              'route status', 'product route', 'list route', 'list version', 'list row', 'Fimea EU-critical flag', 'note', 'source credit']
+    yield header
+    for r in rows:
+        yield [r['vnr'], r['atc'], r.get('name', ''), r.get('strength', ''), r.get('form_en') or r.get('form', ''), r.get('substances', ''), r.get('company', ''), r.get('start', ''), r.get('end', ''),
+               r.get('notified', ''), r['match_type'], r.get('route_status', ''), '; '.join(r.get('product_routes', [])), r.get('list_route', ''), meta['version'],
+               r['list_row'] if r.get('list_row') else '', {'0': 'no', '1': 'yes'}.get(r.get('fimea_flag', ''), ''), r['note'], credit(meta)]
+
+
+def json_data(rows, meta, source_metadata, snapshot_date):
+    return {'title': 'Critical medicines in Finland', 'generated_for_snapshot': snapshot_date, 'list': {k: meta[k] for k in ('version', 'reference', 'published', 'source_url', 'retrieved', 'rows')},
+            'counts': counts(rows), 'source_credit': credit(meta),
+            'sources': {'shortages_last_modified': source_metadata.get('shortages_last_modified'), 'register_last_modified': source_metadata.get('register_last_modified')},
+            'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=credit(meta)) for r in rows]}
+
+
+def history(events, matches):
+    """Per ATC code: the notices of the archive for packages with that code, and what they show.
+
+    The archive is made of captures, not daily observations, so a notice has a first and a last capture that listed it,
+    not an exact end. A notice that is no longer listed shows the date it was `last seen`. `days_listed` counts from the
+    first to the last capture that listed it, so it is a lower bound; notices already listed in the first capture
+    of the archive have no known start and are left out of the lengths.
+    """
+    by_code = {}
+    for e in events:
+        m = matches.get(e['NordicArticleNumber'])
+        if not m or not m['atc'] or m['match_type'] == 'unmatched':
+            continue
+        n = {k: e[k] for k in EVENT_KEYS}
+        n.update(match_type=m['match_type'], name=m['name'], strength=m['strength'])
+        n['days_listed'] = (date.fromisoformat(e['last_seen']) - date.fromisoformat(e['first_seen'])).days
+        by_code.setdefault(m['atc'], []).append(n)
+    out = {}
+    for atc, notices in by_code.items():
+        notices.sort(key=lambda n: (n['first_seen'], n['NordicArticleNumber']), reverse=True)
+        measured = [n['days_listed'] for n in notices if n['removed_on'] and not n['listed_at_first_capture']]
+        out[atc] = {'notices': notices, 'count': len(notices), 'listed_now': sum(1 for n in notices if n['removed_on'] is None),
+                    'gone': sum(1 for n in notices if n['removed_on']), 'measured': len(measured),
+                    'days_min': min(measured) if measured else None, 'days_median': median(measured) if measured else None, 'days_max': max(measured) if measured else None}
+    return out
+
+
+def new_alerts(events, matches, snapshots, since):
+    """Notices of exact matches that first appeared in a capture after `since`: the alert feed.
+
+    A notice listed in the first capture of the archive, or whose VNR was already listed in the capture before it, is not new.
+    """
+    listed = {day: {r['NordicArticleNumber'] for r in rows} for day, rows in snapshots}
+    out = []
+    for e in events:
+        m = matches.get(e['NordicArticleNumber'])
+        if (m and m['match_type'] == 'exact' and e['first_seen'] > since and not e['listed_at_first_capture']
+                and e['NordicArticleNumber'] not in listed.get(e['first_seen_after'], ())):
+            out.append((e, m))
+    out.sort(key=lambda x: (x[0]['first_seen'], x[1]['atc'], x[0]['NordicArticleNumber']), reverse=True)
+    return out
+
+
+SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
+TAG_BASE = 'tag:alejandrorenalias.github.io,2026:shortage-radar/critical/'
+ALERT_DAYS = 30
+ALERT_MAX = 100
+FEED_TITLE = 'Critical medicines in Finland: new shortages'
+FEED_SUBTITLE = 'New shortage notices in Fimea’s file for packages that match the EU Union list of critical medicines by ATC code and route.'
+
+
+def _day_text(value):
+    return date_text(value, 'en') or 'not given'
+
+
+def alert_item(e, m, meta):
+    """One alert as plain facts: what appeared, when we first saw it, and the match."""
+    name = ' '.join(x for x in (m['name'], m['strength']) if x) or f"VNR {e['NordicArticleNumber']}"
+    key = '|'.join([e['NordicArticleNumber'], e['UnavailableFrom'], e['DateOfTheNotification'], e['Company']])
+    lines = [f"First seen in the capture of {_day_text(e['first_seen'])}.", f"ATC code: {m['atc']} ({m['list_description']}). Match: exact (EU list version {meta['version']}, row {m['list_row']}).",
+             f"Product route: {', '.join(m['product_routes']) or 'not given'}. List route: {m['list_route']}.",
+             f"Reported start: {_day_text(e['UnavailableFrom'])}. Company’s estimated end: {_day_text(e['EndingDate'])}. Notified: {_day_text(e['DateOfTheNotification'])}.",
+             f"Company: {e['Company']}. VNR: {e['NordicArticleNumber']}."]
+    if m['fimea_flag'] == '0':
+        lines.append('Fimea does not flag this product as EU-critical.')
+    lines.append(credit(meta))
+    return {'id': f"{TAG_BASE}{e['NordicArticleNumber']}/{hashlib.sha1(key.encode('utf-8')).hexdigest()[:10]}", 'title': f"New shortage: {name} ({m['atc']})",
+            'url': f"{SITE_URL}critical-{m['atc']}.html", 'date': e['first_seen'], 'text': '\n'.join(lines), 'atc': m['atc'], 'vnr': e['NordicArticleNumber']}
+
+
+def alert_items(alerts, meta):
+    return [alert_item(e, m, meta) for e, m in alerts[:ALERT_MAX]]
+
+
+def rss_feed(items, meta, latest):
+    def rfc822(day):
+        return datetime.strptime(day, '%Y-%m-%d').strftime('%a, %d %b %Y 00:00:00 +0000')
+    parts = ['<?xml version="1.0" encoding="utf-8"?>', '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>', f'<title>{escape(FEED_TITLE)}</title>',
+             f'<link>{SITE_URL}critical.html</link>', f'<description>{escape(FEED_SUBTITLE)}</description>', '<language>en</language>', f'<lastBuildDate>{rfc822(latest)}</lastBuildDate>',
+             f'<atom:link href="{SITE_URL}critical-feed.xml" rel="self" type="application/rss+xml"/>', f'<copyright>{escape(credit(meta))}</copyright>']
+    for i in items:
+        parts.append(f'<item><title>{escape(i["title"])}</title><link>{i["url"]}</link><guid isPermaLink="false">{i["id"]}</guid><pubDate>{rfc822(i["date"])}</pubDate>'
+                     f'<category>{i["atc"]}</category><description>{escape(i["text"])}</description></item>')
+    parts.append('</channel></rss>')
+    return '\n'.join(parts) + '\n'
+
+
+def json_feed(items, meta):
+    return json.dumps({'version': 'https://jsonfeed.org/version/1.1', 'title': FEED_TITLE, 'description': FEED_SUBTITLE, 'language': 'en', 'home_page_url': SITE_URL + 'critical.html',
+                       'feed_url': SITE_URL + 'critical-feed.json', 'authors': [{'name': 'Shortage Radar', 'url': SITE_URL}],
+                       'items': [{'id': i['id'], 'url': i['url'], 'title': i['title'], 'content_text': i['text'], 'date_published': i['date'] + 'T00:00:00Z', 'tags': [i['atc'], 'exact']} for i in items]},
+                      ensure_ascii=False, indent=1) + '\n'
+
+
+def write_outputs(site, rows, meta, source_metadata, snapshot_date, alerts):
+    """Write the downloads and the alert feeds into the site folder."""
+    with (site / 'critical.csv').open('w', encoding='utf-8-sig', newline='') as f:
+        csv.writer(f).writerows(csv_rows(rows, meta))
+    (site / 'critical.json').write_text(json.dumps(json_data(rows, meta, source_metadata, snapshot_date), ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
+    items = alert_items(alerts, meta)
+    (site / 'critical-feed.xml').write_text(rss_feed(items, meta, snapshot_date), encoding='utf-8', newline='\n')
+    (site / 'critical-feed.json').write_text(json_feed(items, meta), encoding='utf-8', newline='\n')
