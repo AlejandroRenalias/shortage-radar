@@ -30,12 +30,14 @@ function timelineMarkup(e, archive) {
     today: [archive ? t.tlLastListed : t.tlToday, dateText(new Date(now).toISOString().slice(0, 10)), archive && e.removed_on ? t.tlGone(dateText(e.removed_on)) : ''],
     end: [t.tlEnd, dateText(e.EndingDate), model.late ? t.tlPast(model.daysPastEstimate) : !archive && model.daysToEstimate !== null ? t.tlRemaining(model.daysToEstimate) : '']
   };
+  // A gap in the captures lies inside the stretch from the reported start to now: that stretch is not known to be a listing, so its line is hatched.
+  const unknownLine = Boolean((e.gaps || []).some(g => !e.UnavailableFrom || g.to > e.UnavailableFrom));
   const tone = model.late ? 'late' : model.status === 'soon' ? 'soon' : 'now';
   const todayAt = model.order.indexOf('today');
   const track = model.order.map((key, i) => {
     const [label, date, note] = items[key], prev = model.order[i - 1];
     // The connector before a marker is solid when that stretch has happened, dashed when it is still ahead.
-    const seg = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : `seg-done seg-${tone}`;
+    const seg = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : unknownLine ? 'seg-unknown' : `seg-done seg-${tone}`;
     return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(t.late)}</small>` : ''}</li>`;
   }).join('');
   const range = archive || (e.gaps && e.gaps.length) ? `<p class="note">${esc(captureSentences(e, t).join(' '))}</p>` : '';

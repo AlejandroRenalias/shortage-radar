@@ -606,6 +606,36 @@ test('a notice seen on both sides of a long gap says it was not observed in betw
   assert.match(env.timelineMarkup({...gone, removed_on:'2026-09-15'}, true), /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
 });
 
+test('the line from the reported start to today is hatched when a gap lies inside it, and the count says what it counts', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const base = {NordicArticleNumber:'114636', UnavailableFrom:day(-1028), EndingDate:day(100), first_seen:'2024-11-18', last_seen:day(0), removed_on:null};
+  const gap = {from:'2024-11-18', to:'2026-09-15', days:666};
+  const hatched = env.timelineMarkup({...base, gaps:[gap]}, false);
+  assert.match(hatched, /tl-today seg-unknown/); assert.doesNotMatch(hatched, /seg-done|seg-now/);
+  assert.match(hatched, /Days since the reported start: 1,028/); assert.doesNotMatch(hatched, /so far/);
+  const solid = env.timelineMarkup({...base, gaps:[]}, false);
+  assert.match(solid, /seg-done seg-now/); assert.doesNotMatch(solid, /seg-unknown/);
+  // A gap that ended before the reported start does not touch the stretch.
+  assert.match(env.timelineMarkup({...base, UnavailableFrom:'2026-10-01', gaps:[gap]}, false), /seg-done/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.timelineMarkup({...base, gaps:[gap]}, false), /Päiviä ilmoitetusta alkamispäivästä: 1\s?028/);
+  assert.match(fs.readFileSync(require('node:path').join(__dirname, '../site/style.css'), 'utf8'), /\.seg-unknown\)::before\{background:repeating-linear-gradient/);
+});
+
+test('no text calls a reported start a "longest running" or "so far" listing', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    const t = copy[lang];
+    assert.equal(t.longestTitle, lang === 'en' ? 'Earliest reported starts' : 'Varhaisimmat ilmoitetut alkamispäivät');
+    for (const key of ['longestTitle', 'longestNote', 'sortLongest', 'factLongest', 'tlDuration']) {
+      const text = typeof t[key] === 'function' ? t[key](3, '1 Jan 2026') : t[key];
+      assert.doesNotMatch(text, /longest running|so far|pisimpään|tähän mennessä/i, key);
+    }
+  }
+});
+
 test('the timeline is one track in time order with evenly spaced markers and the right connectors', () => {
   const [env] = pageEnv(['medicine.js']);
   vm.runInContext("language='en'", env);

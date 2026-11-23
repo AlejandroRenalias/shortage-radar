@@ -48,7 +48,7 @@ def name_cell(r):
 def status_cell(r):
     """Fimea's Voimassa: K is ongoing, E has not started yet; the start date shows when."""
     if r['status'] == 'ongoing':
-        return f'<span>Ongoing<span class="note">since {E(D(r["start"]))}</span></span>'
+        return f'<span>Ongoing<span class="note">reported start {E(D(r["start"]))}</span></span>'
     return f'<span>Starts later<span class="note">on {E(D(r["start"]))}</span></span>'
 
 
