@@ -10,15 +10,15 @@ from pathlib import Path
 
 import critical as eu_list
 from changes import _shift, feeds, week_summary
+from gaps import MAX_GAP_DAYS, add_capture, days_between, gaps_of, is_gap
 from packs import pack_label
 from pages import render_pages
 from slices import package_shards, summary
 from triage import level, medicine_name, newly_critical
 
 ROOT = Path(__file__).resolve().parents[1]
-# Captures further apart than this are not joined into one continuous series,
+# MAX_GAP_DAYS (scripts/gaps.py): captures further apart than this are not joined into one continuous series,
 # and removal windows or first sightings wider than this are not used for delays.
-MAX_GAP_DAYS = 14
 MIN_DELAY_SAMPLE = 30
 # Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
 PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
@@ -116,10 +116,6 @@ def register(path, wanted, current_shortages=(), members=None, details=None):
     return result
 
 
-def days_between(a, b):
-    return (date.fromisoformat(b) - date.fromisoformat(a)).days
-
-
 def events(snapshots):
     """Track events across captures.
 
@@ -127,6 +123,11 @@ def events(snapshots):
     an event began after `first_seen_after` (None for the first capture) and
     no later than `first_seen`; it ended after `last_seen` and no later than
     `removed_on` (None while still listed).
+
+    `first_seen` and `last_seen` are the first and last capture that listed the event. Captures more than MAX_GAP_DAYS
+    apart (scripts/gaps.py) are not continuous: `spans` lists the runs of captures ({'first_seen', 'last_seen'}) and
+    `gaps` the stretches between them that were not observed ({'from', 'to', 'days'}). `removed_after_gap` is true when the
+    capture that no longer lists the event is more than MAX_GAP_DAYS after the last one that did, so the removal date is unknown.
     """
     active, all_events, history = {}, [], []
     previous_day = None
@@ -140,21 +141,26 @@ def events(snapshots):
                 raise ValueError(f'{day}: duplicate event identity {key}')
             seen.add(key)
             if key not in active:
-                e = dict(row, first_seen=day, first_seen_after=previous_day, listed_at_first_capture=previous_day is None, last_seen=day, first_estimated_end=row['EndingDate'], end_changes=[{'seen': day, 'date': row['EndingDate']}], removed_on=None)
+                e = dict(row, first_seen=day, first_seen_after=previous_day, listed_at_first_capture=previous_day is None, last_seen=day, first_estimated_end=row['EndingDate'], end_changes=[{'seen': day, 'date': row['EndingDate']}], removed_on=None, spans=[])
                 active[key] = e
                 all_events.append(e)
+                add_capture(e['spans'], None, day)
             else:
                 e = active[key]
                 if e['EndingDate'] != row['EndingDate']:
                     e['end_changes'].append({'seen': day, 'date': row['EndingDate']})
                 e.update(row, last_seen=day)
+                add_capture(e['spans'], previous_day, day)
         listed = {key[0] for key in seen}
         for key in set(active) - seen:
             e = active.pop(key)
             # A changed start date or notification date shows up as a removal plus a new event.
-            e.update(removed_on=day, vnr_listed_at_removal=key[0] in listed)
+            e.update(removed_on=day, vnr_listed_at_removal=key[0] in listed, removed_after_gap=is_gap(e['last_seen'], day))
         history.append({'date': day, 'count': len(rows), 'gap_days': days_between(previous_day, day) if previous_day else None})
         previous_day = day
+    for e in all_events:
+        e['gaps'] = gaps_of(e['spans'])
+        e.setdefault('removed_after_gap', False)
     return all_events, history
 
 
@@ -165,12 +171,12 @@ def delay_stats(all_events):
     MAX_GAP_DAYS of the previous capture (so the first estimate is close to the
     original one) and removed within MAX_GAP_DAYS of the last capture listing it.
     """
-    sample, active_past, excluded = [], [], {'listed_at_first_capture': 0, 'no_estimate': 0, 'wide_start_window': 0, 'wide_removal_window': 0, 'vnr_still_listed': 0}
+    sample, active_past, excluded = [], [], {'listed_at_first_capture': 0, 'no_estimate': 0, 'wide_start_window': 0, 'wide_removal_window': 0, 'vnr_still_listed': 0, 'gap_in_captures': 0}
     for e in all_events:
         end = e.get('first_estimated_end')
         if not e['removed_on']:
-            if (end and not e['listed_at_first_capture'] and e['first_seen_after']
-                    and days_between(e['first_seen_after'], e['first_seen']) <= MAX_GAP_DAYS
+            if (end and not e['listed_at_first_capture'] and e['first_seen_after'] and not e.get('gaps')
+                    and not is_gap(e['first_seen_after'], e['first_seen'])
                     and days_between(end, e['last_seen']) > 0):
                 active_past.append(days_between(end, e['last_seen']))
             continue
@@ -178,12 +184,14 @@ def delay_stats(all_events):
             reason = 'listed_at_first_capture'
         elif not end:
             reason = 'no_estimate'
-        elif days_between(e['first_seen_after'], e['first_seen']) > MAX_GAP_DAYS:
+        elif is_gap(e['first_seen_after'], e['first_seen']):
             reason = 'wide_start_window'
-        elif days_between(e['last_seen'], e['removed_on']) > MAX_GAP_DAYS:
+        elif is_gap(e['last_seen'], e['removed_on']):
             reason = 'wide_removal_window'
         elif e.get('vnr_listed_at_removal'):
             reason = 'vnr_still_listed'
+        elif e.get('gaps'):
+            reason = 'gap_in_captures'
         else:
             reason = None
         if reason:

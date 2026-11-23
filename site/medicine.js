@@ -12,6 +12,16 @@ function lookup(vnr, shard) {
   return gone.length ? {state: 'left', events: gone} : {state: 'missing', events: []};
 }
 let vnr = '', shard = null;
+// Where the archive saw the notice: one sentence for each run of captures, then each stretch that was not observed.
+// Captures more than the gap limit apart (scripts/gaps.py) are not one continuous listing.
+function captureSentences(e, t) {
+  const spans = e.spans && e.spans.length ? e.spans : [{first_seen: e.first_seen, last_seen: e.last_seen}], d = dateText;
+  const out = spans.map((s, i) => i === 0 && e.listed_at_first_capture ? t.tlListedAtFirst(d(s.first_seen), d(s.last_seen)) : s.first_seen === s.last_seen ? t.tlListedOne(d(s.first_seen)) : t.tlListedFrom(d(s.first_seen), d(s.last_seen)));
+  const gaps = e.gaps && e.gaps.length ? e.gaps : [];
+  for (const g of gaps) out.push(t.tlGap(d(g.from), d(g.to)));
+  if (e.removed_after_gap && e.removed_on) out.push(t.tlGap(d(e.last_seen), d(e.removed_on)));
+  return out;
+}
 // One track with markers in time order and the actual dates next to each marker.
 function timelineMarkup(e, archive) {
   const t = copy[language], now = archive ? parsedDate(e.last_seen).valueOf() : todayUTC(), model = timelineModel(e, now);
@@ -28,7 +38,7 @@ function timelineMarkup(e, archive) {
     const seg = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : `seg-done seg-${tone}`;
     return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(t.late)}</small>` : ''}</li>`;
   }).join('');
-  const range = archive ? `<p class="note">${esc(e.listed_at_first_capture ? t.tlListedAtFirst(dateText(e.first_seen), dateText(e.last_seen)) : t.tlListedFrom(dateText(e.first_seen), dateText(e.last_seen)))}</p>` : '';
+  const range = archive || (e.gaps && e.gaps.length) ? `<p class="note">${esc(captureSentences(e, t).join(' '))}</p>` : '';
   const earlier = model.earlier.length ? `<div class="tl-earlier"><h3>${esc(t.tlEarlier)}</h3><p>${esc(t.tlEarlierNote)}</p><ul>${model.earlier.map(x => `<li><span class="tl-date">${esc(dateText(x.date))}</span><small>${esc(t.tlSeen(dateText(x.seen)))}</small></li>`).join('')}${model.hasEnd ? `<li class="is-now"><span class="tl-date">${esc(dateText(e.EndingDate))}</span><small>${esc(t.tlCurrent)}</small></li>` : ''}</ul></div>` : '';
   return `<section class="panel timeline" aria-labelledby="tl-title"><h2 id="tl-title">${esc(t.timelineTitle)}</h2><ol class="tl-track tl-count-${model.order.length}">${track}</ol>${range}${model.hasEnd ? '' : `<p class="note">${esc(t.tlNoEnd)}</p>`}${earlier}</section>`;
 }

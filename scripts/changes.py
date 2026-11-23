@@ -26,6 +26,7 @@ TEXT = {
         'critical_when': lambda day, after: f'From the capture of {day} (not yet in the capture of {after}), no other package in this substitution group is on the market without a shortage.',
         'critical_advice': 'Talk to your pharmacist or doctor early. “On the market” comes from the register and is not a pharmacy stock check.',
         'listed': 'Packages on the shortage list',
+        'unobserved': lambda a, b: f'Not observed between {a} and {b}.',
     },
     'fi': {
         'lang': 'fi', 'file': 'feed-fi.xml', 'title': 'Saatavuustutka — Suomi: muutokset',
@@ -38,6 +39,7 @@ TEXT = {
         'critical_when': lambda day, after: f'Tilannekuvasta {day} alkaen (ei vielä tilannekuvassa {after}) tämän vaihtokelpoisuusryhmän muita pakkauksia ei ole kaupan ilman saatavuushäiriötä.',
         'critical_advice': 'Kysy apteekista tai lääkäriltä hyvissä ajoin. Tieto kaupan olosta tulee lääkerekisteristä, eikä se kerro apteekin varastosta.',
         'listed': 'Saatavuushäiriölistalla olevat pakkaukset',
+        'unobserved': lambda a, b: f'Ei havaintoja välillä {a}–{b}.',
     },
 }
 
@@ -90,7 +92,8 @@ def _entry_text(e, lang, kind):
     name = name_with_strength(e.get('name'), e.get('strength'), lang, pack) if e.get('name') else f"VNR {e['NordicArticleNumber']}"
     d = lambda value: date_text(value, lang)
     when = t['first_seen'](d(e['first_seen']), d(e['first_seen_after'])) if kind == 'new' else t['last_seen'](d(e['last_seen']), d(e['removed_on']))
-    lines = [when, f"{t['since']}: {d(e['UnavailableFrom']) or t['none']}", f"{t['end']}: {d(e['EndingDate']) or t['none']}", f"{t['notified']}: {d(e['DateOfTheNotification']) or t['none']}", f"{t['company']}: {e['Company']}", f"VNR: {e['NordicArticleNumber']}"]
+    gaps = [t['unobserved'](d(g['from']), d(g['to'])) for g in e.get('gaps', [])]
+    lines = [when, *gaps, f"{t['since']}: {d(e['UnavailableFrom']) or t['none']}", f"{t['end']}: {d(e['EndingDate']) or t['none']}", f"{t['notified']}: {d(e['DateOfTheNotification']) or t['none']}", f"{t['company']}: {e['Company']}", f"VNR: {e['NordicArticleNumber']}"]
     return f"{t[kind]}: {name}" + (f', {pack}' if pack else ''), '\n'.join(lines)
 
 

@@ -82,7 +82,7 @@ def test_delay_stats_bounds_and_exclusions():
     ]
     stats = delay_stats(all_events)
     assert (stats['sample_size'], stats['past_estimate'], stats['not_past_estimate'], stats['undetermined']) == (3, 1, 1, 1)
-    assert stats['excluded'] == {'listed_at_first_capture': 1, 'no_estimate': 0, 'wide_start_window': 1, 'wide_removal_window': 0, 'vnr_still_listed': 1}
+    assert stats['excluded'] == {'listed_at_first_capture': 1, 'no_estimate': 0, 'wide_start_window': 1, 'wide_removal_window': 0, 'vnr_still_listed': 1, 'gap_in_captures': 0}
     assert (stats['median_overrun_min_days'], stats['median_overrun_max_days']) == (10, 14)
     assert not stats['meaningful'] and 'share_past_min' not in stats
 

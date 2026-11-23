@@ -12,15 +12,14 @@ basic register:
 The register is current only, so the history of "newly critical" groups is rebuilt from the shortage
 captures with today's group membership and the market dates the register gives for each package.
 """
-from datetime import date
+from gaps import is_gap
 
 LEVELS = ('substitute', 'critical', 'nogroup', 'vet')
 MAX_NAMED_SUBSTANCES = 2
 # A group must be without alternatives in this many consecutive captures before it counts as newly critical,
 # and must have had an alternative in as many captures before, so a one-capture glitch does not make an event.
 CONFIRM_CAPTURES = 2
-# Captures further apart than this do not tell when a change happened.
-MAX_GAP_DAYS = 14
+# Captures further apart than MAX_GAP_DAYS (scripts/gaps.py) do not tell when a change happened.
 # Words for salts, esters and water of crystallisation at the end of a substance name: "Quetiapine fumarate" is shown as "Quetiapine".
 SALT_WORDS = {
     'hydrochloride', 'dihydrochloride', 'hydrobromide', 'sodium', 'disodium', 'potassium', 'calcium', 'magnesium',
@@ -82,10 +81,6 @@ def group_states(day, rows, members, alias):
     return {g: not any(on_market(p, day) and not ({p['vnr']} | p['old']) & listed for p in members[g]) for g in groups}
 
 
-def _gap(a, b):
-    return (date.fromisoformat(b) - date.fromisoformat(a)).days
-
-
 def newly_critical(snapshots, members):
     """Events when a substitution group lost its last available alternative.
 
@@ -105,11 +100,11 @@ def newly_critical(snapshots, members):
     listed = [{r['NordicArticleNumber'] for r in rows} for _, rows in snapshots]
     stable, out = None, []
     for i, day in enumerate(days):
-        if stable is None or _gap(days[i - 1], day) > MAX_GAP_DAYS:
+        if stable is None or is_gap(days[i - 1], day):
             stable = dict(raw[i])
             continue
         window = range(i, i + CONFIRM_CAPTURES)
-        if window[-1] >= len(days) or any(_gap(days[j], days[j + 1]) > MAX_GAP_DAYS for j in window[:-1]):
+        if window[-1] >= len(days) or any(is_gap(days[j], days[j + 1]) for j in window[:-1]):
             continue
         for g in sorted(set(raw[i]) | {g for g, v in stable.items() if v}):
             now = raw[i].get(g, False)

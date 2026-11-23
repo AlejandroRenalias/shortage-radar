@@ -586,6 +586,26 @@ test('a package that left the list shows when it was listed, not days until the 
   assert.match(env.timelineMarkup(gone, true), /Listalla tilannekuvissamme 3\.11\.2026–18\.11\.2026\./);
 });
 
+test('a notice seen on both sides of a long gap says it was not observed in between', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const spans = [{first_seen:'2024-11-18', last_seen:'2024-11-18'}, {first_seen:'2026-09-15', last_seen:'2026-11-23'}];
+  const e = {NordicArticleNumber:'114636', UnavailableFrom:day(-100), EndingDate:day(100), first_seen:'2024-11-18', last_seen:'2026-11-23', removed_on:null, listed_at_first_capture:true, spans, gaps:[{from:'2024-11-18', to:'2026-09-15', days:666}]};
+  for (const archive of [false, true]) {
+    const html = env.timelineMarkup(e, archive);
+    assert.match(html, /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+    assert.match(html, /On the list in our capture of 15 Sep 2026|On the list in our captures from 15 Sep 2026 to 23 Nov 2026\./);
+    assert.doesNotMatch(html, /from 18 Nov 2024 to 23 Nov 2026/);
+  }
+  assert.doesNotMatch(env.timelineMarkup({...e, gaps:[], spans:[spans[1]], listed_at_first_capture:false}, false), /Not observed/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.timelineMarkup(e, false), /Ei havaintoja välillä 18\.11\.2024–15\.9\.2026\./);
+  const gone = {...e, removed_on:'2026-12-01', last_seen:'2024-11-18', spans:[spans[0]], gaps:[], removed_after_gap:true};
+  vm.runInContext("language='en'", env);
+  assert.match(env.timelineMarkup({...gone, removed_on:'2026-09-15'}, true), /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+});
+
 test('the timeline is one track in time order with evenly spaced markers and the right connectors', () => {
   const [env] = pageEnv(['medicine.js']);
   vm.runInContext("language='en'", env);

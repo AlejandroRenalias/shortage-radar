@@ -46,7 +46,7 @@ function drawDelays(d, snapshotDate) {
   $('delay-visual').innerHTML=(d.meaningful ? `<div class="delay-bars">${values.map(([label,value])=>`<div class="delay-row"><span>${esc(label)}</span><svg viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="1" fill="#e3ece7"/><rect width="${value/max*100}" height="1" fill="#00704b"/></svg><strong>${n(value)}</strong></div>`).join('')}</div>` : '')+`<p>${esc(t.activePast(n(d.active_past_estimate),dateText(snapshotDate),n(d.max_gap_days)))}</p>`;
   $('delay-note').textContent=t.delayMethod(n(d.sample_size),n(d.max_gap_days))+t.delayBias;
   const x=d.excluded || {}; $('how-count').hidden=false;
-  const skipped=[['listed_at_first_capture',t.howFirst],['no_estimate',t.howNoEstimate],['wide_start_window',t.howStart],['wide_removal_window',t.howEnd],['vnr_still_listed',t.howChanged]].filter(([k])=>x[k]).map(([k,f])=>f(n(x[k]))).join(', ');
+  const skipped=[['listed_at_first_capture',t.howFirst],['no_estimate',t.howNoEstimate],['wide_start_window',t.howStart],['wide_removal_window',t.howEnd],['vnr_still_listed',t.howChanged],['gap_in_captures',t.howGap]].filter(([k])=>x[k]).map(([k,f])=>f(n(x[k]))).join(', ');
   $('how-count-text').textContent=t.howText(n(d.sample_size),n(d.removed_total),n(d.max_gap_days),skipped);
   $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3><ul class="examples">`+d.examples.map(e=>`<li><strong>${esc(nameWithStrength(e) || e.vnr)}</strong><span>${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))}, ${esc(t.lastListed)} ${esc(dateText(e.last_seen))}, ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</span></li>`).join('')+'</ul>' : '';
 }
