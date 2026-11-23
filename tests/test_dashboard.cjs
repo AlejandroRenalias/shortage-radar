@@ -769,17 +769,19 @@ const REMOVED = [
 ];
 const CURRENT = [{NordicArticleNumber:'100001', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', atc:'M02AA13', form:'geeli', Company:'Orion', UnavailableFrom:'2026-02-02', EndingDate:'2027-02-01', removed_on:null}];
 // Runs shortages.js against a fake page with the given search; fetch serves current.json and removed.json and records what was asked for.
-async function listPage(search, {failRemoved = false, lang = 'en'} = {}) {
+async function listPage(search, {failRemoved = false, lang = 'en', gate = null, after = null} = {}) {
   const elements = {}, requested = [];
-  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:false, value:'', parentElement:{hidden:false}, dataset:{}, addEventListener(){}, setAttribute(){}, open:false};
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:false, value:'', parentElement:{hidden:false}, dataset:{}, handlers:{}, addEventListener(type, fn){ this.handlers[type] = fn; }, setAttribute(){}, open:false};
   const files = {'current.json': {events: CURRENT, snapshot_date:'2026-11-21'}, 'removed.json': {events: REMOVED}};
-  const fetch = url => { requested.push(url); return failRemoved && url === 'removed.json' ? Promise.reject(Error(url)) : Promise.resolve({ok:true, json:() => Promise.resolve(files[url])}); };
+  const fetch = url => { requested.push(url); return failRemoved && url === 'removed.json' ? Promise.reject(Error(url)) : (url === 'current.json' && gate ? gate : Promise.resolve()).then(() => ({ok:true, json:() => Promise.resolve(files[url])})); };
   const root = {dataset:{}, classList:{remove(){}}};
   const document = {getElementById:get, documentElement:root, querySelector:() => ({checked:false, value:''}), querySelectorAll:() => []};
   const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia:() => ({matches:false}), document, navigator:{language:lang}, localStorage:{getItem:() => lang, setItem(){}}, fetch, location:{search}, history:{replaceState(){}}, URL, setTimeout, clearTimeout});
   vm.runInContext(shared + '\n' + read('shortages.js'), env);
-  for (let i = 0; i < 6; i++) await new Promise(resolve => setTimeout(resolve, 0));
-  return {list:get('list').innerHTML, count:get('result-count').textContent, requested, root, get};
+  const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
+  await settle();
+  if (after) { await after(get); await settle(); }
+  return {settle, list:get('list').innerHTML, count:get('result-count').textContent, requested, root, get};
 }
 
 test('a past package shows when it was last seen in a capture, never as supply returned, and links to its archived page', () => {
@@ -872,4 +874,55 @@ test('a result carries a short impact chip next to the full label, and the compa
   const css = read('style.css');
   for (const selector of ['html[data-searching] .page-head .lead', 'html[data-searching] #search-hint', 'html[data-searching] .crit-callout']) assert.ok(css.includes(selector), selector);
   assert.match(css, /@media \(max-width:719px\)\{\s*html\[data-searching\] \.page-head\{/);
+});
+
+test('nothing is answered, and the archive is not read, while current.json is still loading; early input is kept', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const early = await listPage('', {gate, after: async get => { get('search').value = 'ibuprofeeni'; get('search').handlers.input(); }});
+  assert.deepEqual(early.requested, ['current.json']);
+  assert.doesNotMatch(early.list, /Not on the list|Ibutabs|Earlier on the list|Buranagel/);
+  assert.equal(early.count, '');
+  release();
+  await early.settle();
+  assert.deepEqual(early.requested, ['current.json']);
+  assert.match(early.get('list').innerHTML, /Buranagel/);
+  assert.doesNotMatch(early.get('list').innerHTML, /Ibutabs|Earlier on the list/);
+  assert.equal(early.get('search').value, 'ibuprofeeni');
+});
+
+test('a search that a filter limits says so, keeps the query and offers to clear the filters (?q=burana&status=soon)', async () => {
+  const page = await listPage('?q=burana&status=soon');
+  assert.match(page.list, /No package on the current list matches this search with these filters\./);
+  assert.match(page.list, /id="clear-inline">Clear filters</);
+  assert.doesNotMatch(page.list, /Not on the list\./);
+  assert.deepEqual(page.requested, ['current.json']);
+  assert.equal(page.get('search').value, 'burana');
+  const fi = await listPage('?q=burana&status=soon', {lang:'fi'});
+  assert.match(fi.list, /Nykyisellä listalla ei ole tähän hakuun sopivaa pakkausta näillä suodattimilla\./);
+  assert.match(fi.list, /Tyhjennä suodattimet/);
+  // Without a filter the old messages stay.
+  assert.match((await listPage('?q=zzzz')).list, /Not on the list\./);
+  assert.match((await listPage('?status=soon')).list, /Nothing matches these filters/);
+});
+
+test('the filter panel starts closed on a phone while a search is on, and open without a search, on a wide screen', async () => {
+  const withSearch = await listPage('?q=burana&status=now');
+  assert.equal(withSearch.get('filters').open, false);
+  assert.match(withSearch.get('filters-count').textContent, /\(1\)/);
+  assert.equal((await listPage('?status=now')).get('filters').open, true);
+  assert.equal((await listPage('?q=burana')).get('filters').open, false);
+});
+
+test('the phone chip states only what the register shows, in both languages', () => {
+  const copy = vm.runInContext('copy', context);
+  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
+  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
+  for (const lang of ['en', 'fi']) for (const level of ['substitute', 'critical', 'nogroup', 'vet']) {
+    assert.doesNotMatch(copy[lang]['impactChip_' + level], /usually|yleensä|available|saatavilla|substitute|can give/i, `${lang} ${level}`);
+    setLanguage(context, lang);
+    const html = context.pkgCard({name:'T', UnavailableFrom:'2026-11-06', atc: level === 'vet' ? 'QN02' : 'N02', substitution_group: level === 'nogroup' ? '' : '42', other_packages_count: level === 'substitute' ? 2 : 0}, NOW);
+    assert.ok(html.includes(`<span class="impact-chip">${copy[lang]['impactChip_' + level]}</span>`), `${lang} ${level}`);
+  }
+  setLanguage(context, 'en');
 });

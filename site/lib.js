@@ -220,7 +220,7 @@ function impactLine(e) {
 }
 function impactBadge(e, tag = 'p') {
   const level = impactOf(e);
-  return `<${tag} class="impact impact-${level}">${uiIcon(level, 20)}<span>${esc(impactLine(e))}</span><span class="impact-chip">${esc(copy[language]['impact_' + level])}</span></${tag}>`;
+  return `<${tag} class="impact impact-${level}">${uiIcon(level, 20)}<span>${esc(impactLine(e))}</span><span class="impact-chip">${esc(copy[language]['impactChip_' + level])}</span></${tag}>`;
 }
 // Strengths of one medicine side by side: "10/20/30 mg" when they share a unit, else listed in order.
 function mergedStrengths(list) {
