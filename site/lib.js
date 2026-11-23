@@ -8,6 +8,28 @@ const fold = s => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/
 // Page numbers for a long list: at most seven slots, "…" for a gap; the first and last page, the current page and its neighbours always show.
 const pageCount = (total, size) => Math.max(1, Math.ceil(total / size));
 const clampPage = (page, pages) => Math.min(Math.max(Math.trunc(page) || 1, 1), pages);
+// The page number in the address (?page=3): read it, and write it back without touching other parameters. Page 1 leaves no parameter.
+const pageFromUrl = (search, pages = Infinity) => { try { const v = new URLSearchParams(search).get('page'); return clampPage(/^\d{1,9}$/.test(v || '') ? Number(v) : 1, pages); } catch (_) { return 1; } };
+function pageToUrl(search, page) {
+  const params = new URLSearchParams(search);
+  if (page > 1) params.set('page', String(page)); else params.delete('page');
+  const text = params.toString();
+  return text ? '?' + text : '';
+}
+// The EU list state in the address: ?q=text&match=type&status=when&page=3. Defaults are left out; a value that is not allowed falls back to its default.
+function listFromUrl(search, allowed) {
+  let p; try { p = new URLSearchParams(search); } catch (_) { p = new URLSearchParams(''); }
+  const pick = (key, list) => list.includes(p.get(key)) ? p.get(key) : '';
+  return {q: (p.get('q') || '').trim().slice(0, 100), match: pick('match', allowed.match), status: pick('status', allowed.status), page: pageFromUrl(search)};
+}
+function listToUrl(search, state) {
+  const params = new URLSearchParams(search);
+  for (const [key, value] of [['q', (state.q || '').trim().slice(0, 100)], ['match', state.match], ['status', state.status], ['page', state.page > 1 ? String(state.page) : '']]) {
+    if (value) params.set(key, value); else params.delete(key);
+  }
+  const text = params.toString();
+  return text ? '?' + text : '';
+}
 function pageNumbers(current, pages) {
   if (pages <= 7) return Array.from({length: pages}, (_, i) => i + 1);
   if (current <= 4) return [1, 2, 3, 4, 5, '…', pages];

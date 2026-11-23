@@ -634,3 +634,38 @@ test('page numbers for a long list: seven slots at most, the current page and th
   assert.equal(vm.runInContext("pageCount", context)(0, 12), 1); assert.equal(vm.runInContext("pageCount", context)(12, 12), 1); assert.equal(vm.runInContext("pageCount", context)(13, 12), 2); assert.equal(vm.runInContext("pageCount", context)(123, 12), 11);
   assert.equal(vm.runInContext("clampPage", context)(0, 5), 1); assert.equal(vm.runInContext("clampPage", context)(9, 5), 5); assert.equal(vm.runInContext("clampPage", context)(NaN, 5), 1); assert.equal(vm.runInContext("clampPage", context)(3, 5), 3);
 });
+
+test('the list page number in the address: parse, clamp and build', () => {
+  const from = (search, pages) => vm.runInContext('pageFromUrl', context)(search, pages);
+  const to = (search, page) => vm.runInContext('pageToUrl', context)(search, page);
+  assert.equal(from('?page=3', 11), 3);
+  assert.equal(from('', 11), 1);
+  assert.equal(from('?page=3'), 3);
+  for (const bad of ['?page=', '?page=abc', '?page=0', '?page=-2', '?page=2.5', '?page=1e3', '?page=%20', '?page=3x']) assert.equal(from(bad, 11), 1, bad);
+  assert.equal(from('?page=99', 11), 11);
+  assert.equal(from('?page=99999999999999999999', 11), 1);
+  assert.equal(from('?page=4', 1), 1);
+  assert.equal(to('', 3), '?page=3');
+  assert.equal(to('?page=3', 1), '');
+  assert.equal(to('?page=3', 5), '?page=5');
+  assert.equal(to('?x=1&page=3', 1), '?x=1');
+  assert.equal(to('?x=1', 2), '?x=1&page=2');
+  assert.equal(from(to('?x=1', 7), 11), 7);
+});
+
+test('the list search, filters and page share one address: parse, build and bad values', () => {
+  const allowed = {match: ['exact', 'route-mismatch', 'ingredient-mismatch', 'unmatched'], status: ['ongoing', 'upcoming']};
+  const from = search => plain(vm.runInContext('listFromUrl', context)(search, allowed));
+  const to = (search, state) => vm.runInContext('listToUrl', context)(search, state);
+  assert.deepEqual(from(''), {q: '', match: '', status: '', page: 1});
+  assert.deepEqual(from('?q=hep&match=route-mismatch&status=ongoing&page=2'), {q: 'hep', match: 'route-mismatch', status: 'ongoing', page: 2});
+  assert.deepEqual(from('?match=bogus&status=x&page=abc'), {q: '', match: '', status: '', page: 1});
+  assert.deepEqual(from('?match=&status=&q=%20%20'), {q: '', match: '', status: '', page: 1});
+  assert.equal(from('?q=' + 'a'.repeat(300)).q.length, 100);
+  assert.equal(to('', {q: '', match: '', status: '', page: 1}), '');
+  assert.equal(to('', {q: 'hep', match: 'route-mismatch', status: '', page: 2}), '?q=hep&match=route-mismatch&page=2');
+  assert.equal(to('?match=exact&page=4&x=1', {q: '', match: '', status: 'upcoming', page: 1}), '?x=1&status=upcoming');
+  assert.equal(to('', {q: 'a b&c', match: '', status: '', page: 1}), '?q=a+b%26c');
+  const state = {q: 'a b&c', match: 'exact', status: 'ongoing', page: 3};
+  assert.deepEqual(from(to('', state)), state);
+});
