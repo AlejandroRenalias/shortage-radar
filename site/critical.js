@@ -2,7 +2,10 @@
 const PAGE_SIZE = 12;
 const rows = [...document.querySelectorAll('#eu-body tr[data-type]')];
 const input = $('eu-q'), select = $('eu-type'), status = $('eu-status'), shown = $('eu-shown'), pager = $('eu-pager'), heading = $('eu-table-title');
-let matching = rows, page = pageFromUrl(location.search);   // a reload or a shared link keeps the page
+const allowed = {match: [...select.options].map(o => o.value).filter(Boolean), status: [...status.options].map(o => o.value).filter(Boolean)};
+const start_ = listFromUrl(location.search, allowed);   // a reload or a shared link keeps the search, filters and page together
+input.value = start_.q; select.value = start_.match; status.value = start_.status;
+let matching = rows, page = start_.page;
 let reset = false;   // true once the visitor changes a filter: the next list starts at page 1
 function pageButton(label, target, extra = {}) {
   const b = document.createElement('button');
@@ -14,7 +17,7 @@ function pageButton(label, target, extra = {}) {
 }
 // replaceState keeps Back simple: one page of the list is one history entry, not a dozen.
 function syncUrl() {
-  const search = pageToUrl(location.search, page);
+  const search = listToUrl(location.search, {q: input.value, match: select.value, status: status.value, page});
   if (search !== location.search) history.replaceState(null, '', location.pathname + search + location.hash);
 }
 function render() {

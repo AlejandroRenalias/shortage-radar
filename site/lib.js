@@ -16,6 +16,20 @@ function pageToUrl(search, page) {
   const text = params.toString();
   return text ? '?' + text : '';
 }
+// The EU list state in the address: ?q=text&match=type&status=when&page=3. Defaults are left out; a value that is not allowed falls back to its default.
+function listFromUrl(search, allowed) {
+  let p; try { p = new URLSearchParams(search); } catch (_) { p = new URLSearchParams(''); }
+  const pick = (key, list) => list.includes(p.get(key)) ? p.get(key) : '';
+  return {q: (p.get('q') || '').trim().slice(0, 100), match: pick('match', allowed.match), status: pick('status', allowed.status), page: pageFromUrl(search)};
+}
+function listToUrl(search, state) {
+  const params = new URLSearchParams(search);
+  for (const [key, value] of [['q', (state.q || '').trim().slice(0, 100)], ['match', state.match], ['status', state.status], ['page', state.page > 1 ? String(state.page) : '']]) {
+    if (value) params.set(key, value); else params.delete(key);
+  }
+  const text = params.toString();
+  return text ? '?' + text : '';
+}
 function pageNumbers(current, pages) {
   if (pages <= 7) return Array.from({length: pages}, (_, i) => i + 1);
   if (current <= 4) return [1, 2, 3, 4, 5, '…', pages];

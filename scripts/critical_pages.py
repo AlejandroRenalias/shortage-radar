@@ -138,7 +138,7 @@ def critical_page(data):
 {notes}
 <details class="eu-fold eu-charts-fold" id="eu-charts-fold" open><summary>Exact matches by ATC group and route</summary><div class="eu-charts">{charts.group_bars(rows)}{charts.route_row(rows)}</div></details></section>
 <section class="wrap eu-list" aria-labelledby="eu-table-title"><h2 id="eu-table-title" tabindex="-1">Shortage packages</h2>
-<form class="eu-filter needs-js" id="eu-filter"><div class="eu-field eu-search"><label for="eu-q">Search</label><input id="eu-q" type="search" autocomplete="off" maxlength="100" placeholder="Name, substance, ATC code, company or VNR"></div>
+<form class="eu-filter needs-js" id="eu-filter" autocomplete="off"><div class="eu-field eu-search"><label for="eu-q">Search</label><input id="eu-q" type="search" autocomplete="off" maxlength="100" placeholder="Name, substance, ATC code, company or VNR"></div>
 <div class="eu-field"><label for="eu-type">Match</label><select id="eu-type"><option value="">All matches</option><option value="exact">{E(TYPE_NAMES['exact'])}</option><option value="route-mismatch">{E(TYPE_NAMES['route-mismatch'])}</option><option value="ingredient-mismatch">{E(TYPE_NAMES['ingredient-mismatch'])}</option><option value="unmatched">{E(TYPE_NAMES['unmatched'])}</option></select></div>
 <div class="eu-field"><label for="eu-status">Status</label><select id="eu-status"><option value="">Ongoing and starts later</option><option value="ongoing">Ongoing</option><option value="upcoming">Starts later</option></select></div>
 <p class="note" id="eu-shown" role="status" aria-live="polite"></p></form>
