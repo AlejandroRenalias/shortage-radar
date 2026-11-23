@@ -33,7 +33,8 @@ def package_shards(events, meta, groups=None):
 def summary(current, meta):
     """Counts by raw form, by ATC prefix (3 letters) and by company, the longest running and the newest current packages."""
     started = sorted((e for e in current if e['UnavailableFrom'] <= meta['snapshot_date']), key=lambda e: e['UnavailableFrom'])
-    return dict(meta, total=len(current), company_count=len({e['Company'] for e in current}),
+    soon = sum(e['UnavailableFrom'] > meta['snapshot_date'] for e in current)
+    return dict(meta, total=len(current), short_now=len(current) - soon, expected_soon=soon, company_count=len({e['Company'] for e in current}),
                 forms=dict(Counter(e.get('form', '') for e in current)),
                 atc=dict(Counter((e.get('atc') or '')[:3] for e in current)),
                 companies=dict(Counter(e['Company'] for e in current)), impact=counts(current),

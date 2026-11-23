@@ -31,8 +31,9 @@ function triageMarkup(counts) {
 }
 function renderHome() {
   const t = copy[language], hero = $('hero-line'), now = todayUTC();
-  const n = data ? data.total : Number(hero.dataset.count);
-  if (Number.isFinite(n)) hero.textContent = t.heroLine(n);
+  const n = data ? data.short_now : Number(hero.dataset.count), soon = data ? data.expected_soon : Number(hero.dataset.soon);
+  if (Number.isFinite(n)) hero.textContent = t.heroLine(n, soon || 0);
+  $('hero-label').textContent = t.heroReading;
   const counts = impactCounts();
   if (Number.isFinite(counts.substitute)) {
     $('hero-answer').textContent = t.heroAnswer(counts.substitute);

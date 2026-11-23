@@ -89,6 +89,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .hero .eu-hero-art{display:block;height:72px}
 .hero .home-notes{margin:var(--s3) 0 0}
 .hero h1#hero-line{font-size:clamp(1.75rem,1.3rem + 2vw,2.75rem);max-width:20ch;margin-bottom:var(--s3)}
+.hero-label{color:var(--muted);font-size:1rem;margin:0 0 var(--s1)}
 .hero-answer{font-size:clamp(1.125rem,1.05rem + .4vw,1.375rem);font-weight:400;line-height:1.35;max-width:34ch;margin:0 0 var(--s4)}
 .hero .lead{margin:var(--s4) 0 0;font-size:1rem;max-width:52ch}
 .home-section{padding-block:var(--s5)}
@@ -243,7 +244,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .toc li{break-inside:avoid}
 .toc-title{font-weight:500;margin:0 0 4px}
 .toc ul{list-style:none;margin:0;padding:0}
-.toc a{display:flex;align-items:center;min-height:44px;font-weight:400}
+.toc a{display:flex;align-items:center;min-height:44px;font-weight:400;overflow-wrap:anywhere}
 @media (max-width:899px){.toc{background:none;padding:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0}.toc ul{columns:2;column-gap:16px}.toc a{font-size:.9375rem;font-weight:400}}
 .prose{max-width:68ch}
 .prose section{padding-block:20px;border-top:1px solid var(--line);scroll-margin-top:calc(var(--header-h) + 8px)}

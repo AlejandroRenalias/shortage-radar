@@ -59,10 +59,15 @@ def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
 
 def test_home_headline_carries_the_count_and_search_goes_to_the_list():
     html = render_pages(749)['index.html']
-    assert 'Fimea lists 749 packages as short today.' in html
+    assert 'Fimea: 749 short now.' in html
     assert 'data-count="749"' in html
     assert 'action="shortages.html" method="get"' in html and 'name="q"' in html
-    assert 'Fimea lists 1 package as short today.' in render_pages(1)['index.html']
+    assert 'Fimea: 1 short now.' in render_pages(1)['index.html']
+    # Packages expected within two weeks are named apart from the ones short now.
+    html = render_pages(714, soon=43)['index.html']
+    assert '>Fimea: 714 short now, 43 more expected within 2 weeks.</h1>' in html and 'data-soon="43"' in html
+    assert html.index('id="hero-label"') < html.index('id="hero-answer"')
+    assert 'Our reading of Fimea’s register, not a stock check.' in html
 
 
 def test_404_page_uses_absolute_paths_for_the_project_site():
