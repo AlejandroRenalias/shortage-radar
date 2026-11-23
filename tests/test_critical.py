@@ -164,7 +164,7 @@ def test_upcoming_notices_are_counted_apart_from_ongoing_ones():
     assert [r['status'] for r in rows if r['match_type'] == 'exact'] == ['ongoing', 'upcoming', 'upcoming']   # ongoing first
     page = render_critical({'eu': EU, 'rows': rows, 'counts': counts, 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {}})['critical.html']
     assert 'Fimea file saved' in page and '>23 Nov 2026<' in page and 'Starts later' in page and 'on 30 Nov 2026' in page and 'on 7 Dec 2026' in page
-    assert 'Exact matches that start later' in page and 'checked that start later: 2 exact match' in page
+    assert 'Starts later.' in page and 'has not started yet (2 exact match' in page and '2 more start later.' in page
     assert 'data-status="upcoming"' in page and 'id="eu-status"' in page
 
 
@@ -444,8 +444,8 @@ def test_headline_tile_and_atc_chart_count_exact_matches_only():
     checked, exact = sum(counts['ongoing'][t] for t in C.TYPES), counts['ongoing']['exact']
     assert checked > exact > 0
     page = render_critical(_two_row_page_data(rows))['critical.html']
-    assert f'<span class="eu-num">{exact:,}</span><span class="eu-tile-label">Ongoing exact matches</span>' in page
-    assert f'of {checked:,} ongoing packages checked' in page
+    assert f'<span class="eu-num">{exact:,}</span><span class="eu-tile-label">Exact match</span>' in page      # a box keeps the number and a short label
+    assert f'Of {checked:,} ongoing packages checked' in page and 'class="eu-info"' in page                 # the longer text sits behind the "i"
     groups = page[page.index('<caption>Exact matches by ATC group'):]
     groups = groups[:groups.index('</table>')]
     assert sum(int(m) for m in re.findall(r'<td>(\d+)</td>', groups)) == exact     # ongoing and starts-later columns add up to the exact matches
@@ -471,3 +471,8 @@ def test_timeline_strip_hatches_a_notice_that_vanished_for_a_capture():
     assert 'Not listed in the captures 2026-10-01 to 2026-10-10: unknown' in svg
     steady = dict(n, unseen=[])
     assert 'class="eu-tl-gap"><title>' not in charts.timeline_strip([steady], '2026-09-15', '2026-11-23')
+
+
+def test_long_urls_wrap_in_the_notes_and_other_credit_text():
+    css = (Path(__file__).resolve().parents[1] / 'site/style.css').read_text(encoding='utf-8')
+    assert '.eu-notes,.eu-info-text,.eu-list,.eu-more,.eu-code-page,.eu-facts{overflow-wrap:anywhere}' in css

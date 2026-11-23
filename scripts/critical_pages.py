@@ -57,9 +57,9 @@ def notice_row(r):
     product = ', '.join(r.get('product_routes') or []) or 'not given'
     route = '<dt>Route</dt><dd>not known</dd>' if r['match_type'] == 'unmatched' else f'<dt>Product route</dt><dd>{E(product)}</dd><dt>List route</dt><dd>{E(r.get("list_route") or "—")}</dd>'
     tag = '' if r['match_type'] == 'unmatched' else f'<span class="eu-route-line">{charts.route_label(r.get("product_routes"))}</span>'
-    more = (f'<details class="eu-fold eu-row-more"><summary>Details</summary><p class="note">{E(r["note"])}</p><dl class="eu-facts"><dt>Company</dt><dd>{E(r.get("company", ""))}</dd>{route}<dt>VNR</dt><dd>{E(r["vnr"])}</dd></dl></details>')
+    more = (f'<details class="eu-fold eu-row-more"><summary>Details</summary><p class="note">{E(r["note"])}</p><dl class="eu-facts"><dt>Company</dt><dd>{E(r.get("company", ""))}</dd><dt class="eu-atc-fact">ATC code</dt><dd class="eu-atc-fact">{atc}</dd><dt>Start</dt><dd>{E(D(r["start"]))}</dd>{route}<dt>VNR</dt><dd>{E(r["vnr"])}</dd></dl></details>')
     return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}"><td data-label="Medicine">{name_cell(r)}{tag}{more}</td>'
-            f'<td data-label="ATC code">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Estimated end">{E(D(r.get("end")))}</td></tr>')
+            f'<td data-label="ATC code" class="eu-col-atc">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Estimated end"><span class="eu-end">{E(D(r.get("end")))}</span></td></tr>')
 
 
 def downloads():
@@ -77,8 +77,28 @@ def plural(n, word):
     return f'{n:,} {word}' if n == 1 else f'{n:,} {word}s'
 
 
-def tile(number, label, sub='', small=False):
-    return f'<li class="eu-tile"><span class="eu-num{" eu-num-date" if small else ""}">{number}</span><span class="eu-tile-label">{label}</span>' + (f'<span class="eu-tile-sub">{sub}</span>' if sub else '') + '</li>'
+INFO_ICON = '<svg class="uicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>'
+
+
+def info(label, text):
+    """A small "i" that opens a short note in place; it works without scripts and with the keyboard."""
+    return f'<details class="eu-info"><summary aria-label="About: {E(label)}">{INFO_ICON}</summary><div class="eu-info-text">{text}</div></details>'
+
+
+def tile(number, label, sub='', small=False, more=''):
+    """A key number with its short label. `sub` is a short line shown under it; `more` is a longer explanation that sits behind the "i"."""
+    return (f'<li class="eu-tile"><span class="eu-num{" eu-num-date" if small else ""}">{number}</span><span class="eu-tile-label">{label}</span>'
+            + (info(label, more) if more else '') + (f'<span class="eu-tile-sub">{sub}</span>' if sub else '') + '</li>')
+
+
+def tile_more(t, ongoing, upcoming, checked):
+    """The note behind the "i" of one match box."""
+    text = E(TYPE_EXPLAINED[t])
+    if t == 'exact':
+        text += f' Of {plural(checked, "ongoing package")} checked against the EU list, {ongoing["exact"]:,} are exact.'
+        if upcoming['exact']:
+            text += f' {upcoming["exact"]:,} more start later.'
+    return text
 
 
 def split_text(counts_by_type):
@@ -89,36 +109,43 @@ def critical_page(data):
     meta, rows, counts = data['eu']['meta'], data['rows'], data['counts']
     ongoing, upcoming = counts['ongoing'], counts['upcoming']
     checked_ongoing, checked_upcoming = sum(ongoing[t] for t in TYPES), sum(upcoming[t] for t in TYPES)
-    tiles = ''.join((
-        tile(f'{ongoing["exact"]:,}', 'Ongoing exact matches', f'of {plural(checked_ongoing, "ongoing package")} checked against the EU list'),
-        tile(f'{upcoming["exact"]:,}', 'Exact matches that start later', (f'of {plural(checked_upcoming, "package")} checked that start later: {split_text(upcoming)}' if checked_upcoming else 'None listed')),
-        tile(E(D(data['snapshot_date'])), 'Fimea file saved', 'Date of the data on this page', True)))
+    tiles = ''.join(tile(f'{ongoing[t]:,}', E(TYPE_NAMES[t]), more=tile_more(t, ongoing, upcoming, checked_ongoing)) for t in TYPES)
     flag = counts['disagree']
     flag_only = ongoing['flag-only'] + upcoming['flag-only']
-    flag_line = (f'<p class="note">Fimea’s own EU-critical flag differs from this match for {plural(flag, "ongoing package")}'
+    flag_line = (f'<p><strong>Fimea’s flag differs.</strong> Fimea’s own EU-critical flag differs from this match for {plural(flag, "ongoing package")}'
                  + (f', and Fimea flags {flag_only:,} more whose ATC code is not on the list' if flag_only else '') + '. The row note says so.</p>')
+    if checked_upcoming:
+        later_line = (f'<p><strong>Starts later.</strong> {plural(checked_upcoming, "checked package")} {"has" if checked_upcoming == 1 else "have"} a notice that has not started yet ({split_text(upcoming)}). '
+                      'They are in the list, marked “Starts later”, and are not in the numbers above.</p>')
+    else:
+        later_line = '<p><strong>Starts later.</strong> No notice that starts later is listed. Such a notice would be marked “Starts later” and kept out of the numbers above.</p>'
+    notes = (f'<details class="eu-fold eu-notes"><summary>Notes: not medical advice, sources, data date</summary>'
+             f'<p><strong>This is not medical advice.</strong> A listing does not tell you whether a medicine is available at your pharmacy. Ask a pharmacist or doctor.</p>'
+             f'{later_line}{flag_line}'
+             '<p><strong>Estimated end.</strong> End dates are the company’s estimates. Fimea’s file keeps no history and its dates can change.</p>'
+             f'<p><strong>Data.</strong> Fimea file saved <time datetime="{E(data["snapshot_date"])}">{E(D(data["snapshot_date"]))}</time>.</p>'
+             f'{source_block(meta, data["snapshot_date"], data["source_metadata"])}'
+             f'<p class="note"><a href="{FILE["methods"]}">How the match works</a> · <a href="{FILE["methods"]}#types">What the match types mean</a> · These pages are in English only.</p></details>')
     body_rows = ''.join(notice_row(r) for r in rows) or '<tr><td colspan="5">No shortage packages match the EU list today.</td></tr>'
     codes = ''.join(
         f'<li><a href="{code_file(a)}"><span class="eu-code">{E(a)}</span> {E(row["description"].title())}</a>'
         + (f' <span class="note">{data["history"][a]["count"]:,} in archive</span>' if a in data['history'] else '') + '</li>'
         for a, row in sorted(data['eu']['rows'].items()))
     body = f'''<div class="wrap page-head eu-head"><div><h1>Critical medicines in Finland</h1>
-<p class="lead">Medicines on the EU critical list (version {E(meta['version'])}) that Fimea lists as short in Finland.</p>
-<p class="eu-advice"><strong>This is not medical advice.</strong> A listing does not tell you whether a medicine is available at your pharmacy. Ask a pharmacist or doctor. <a href="{FILE['methods']}">How the match works</a></p></div>{charts.hero_art()}</div>
-<section class="wrap" aria-labelledby="eu-counts-title"><h2 id="eu-counts-title" class="sr-only">Key numbers</h2>
+<p class="lead">Medicines on the EU critical list (version {E(meta['version'])}) that Fimea lists as short in Finland.</p></div>{charts.hero_art()}</div>
+<section class="wrap" aria-labelledby="eu-counts-title"><h2 id="eu-counts-title" class="eu-counts-title">Ongoing packages by match</h2>
 <ul class="eu-tiles">{tiles}</ul>
-<div class="eu-charts">{charts.match_bars(ongoing, TYPES, TYPE_NAMES)}{charts.group_bars(rows)}</div>{charts.route_row(rows)}
-{flag_line}<p class="note"><a href="{FILE['methods']}#types">What the match types mean</a></p></section>
-<section class="wrap eu-list" aria-labelledby="eu-table-title"><h2 id="eu-table-title">Shortage packages</h2>
+{notes}
+<details class="eu-fold eu-charts-fold" id="eu-charts-fold" open><summary>Exact matches by ATC group and route</summary><div class="eu-charts">{charts.group_bars(rows)}{charts.route_row(rows)}</div></details></section>
+<section class="wrap eu-list" aria-labelledby="eu-table-title"><h2 id="eu-table-title" tabindex="-1">Shortage packages</h2>
 <form class="eu-filter needs-js" id="eu-filter"><div class="eu-field eu-search"><label for="eu-q">Search</label><input id="eu-q" type="search" autocomplete="off" maxlength="100" placeholder="Name, substance, ATC code, company or VNR"></div>
 <div class="eu-field"><label for="eu-type">Match</label><select id="eu-type"><option value="">All matches</option><option value="exact">{E(TYPE_NAMES['exact'])}</option><option value="route-mismatch">{E(TYPE_NAMES['route-mismatch'])}</option><option value="ingredient-mismatch">{E(TYPE_NAMES['ingredient-mismatch'])}</option><option value="unmatched">{E(TYPE_NAMES['unmatched'])}</option></select></div>
 <div class="eu-field"><label for="eu-status">Status</label><select id="eu-status"><option value="">Ongoing and starts later</option><option value="ongoing">Ongoing</option><option value="upcoming">Starts later</option></select></div>
-<p class="note" id="eu-shown" role="status"></p></form>
+<p class="note" id="eu-shown" role="status" aria-live="polite"></p></form>
 <div class="eu-scroll"><table class="eu-table"><thead><tr><th scope="col">Medicine</th><th scope="col">ATC code</th><th scope="col">Match</th><th scope="col">Status</th><th scope="col">Estimated end</th></tr></thead><tbody id="eu-body">{body_rows}</tbody></table></div>
-<p class="note">Estimated end dates are the company’s estimates. Fimea’s file keeps no history and its dates can change.</p></section>
+<nav class="eu-pager needs-js" id="eu-pager" aria-label="Pages of shortage packages" hidden></nav></section>
 <section class="wrap eu-more" aria-labelledby="eu-dl-title"><h2 id="eu-dl-title">Download</h2>{downloads()}
-<details class="eu-fold"><summary>All {len(data['eu']['rows'])} codes on the EU list</summary><ul class="eu-codes">{codes}</ul></details>
-{source_block(meta, data['snapshot_date'], data['source_metadata'])}<p class="note">These pages are in English only.</p></section>'''
+<details class="eu-fold"><summary>All {len(data['eu']['rows'])} codes on the EU list</summary><ul class="eu-codes">{codes}</ul></details></section>'''
     return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['critical'], 'Critical medicines in Finland | Shortage Radar',
                     'Medicines on the EU Union list of critical medicines that Fimea lists as short in Finland, matched by ATC code and route.', 'critical.js'))
 
@@ -166,9 +193,10 @@ def history_block(code, h, archive_start, snapshot_date):
     timeline = f'<ol class="eu-timeline">{"".join(shown)}</ol>'
     if rest:
         timeline += f'<details class="eu-fold"><summary>Show {len(rest):,} earlier {"shortage" if len(rest) == 1 else "shortages"}</summary><ol class="eu-timeline">{"".join(rest)}</ol></details>'
-    lines.append('<p class="note">Newest first. “Start unknown” means the notice was already listed in the first capture, or the capture before its first sighting is more than 14 days earlier.</p>')
+    lines.append('<p class="note">Newest first. “Start unknown”: see “How to read this history” below.</p>')
     lines.append(timeline)
     lines.append('<details class="eu-fold"><summary>How to read this history</summary>' + measured +
+                 '<p class="note">“Start unknown” means the notice was already listed in the first capture, or the capture before its first sighting is more than 14 days earlier.</p>' +
                  '<p class="note">A notice that Fimea edited, or that was missing from some captures and came back, is counted as one shortage. '
                  'The archive is made of captures of Fimea’s file, not daily readings; before 21 Nov 2026 the captures come from the Internet Archive and have gaps. '
                  'A gap in the captures is unknown time: it is not a new start and not an end. The start of a shortage is unknown when it was already listed in the first capture, or when the capture before its first sighting is more than 14 days earlier. '
@@ -213,9 +241,10 @@ def code_page(code, row, data):
 <section aria-labelledby="h-list"><h2 id="h-list" class="sr-only">EU list row</h2><details class="eu-fold"><summary>EU list row</summary>
 <dl class="eu-facts"><dt>ATC code</dt><dd>{E(code)}</dd><dt>Substance on the list</dt><dd>{E(row['description'])}</dd><dt>Routes on the list</dt><dd>{E(row['route'])}</dd>
 <dt>Date of inclusion</dt><dd>{E(D(row['included']))}</dd><dt>List version</dt><dd>{E(meta['version'])} ({E(meta['reference'])}, {E(D(meta['published']))})</dd><dt>Row in the EMA file</dt><dd>{row['row']}</dd></dl></details></section>
-<section><p class="note"><strong>This is not medical advice.</strong> <a href="{FILE['methods']}">How the match works</a></p>
+<section><details class="eu-fold eu-notes"><summary>Notes: not medical advice, sources</summary>
+<p><strong>This is not medical advice.</strong> A listing does not tell you whether a medicine is available at your pharmacy. Ask a pharmacist or doctor. <a href="{FILE['methods']}">How the match works</a></p>
 <p class="note">Sources: European Medicines Agency (EU list) and Fimea (shortages, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>). We selected, joined and changed the data.</p>
-<details class="eu-fold"><summary>Full source credit</summary><p class="note">{E(credit(meta, data['source_metadata']))}</p></details>{downloads()}</section></div>'''
+<details class="eu-fold"><summary>Full source credit</summary><p class="note">{E(credit(meta, data['source_metadata']))}</p></details></details>{downloads()}</section></div>'''
     return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(code_file(code), f'{title} | Critical medicines | Shortage Radar',
                     f'Fimea shortage notices, the EU list row and the archive history for ATC code {code}.'))
 

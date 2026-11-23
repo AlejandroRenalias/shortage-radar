@@ -616,3 +616,21 @@ test('the form shelf counts packages by form and links to the list filtered by t
   for (const lang of ['en', 'fi']) for (const kind of ['injection', 'inhaler', 'suppository']) assert.match(copy[lang]['shelf_' + kind], /\u00ad/, `${lang} ${kind}`);
   assert.match(fs.readFileSync('site/style.css', 'utf8'), /\.shelf-name\{[^}]*overflow-wrap:normal[^}]*hyphens:auto/);
 });
+
+test('page numbers for a long list: seven slots at most, the current page and the ends always show', () => {
+  const nums = (current, pages) => plain(context.pageNumbers(current, pages));
+  assert.deepEqual(nums(1, 1), [1]);
+  assert.deepEqual(nums(2, 5), [1, 2, 3, 4, 5]);
+  assert.deepEqual(nums(4, 7), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(nums(1, 11), [1, 2, 3, 4, 5, '…', 11]);
+  assert.deepEqual(nums(4, 11), [1, 2, 3, 4, 5, '…', 11]);
+  assert.deepEqual(nums(6, 11), [1, '…', 5, 6, 7, '…', 11]);
+  assert.deepEqual(nums(8, 11), [1, '…', 7, 8, 9, 10, 11]);
+  assert.deepEqual(nums(11, 11), [1, '…', 7, 8, 9, 10, 11]);
+  for (let pages = 1; pages <= 30; pages++) for (let current = 1; current <= pages; current++) {
+    const list = nums(current, pages);
+    assert.ok(list.length <= 7 && list.includes(current) && list.includes(1) && list.includes(pages), `${current}/${pages}`);
+  }
+  assert.equal(vm.runInContext("pageCount", context)(0, 12), 1); assert.equal(vm.runInContext("pageCount", context)(12, 12), 1); assert.equal(vm.runInContext("pageCount", context)(13, 12), 2); assert.equal(vm.runInContext("pageCount", context)(123, 12), 11);
+  assert.equal(vm.runInContext("clampPage", context)(0, 5), 1); assert.equal(vm.runInContext("clampPage", context)(9, 5), 5); assert.equal(vm.runInContext("clampPage", context)(NaN, 5), 1); assert.equal(vm.runInContext("clampPage", context)(3, 5), 3);
+});
