@@ -458,7 +458,7 @@ html:not(.js) .needs-js{display:none}
 .eu-scroll{margin:var(--s3) 0}
 .eu-table{width:100%;border-collapse:collapse;font-size:.9375rem;font-variant-numeric:tabular-nums}
 .eu-table th,.eu-table td{text-align:left;vertical-align:top;padding:10px 10px 10px 0;border-top:1px solid var(--line)}
-.eu-table td>span{display:block}.eu-table .eu-note,.eu-table .note{margin-top:4px;color:var(--muted);font-size:.875rem}
+.eu-table td span{display:block}.eu-table .eu-note,.eu-table .note{margin-top:4px;color:var(--muted);font-size:.875rem}
 .eu-route b{font-weight:400;color:var(--muted)}
 .eu-codes{columns:2;column-gap:var(--s5);list-style:none;padding:0;margin:var(--s3) 0}.eu-codes li{break-inside:avoid;padding:4px 0}.eu-code{font-variant-numeric:tabular-nums}
 .eu-facts{display:grid;grid-template-columns:minmax(0,1fr);gap:2px var(--s4);margin:var(--s3) 0}.eu-facts dt{color:var(--muted);font-size:.9375rem;margin-top:var(--s2)}.eu-facts dd{margin:0;color:var(--ink)}
@@ -477,6 +477,7 @@ html:not(.js) .needs-js{display:none}
   .eu-table tr{padding:var(--s3) 0;border-top:1px solid var(--line-strong)}
   .eu-table td{border:0;padding:3px 0;display:grid;grid-template-columns:7.5rem 1fr;gap:var(--s2)}
   .eu-table td::before{content:attr(data-label);color:var(--muted);font-size:.875rem}
+  .eu-table td>span{min-width:0;overflow-wrap:break-word}.eu-table td::before{min-width:0}
   .eu-table td:first-child{grid-template-columns:1fr}.eu-table td:first-child::before{display:none}
   .eu-codes{columns:1}
 }

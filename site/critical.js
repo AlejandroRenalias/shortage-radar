@@ -7,6 +7,6 @@ function filter() {
   rows.forEach(tr => { const show = (!type || tr.dataset.type === type) && (!when || tr.dataset.status === when) && (!q || fold(tr.dataset.text).includes(q)); tr.hidden = !show; if (show) n++; });
   shown.textContent = `Showing ${n} of ${rows.length}.`;
 }
-// These pages are in English only, whatever language the visitor chose for the rest of the site.
-start(() => { document.documentElement.lang = 'en'; });
+// The pages are in English only; their content carries lang="en", so the page language the visitor chose stays on the menu and footer.
+start();
 if (input) { [input, select, status].forEach(el => el.addEventListener(el === input ? 'input' : 'change', filter)); filter(); }

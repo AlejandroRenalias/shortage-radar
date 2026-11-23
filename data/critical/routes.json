@@ -1,5 +1,5 @@
 {
- "note": "Fimea Antoreitti id to the EU list route terms it satisfies. A route with no EU term has an empty list. \"injection\" routes also satisfy \"parenteral use\". English labels are plain-language glosses, not Fimea text. Ids not in this table are treated as unclear.",
+ "note": "Fimea Antoreitti id to the EU list route terms it satisfies. A route with no EU term has an empty list. \"parenteral\" routes (injection, infusion or implantation into the body) also satisfy \"parenteral use\"; a route is only marked parenteral when the route itself says so. Lesion application (1033) is not assumed to be an injection. English labels are plain-language glosses, not Fimea text. Ids not in this table are treated as unclear.",
  "routes": {
   "1055": {
    "fi": "Suun kautta",
@@ -7,7 +7,7 @@
    "eu": [
     "oral use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1047": {
    "fi": "Laskimoon",
@@ -16,7 +16,7 @@
     "intravenous use",
     "intravascular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1069": {
    "fi": "Ihon alle",
@@ -24,7 +24,7 @@
    "eu": [
     "subcutaneous use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1036": {
    "fi": "Lihakseen",
@@ -32,13 +32,13 @@
    "eu": [
     "intramuscular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1002": {
    "fi": "Iholle",
    "en": "on the skin",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1020": {
    "fi": "Inhalaatioon",
@@ -46,7 +46,7 @@
    "eu": [
     "inhalation use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1052": {
    "fi": "Sumutukseen",
@@ -54,7 +54,7 @@
    "eu": [
     "inhalation use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1053": {
    "fi": "Silmän pinnalle",
@@ -62,7 +62,7 @@
    "eu": [
     "ocular use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "15": {
    "fi": "Ophthalmic",
@@ -70,7 +70,7 @@
    "eu": [
     "ocular use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1073": {
    "fi": "Ihon läpi",
@@ -78,7 +78,7 @@
    "eu": [
     "transdermal use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1070": {
    "fi": "Kielen alle",
@@ -86,7 +86,7 @@
    "eu": [
     "sublingual use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1051": {
    "fi": "Nenään",
@@ -94,7 +94,7 @@
    "eu": [
     "nasal use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1000": {
    "fi": "Korvaan",
@@ -102,7 +102,7 @@
    "eu": [
     "auricular use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1064": {
    "fi": "Peräsuoleen",
@@ -110,7 +110,7 @@
    "eu": [
     "rectal use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1048": {
    "fi": "Virtsarakkoon",
@@ -118,7 +118,7 @@
    "eu": [
     "intravesical use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1046": {
    "fi": "Kohdun sisään",
@@ -126,7 +126,7 @@
    "eu": [
     "intrauterine use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1015": {
    "fi": "Hemodialyysiin",
@@ -134,7 +134,7 @@
    "eu": [
     "haemodialysis use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1007": {
    "fi": "Henkitorveen tai keuhkoputkiin",
@@ -142,7 +142,7 @@
    "eu": [
     "endotracheopulmonary use"
    ],
-   "injection": false
+   "parenteral": false
   },
   "1008": {
    "fi": "Epiduraalitilaan",
@@ -150,7 +150,7 @@
    "eu": [
     "epidural use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1044": {
    "fi": "Selkäydinnesteeseen",
@@ -158,7 +158,7 @@
    "eu": [
     "intrathecal use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1085": {
    "fi": "Takimmaiseen pikkuaivo-selkäydinsammioon",
@@ -166,7 +166,7 @@
    "eu": [
     "intracisternal use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1060": {
    "fi": "Hermoa ympäröivään kudokseen",
@@ -174,7 +174,7 @@
    "eu": [
     "perineural use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1024": {
    "fi": "Nivelen sisään",
@@ -182,7 +182,7 @@
    "eu": [
     "intraarticular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1059": {
    "fi": "Niveltä ympäröivään kudokseen",
@@ -190,7 +190,7 @@
    "eu": [
     "periarticular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1025": {
    "fi": "Limapussin sisään",
@@ -198,7 +198,7 @@
    "eu": [
     "intrabursal use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1040": {
    "fi": "Vatsaonteloon",
@@ -206,7 +206,7 @@
    "eu": [
     "intraperitoneal use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1041": {
    "fi": "Keuhkopussiin",
@@ -214,7 +214,7 @@
    "eu": [
     "intrapleural use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1023": {
    "fi": "Valtimoon",
@@ -223,15 +223,16 @@
     "intraarterial use",
     "intravascular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1030": {
    "fi": "Sepelvaltimoon",
    "en": "into a coronary artery",
    "eu": [
-    "intracoronary use"
+    "intracoronary use",
+    "intravascular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1026": {
    "fi": "Sydämen sisään",
@@ -239,7 +240,7 @@
    "eu": [
     "intracardiac use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1031": {
    "fi": "Ihon sisään",
@@ -247,7 +248,7 @@
    "eu": [
     "intradermal use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1038": {
    "fi": "Luuytimeen",
@@ -255,7 +256,7 @@
    "eu": [
     "intraosseous use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1045": {
    "fi": "Kasvaimeen",
@@ -263,7 +264,7 @@
    "eu": [
     "intratumoral use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1033": {
    "fi": "Kudosvaurioon, leesioon",
@@ -271,7 +272,7 @@
    "eu": [
     "intralesional use"
    ],
-   "injection": true
+   "parenteral": false
   },
   "1068": {
    "fi": "Sidekalvon alle",
@@ -279,7 +280,7 @@
    "eu": [
     "subconjunctival use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1037": {
    "fi": "Silmän sisään",
@@ -287,7 +288,7 @@
    "eu": [
     "intraocular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1049": {
    "fi": "Silmän lasiaiseen",
@@ -295,7 +296,7 @@
    "eu": [
     "intraocular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1092": {
    "fi": "Silmän etukammion sisään",
@@ -303,7 +304,7 @@
    "eu": [
     "intraocular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1097": {
    "fi": "Verkkokalvoon",
@@ -311,223 +312,223 @@
    "eu": [
     "intraocular use"
    ],
-   "injection": true
+   "parenteral": true
   },
   "1056": {
    "fi": "Suuonteloon",
    "en": "in the mouth",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1067": {
    "fi": "Kertavaleluun paikallisesti",
    "en": "single local instillation",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1075": {
    "fi": "Emättimeen",
    "en": "in the vagina",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1079": {
    "fi": "Infiltraatio",
    "en": "infiltration",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "17": {
    "fi": "Topical",
    "en": "on the skin or a surface",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1090": {
    "fi": "Kehonulkoisesti",
    "en": "outside the body",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1009": {
    "fi": "Kudosvaurion päälle",
    "en": "on a tissue injury",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1063": {
    "fi": "Kertavaleluun",
    "en": "single instillation",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1054": {
    "fi": "Silmiin ja sieraimiin",
    "en": "in the eyes and nostrils",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1081": {
    "fi": "Keuhkoon",
    "en": "into the lung",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1012": {
    "fi": "Maha-suolikanavaan",
    "en": "into the gut",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1013": {
    "fi": "Mahalaukkuun",
    "en": "into the stomach",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1021": {
    "fi": "Suoleen",
    "en": "into the intestine",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1086": {
    "fi": "Posken limakalvolle",
    "en": "on the cheek lining",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1089": {
    "fi": "Limakalvon alle",
    "en": "under a mucous membrane",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1003": {
    "fi": "Hammaslääkintään",
    "en": "dental use",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1074": {
    "fi": "Virtsaputkeen",
    "en": "into the urethra",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1057": {
    "fi": "Nieluun",
    "en": "in the throat",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1050": {
    "fi": "Kurkunpäähän",
    "en": "into the larynx",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1027": {
    "fi": "Paisuvaiskudokseen",
    "en": "into erectile tissue",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1098": {
    "fi": "Aivokammioon",
    "en": "into a brain ventricle",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1096": {
    "fi": "Rauhaseen",
    "en": "into a gland",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1091": {
    "fi": "Luukalvolle",
    "en": "on the bone membrane",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1133": {
    "fi": "Aivokuorukkaan",
    "en": "into the brain cortex",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1034": {
    "fi": "Imusuoneen",
    "en": "into a lymph vessel",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1005": {
    "fi": "Kohdunkaulakanavaan",
    "en": "into the cervical canal",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1004": {
    "fi": "Kastoon",
    "en": "dipping",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1080": {
    "fi": "Implantointiin",
    "en": "implantation",
    "eu": [],
-   "injection": false
+   "parenteral": true
   },
   "1095": {
    "fi": "Kasvaimen ympärille",
    "en": "around a tumour",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1100": {
    "fi": "Kudosvaurion ympäristöön",
    "en": "around a tissue injury",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1035": {
    "fi": "Maitorauhaseen",
    "en": "into the udder",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1017": {
    "fi": "Munaan",
    "en": "into an egg",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1018": {
    "fi": "Rehuun sekoitettuna",
    "en": "mixed in feed",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1019": {
    "fi": "Mehiläispesään",
    "en": "in a beehive",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1077": {
    "fi": "Siipeen",
    "en": "into the wing",
    "eu": [],
-   "injection": false
+   "parenteral": false
   },
   "1088": {
    "fi": "Juomaveteen sekoitettuna",
    "en": "mixed in drinking water",
    "eu": [],
-   "injection": false
+   "parenteral": false
   }
  },
  "unclear": {

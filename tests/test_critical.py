@@ -320,3 +320,81 @@ def test_workbook_reader_keeps_rows_version_and_source_row():
     assert len(parsed['rows']) == 300 and parsed['rows'][0]['row'] == 16 and parsed['rows'][0]['included'] == '2023-12-01'
     with pytest.raises(ValueError):
         fetch_critical.read_workbook(workbook(rows[:10]))
+
+
+def test_route_table_blood_vessel_and_parenteral_rules():
+    fits = lambda ids, route: C.route_fit([(i, '') for i in ids], route, ROUTES)[0]
+    assert fits(['1030'], 'intravascular use') == 'fits' and fits(['1030'], 'intracoronary use') == 'fits'   # coronary artery
+    assert fits(['1047'], 'intravascular use') == 'fits' and fits(['1023'], 'intravascular use') == 'fits'
+    assert fits(['1080'], 'parenteral use') == 'fits'                                   # implantation
+    assert fits(['1047'], 'parenteral use') == 'fits' and fits(['1038'], 'parenteral use') == 'fits'   # infusion and injection routes
+    assert fits(['1033'], 'parenteral use') == 'no'                                     # a lesion application is not assumed to be an injection
+    assert fits(['1002'], 'parenteral use') == 'no' and fits(['1055'], 'parenteral use') == 'no'
+    assert ROUTES['routes']['1033']['parenteral'] is False and ROUTES['routes']['1080']['parenteral'] is True
+
+
+def test_named_cases_389066_and_the_minirin_packs():
+    """389066 sodium chloride has the potassium chloride code; Minirin 022246 and 022288 are by mouth in the register (sublingual in the product information)."""
+    products = {'389066': product('B05BB01', 'Natriumklorid B. Braun', 'Sodium chloride'), '022246': product('H01BA02', 'Minirin', 'Desmopressin acetate'),
+                '022288': product('H01BA02', 'Minirin', 'Desmopressin acetate'), '456491': product('H01BA02', 'Minirin', 'Desmopressin acetate')}
+    details = {'389066': detail(['1047'], '0', substances=['Sodium chloride']), '022246': detail(['1055'], '0', substances=['Desmopressin acetate']),
+               '022288': detail(['1055'], '0', substances=['Desmopressin acetate']), '456491': detail(['1051'], '0', substances=['Desmopressin acetate'])}
+    events = [event(v, '2026-11-20', '2026-11-23') for v in products]
+    matches = matches_of(events, products, details)
+    assert matches['389066']['match_type'] == 'ingredient-mismatch'
+    assert [matches[v]['match_type'] for v in ('022246', '022288', '456491')] == ['route-mismatch'] * 3
+    assert C.new_alerts(events, matches, [('2026-11-01', [])], '2026-11-15') == []
+
+
+SOURCES = {'shortages_last_modified': 'Sun, 22 Nov 2026 23:20:01 GMT', 'register_last_modified': 'Mon, 23 Nov 2026 00:31:00 GMT'}
+
+
+def credit_ok(text):
+    for needle in ('European Medicines Agency', 'EMA', 'version 2.1', 'Shortages.txt', 'Perusrekisteri2026.xml', 'https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0',
+                   'Sun, 22 Nov 2026 23:20:01 GMT', 'Mon, 23 Nov 2026 00:31:00 GMT', 'file modification time', 'HTTP Last-Modified', 'changed the data'):
+        assert needle in text, needle
+
+
+def test_every_download_and_feed_carries_the_ema_and_fimea_credit(tmp_path):
+    events, products, details = fixture()
+    matches = matches_of(events, products, details)
+    alerts = C.new_alerts(events, matches, [('2026-11-01', [])], '2026-11-15')
+    assert alerts
+    C.write_outputs(tmp_path, C.current_rows(events, matches), EU['meta'], SOURCES, '2026-11-23', alerts)
+    import csv as csvmod
+    with (tmp_path / 'critical.csv').open(encoding='utf-8-sig', newline='') as f:
+        csv_rows = list(csvmod.DictReader(f))
+    assert csv_rows and all(r['source credit'] for r in csv_rows)
+    for r in csv_rows:
+        credit_ok(r['source credit'])
+    data = json.loads((tmp_path / 'critical.json').read_text(encoding='utf-8'))
+    credit_ok(data['source_credit'])
+    assert all(m['source_credit'] == data['source_credit'] for m in data['matches'])
+    assert data['sources']['ema']['credit'] == 'European Medicines Agency (EMA)' and data['sources']['fimea']['licence_url'].endswith('/by/4.0/')
+    assert [f['file_modified'] for f in data['sources']['fimea']['files']] == [SOURCES['shortages_last_modified'], SOURCES['register_last_modified']]
+    channel = ET.parse(tmp_path / 'critical-feed.xml').getroot().find('channel')
+    credit_ok(channel.findtext('copyright'))
+    for item in channel.findall('item'):
+        credit_ok(item.findtext('description'))
+    feed = json.loads((tmp_path / 'critical-feed.json').read_text(encoding='utf-8'))
+    credit_ok(feed['_credit'])
+    for item in feed['items']:
+        credit_ok(item['content_text'])
+    # Without recorded times the credit says so and does not invent them.
+    assert 'file modification time not recorded' in C.credit(EU['meta'])
+
+
+def test_english_content_is_marked_lang_en_whatever_language_the_menu_has():
+    events, products, details = fixture()
+    matches = matches_of(events, products, details)
+    out = render_critical({'eu': EU, 'rows': C.current_rows(events, matches), 'counts': C.counts(C.current_rows(events, matches)), 'history': C.history(events, matches, []),
+                           'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': SOURCES})
+    for name in ('critical.html', 'critical-methods.html', 'critical-A02BC05.html'):
+        html = out[name]
+        main = html[html.index('<main'):html.index('</main>')]
+        assert '<div lang="en">' in main and main.index('<div lang="en">') < main.index('<h1'), name
+        credit_ok(html) if name != 'critical-methods.html' else None
+    script = (Path(__file__).resolve().parents[1] / 'site/critical.js').read_text(encoding='utf-8')
+    assert 'documentElement.lang' not in script       # the page language stays what the visitor chose; only the content is English
+    css = (Path(__file__).resolve().parents[1] / 'site/style.css').read_text(encoding='utf-8')
+    assert '.eu-table td>span{min-width:0;overflow-wrap:break-word}' in css

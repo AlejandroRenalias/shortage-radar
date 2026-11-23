@@ -25,9 +25,9 @@ TYPES = ('exact', 'route-mismatch', 'ingredient-mismatch', 'unmatched')
 ORDER = {'exact': 0, 'route-mismatch': 1, 'ingredient-mismatch': 2, 'unmatched': 3, 'flag-only': 4}
 STATUS_NAMES = {'ongoing': 'Ongoing', 'upcoming': 'Starts later'}
 TYPE_NAMES = {'exact': 'Exact match', 'route-mismatch': 'Route does not fit', 'unmatched': 'Not in the register', 'ingredient-mismatch': 'Ingredient not confirmed'}
-SOURCE_CREDIT = ('EU list: European Medicines Agency (EMA), Union list of critical medicines, version {version} ({reference}), {published}. '
-                 'Shortages and register: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed by Shortage Radar.')
-# Rows of a captured notice that the history keeps.
+EMA_PAGE = 'https://www.ema.europa.eu/en/human-regulatory-overview/post-authorisation/medicine-shortages-availability-issues/availability-medicines-during-crises/union-list-critical-medicines'
+CC_BY = 'https://creativecommons.org/licenses/by/4.0/'
+# Fields of a captured notice that the history keeps.
 EVENT_KEYS = ('NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Company', 'first_seen', 'last_seen', 'removed_on', 'listed_at_first_capture')
 
 
@@ -106,7 +106,7 @@ def route_fit(product_routes, list_route, table):
         if entry is None:
             continue
         known.append(entry['en'])
-        if wanted & set(entry['eu']) or ('parenteral use' in wanted and entry['injection']):
+        if wanted & set(entry['eu']) or ('parenteral use' in wanted and entry['parenteral']):
             fits = True
     if fits:
         return 'fits', known
@@ -202,11 +202,20 @@ def counts(rows):
     return out
 
 
-def credit(meta):
-    return SOURCE_CREDIT.format(version=meta['version'], reference=meta['reference'], published=meta['published'])
+def credit(meta, sources=None):
+    """The credit that goes with every copy of the data (CSV, JSON, feeds): EMA for the list, Fimea with file names, file
+    modification times (the HTTP Last-Modified of the files; the publisher gives no release times) and the CC BY 4.0 link,
+    and the note that Shortage Radar changed the data."""
+    sources = sources or {}
+    modified = lambda key: f"file modification time {sources[key]} (HTTP Last-Modified)" if sources.get(key) else 'file modification time not recorded'
+    return (f"EU list: European Medicines Agency (EMA), Union list of critical medicines, version {meta['version']} ({meta['reference']}), {meta['published']}, {EMA_PAGE}. "
+            f"EMA is the source of the list and is acknowledged as such. "
+            f"Shortages: Finnish Medicines Agency Fimea, file Shortages.txt (also published as Saatavuushairiot.txt), {modified('shortages_last_modified')}. "
+            f"Register: Fimea, file Perusrekisteri2026.xml, {modified('register_last_modified')}. "
+            f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; neither EMA nor Fimea endorses the result.")
 
 
-def csv_rows(rows, meta):
+def csv_rows(rows, meta, sources=None):
     """CSV lines for the download: every current match, with the list version, the list row and the source credit."""
     header = ['VNR', 'ATC', 'name', 'strength', 'form', 'active substances', 'company', 'status', 'start date', 'estimated end date', 'notification date', 'match type',
               'route status', 'product route', 'list route', 'list version', 'list row', 'Fimea EU-critical flag', 'note', 'source credit']
@@ -214,14 +223,20 @@ def csv_rows(rows, meta):
     for r in rows:
         yield [r['vnr'], r['atc'], r.get('name', ''), r.get('strength', ''), r.get('form_en') or r.get('form', ''), r.get('substances', ''), r.get('company', ''), STATUS_NAMES[r['status']].lower(), r.get('start', ''), r.get('end', ''),
                r.get('notified', ''), r['match_type'], r.get('route_status', ''), '; '.join(r.get('product_routes', [])), r.get('list_route', ''), meta['version'],
-               r['list_row'] if r.get('list_row') else '', {'0': 'no', '1': 'yes'}.get(r.get('fimea_flag', ''), ''), r['note'], credit(meta)]
+               r['list_row'] if r.get('list_row') else '', {'0': 'no', '1': 'yes'}.get(r.get('fimea_flag', ''), ''), r['note'], credit(meta, sources)]
 
 
 def json_data(rows, meta, source_metadata, snapshot_date):
+    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified')}
+    text = credit(meta, sources)
     return {'title': 'Critical medicines in Finland', 'snapshot_date': snapshot_date, 'list': {k: meta[k] for k in ('version', 'reference', 'published', 'source_url', 'retrieved', 'rows')},
-            'counts': counts(rows), 'source_credit': credit(meta),
-            'sources': {'shortages_last_modified': source_metadata.get('shortages_last_modified'), 'register_last_modified': source_metadata.get('register_last_modified')},
-            'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=credit(meta)) for r in rows]}
+            'counts': counts(rows), 'source_credit': text,
+            'sources': {'ema': {'name': 'Union list of critical medicines', 'version': meta['version'], 'reference': meta['reference'], 'published': meta['published'], 'url': EMA_PAGE,
+                                'credit': 'European Medicines Agency (EMA)'},
+                        'fimea': {'licence': 'CC BY 4.0', 'licence_url': CC_BY, 'changed': 'Shortage Radar selected, joined and changed the data',
+                                  'files': [{'name': 'Shortages.txt', 'also_published_as': 'Saatavuushairiot.txt', 'file_modified': sources['shortages_last_modified'], 'file_modified_is': 'HTTP Last-Modified'},
+                                            {'name': 'Perusrekisteri2026.xml', 'file_modified': sources['register_last_modified'], 'file_modified_is': 'HTTP Last-Modified'}]}},
+            'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=text) for r in rows]}
 
 
 def _days(a, b):
@@ -320,7 +335,7 @@ def _day_text(value):
     return date_text(value, 'en') or 'not given'
 
 
-def alert_item(n, m, meta):
+def alert_item(n, m, meta, sources=None):
     """One alert as plain facts: what appeared, when we first saw it, and the match.
 
     The id comes from the first notice of the shortage (VNR, start, notification date, company), so it does not change when the
@@ -335,30 +350,30 @@ def alert_item(n, m, meta):
              f"Company: {n['Company']}. VNR: {n['NordicArticleNumber']}."]
     if m['fimea_flag'] == '0':
         lines.append('Fimea does not flag this product as EU-critical.')
-    lines.append(credit(meta))
+    lines.append(credit(meta, sources))
     key = '|'.join(n['origin'])
     return {'id': f"{TAG_BASE}{n['NordicArticleNumber']}/{hashlib.sha1(key.encode('utf-8')).hexdigest()[:10]}",
             'title': f"New {'upcoming ' if upcoming else ''}shortage: {name} ({m['atc']})", 'url': f"{SITE_URL}critical-{m['atc']}.html", 'date': n['first_seen'],
             'text': '\n'.join(lines), 'atc': m['atc'], 'vnr': n['NordicArticleNumber']}
 
 
-def alert_items(alerts, meta):
+def alert_items(alerts, meta, sources=None):
     """Feed items, newest first, one for each id: a repeated id keeps its earliest entry."""
     seen, items = set(), []
     for n, m in alerts:
-        item = alert_item(n, m, meta)
+        item = alert_item(n, m, meta, sources)
         if item['id'] not in seen:
             seen.add(item['id'])
             items.append(item)
     return items[:ALERT_MAX]
 
 
-def rss_feed(items, meta, latest):
+def rss_feed(items, meta, latest, sources=None):
     def rfc822(day):
         return datetime.strptime(day, '%Y-%m-%d').strftime('%a, %d %b %Y 00:00:00 +0000')
     parts = ['<?xml version="1.0" encoding="utf-8"?>', '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>', f'<title>{escape(FEED_TITLE)}</title>',
              f'<link>{SITE_URL}critical.html</link>', f'<description>{escape(FEED_SUBTITLE)}</description>', '<language>en</language>', f'<lastBuildDate>{rfc822(latest)}</lastBuildDate>',
-             f'<atom:link href="{SITE_URL}critical-feed.xml" rel="self" type="application/rss+xml"/>', f'<copyright>{escape(credit(meta))}</copyright>']
+             f'<atom:link href="{SITE_URL}critical-feed.xml" rel="self" type="application/rss+xml"/>', f'<copyright>{escape(credit(meta, sources))}</copyright>']
     for i in items:
         parts.append(f'<item><title>{escape(i["title"])}</title><link>{i["url"]}</link><guid isPermaLink="false">{i["id"]}</guid><pubDate>{rfc822(i["date"])}</pubDate>'
                      f'<category>{i["atc"]}</category><description>{escape(i["text"])}</description></item>')
@@ -366,9 +381,9 @@ def rss_feed(items, meta, latest):
     return '\n'.join(parts) + '\n'
 
 
-def json_feed(items, meta):
+def json_feed(items, meta, sources=None):
     return json.dumps({'version': 'https://jsonfeed.org/version/1.1', 'title': FEED_TITLE, 'description': FEED_SUBTITLE, 'language': 'en', 'home_page_url': SITE_URL + 'critical.html',
-                       'feed_url': SITE_URL + 'critical-feed.json', 'authors': [{'name': 'Shortage Radar', 'url': SITE_URL}],
+                       'feed_url': SITE_URL + 'critical-feed.json', 'authors': [{'name': 'Shortage Radar', 'url': SITE_URL}], '_credit': credit(meta, sources),
                        'items': [{'id': i['id'], 'url': i['url'], 'title': i['title'], 'content_text': i['text'], 'date_published': i['date'] + 'T00:00:00Z', 'tags': [i['atc'], 'exact']} for i in items]},
                       ensure_ascii=False, indent=1) + '\n'
 
@@ -376,8 +391,9 @@ def json_feed(items, meta):
 def write_outputs(site, rows, meta, source_metadata, snapshot_date, alerts):
     """Write the downloads and the alert feeds into the site folder."""
     with (site / 'critical.csv').open('w', encoding='utf-8-sig', newline='') as f:
-        csv.writer(f).writerows(csv_rows(rows, meta))
+        csv.writer(f).writerows(csv_rows(rows, meta, (source_metadata or {})))
     (site / 'critical.json').write_text(json.dumps(json_data(rows, meta, source_metadata, snapshot_date), ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
-    items = alert_items(alerts, meta)
-    (site / 'critical-feed.xml').write_text(rss_feed(items, meta, snapshot_date), encoding='utf-8', newline='\n')
-    (site / 'critical-feed.json').write_text(json_feed(items, meta), encoding='utf-8', newline='\n')
+    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified')}
+    items = alert_items(alerts, meta, sources)
+    (site / 'critical-feed.xml').write_text(rss_feed(items, meta, snapshot_date, sources), encoding='utf-8', newline='\n')
+    (site / 'critical-feed.json').write_text(json_feed(items, meta, sources), encoding='utf-8', newline='\n')

@@ -71,11 +71,8 @@ def downloads():
 
 
 def source_block(meta, snapshot_date, source_metadata):
-    shortages = (source_metadata or {}).get('shortages_last_modified') or ''
-    register = (source_metadata or {}).get('register_last_modified') or ''
-    return (f'<p class="note">{E(credit(meta))}</p>'
-            f'<p class="note">Shortage file saved {E(D(snapshot_date))}' + (f' (file modified {E(shortages)})' if shortages else '') + '.'
-            + (f' Register file modified {E(register)}.' if register else '') + '</p>')
+    return (f'<p class="note">{E(credit(meta, source_metadata))}</p>'
+            f'<p class="note">Archive snapshot of {E(D(snapshot_date))}. Times are file modification times (HTTP Last-Modified); Fimea gives no release times.</p>')
 
 
 def critical_page(data):
@@ -110,7 +107,7 @@ def critical_page(data):
 <section class="wrap eu-more" aria-labelledby="eu-dl-title"><h2 id="eu-dl-title">Download</h2>{downloads()}
 <details class="data-table"><summary>All {len(data['eu']['rows'])} codes on the EU list</summary><ul class="eu-codes">{codes}</ul></details>
 {source_block(meta, data['snapshot_date'], data['source_metadata'])}<p class="note">These pages are in English only.</p></section>'''
-    return document('critical', body, meta=meta_for(FILE['critical'], 'Critical medicines in Finland | Shortage Radar',
+    return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['critical'], 'Critical medicines in Finland | Shortage Radar',
                     'Medicines on the EU Union list of critical medicines that Fimea lists as short in Finland, matched by ATC code and route.', 'critical.js'))
 
 
@@ -169,8 +166,8 @@ def code_page(code, row, data):
 <dt>Date of inclusion</dt><dd>{E(D(row['included']))}</dd><dt>List version</dt><dd>{E(meta['version'])} ({E(meta['reference'])}, {E(D(meta['published']))})</dd><dt>Row in the EMA file</dt><dd>{row['row']}</dd></dl></section>
 <section aria-labelledby="h-now"><h2 id="h-now">Fimea notices today</h2>{current}</section>
 <section aria-labelledby="h-history"><h2 id="h-history">Seen in our archive</h2>{history_block(code, data['history'].get(code), data['archive_start'])}</section>
-<section><p class="note">This is not medical advice. {E(credit(meta))}</p>{downloads()}<p class="note"><a href="{FILE['methods']}">How the match works</a></p></section></div>'''
-    return document('critical', body, meta=meta_for(code_file(code), f'{title} | Critical medicines | Shortage Radar',
+<section><p class="note">This is not medical advice. {E(credit(meta, data['source_metadata']))}</p>{downloads()}<p class="note"><a href="{FILE['methods']}">How the match works</a></p></section></div>'''
+    return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(code_file(code), f'{title} | Critical medicines | Shortage Radar',
                     f'Fimea shortage notices, the EU list row and the archive history for ATC code {code}.'))
 
 
@@ -180,6 +177,8 @@ def methods_page(data):
         ('Desmopressin Sandoz', '416337', 'Route does not fit', 'Product route is under the tongue (Fimea route code 1070). The list row H01BA02 has intramuscular, intravenous and subcutaneous use.'),
         ('Desmopressin STADA', '448525', 'Route does not fit', 'Under the tongue (code 1070), as above.'),
         ('Desmopressin ratiopharm', '485073', 'Route does not fit', 'Under the tongue (code 1070), as above.'),
+        ('Minirin', '022246', 'Route does not fit', 'The register says by mouth (code 1055); the product information says sublingual. The list row H01BA02 has intramuscular, intravenous and subcutaneous use, so neither fits.'),
+        ('Minirin', '022288', 'Route does not fit', 'By mouth in the register, as above. We use the register, so this stays a route mismatch.'),
         ('Miochol-E', '019235', 'Exact match', 'ATC code S01EB09 and the route match the list (intraocular use; Fimea route code 1092, into the front chamber of the eye). Fimea’s own flag is 0, so Fimea and the list differ for this package. The note says so.'),
     ]
     check_rows = ''.join(f'<tr><td data-label="Package">{E(n)}</td><td data-label="VNR">{v}</td><td data-label="Result">{E(t)}</td><td data-label="Why">{E(w)}</td></tr>' for n, v, t, w in checks)
@@ -195,17 +194,17 @@ def methods_page(data):
 <section id="licences"><h2>Licences and credit</h2>
 <p><strong>Fimea.</strong> Fimea’s open data is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. The licence asks for the name of the licensor, the name of the material and the date and time it was released by Fimea. Fimea does not give release times; we show the file’s last-modified time instead. We select, join and transform the data. Fimea does not endorse this site.</p>
 <p><strong>EMA.</strong> EMA’s <a href="{EMA_NOTICE}">copyright notice</a> says its web content may be reproduced and distributed, for non-commercial and commercial purposes, if EMA is always acknowledged as the source. It is not a Creative Commons licence. We show EMA as the source of the list wherever the list is used, including in the downloads.</p>
-<p>Source credit used in the downloads: {E(credit(meta))}</p>
+<p>Source credit used in the downloads and feeds: {E(credit(meta, data['source_metadata']))}</p>
 <p>Code on this site: MIT licence.</p></section>
 <section id="rule"><h2>The match rule</h2><ol class="steps">
 <li><strong>ATC code.</strong> The ATC level 5 code of the product in the Fimea register must be exactly a code on the EU list. Fimea gives one ATC code for each product.</li>
 <li><strong>Active ingredient.</strong> The substance of the list row must be among the product’s active ingredients (all of them, for a list row that names several, such as piperacillin and tazobactam). A name counts when it is the same, or when the register name starts with it (“Ipratropium bromide” for IPRATROPIUM). A few list names are spelled differently in the register (adrenaline and epinephrine, vaccines, blood products); they are in <a href="https://github.com/AlejandroRenalias/shortage-radar/blob/main/data/critical/ingredients.json"><code>data/critical/ingredients.json</code></a>. Extra ingredients are allowed, so a combination product with the list substance passes. If the substance is not there, or Fimea gives no ingredients, the package is shown as <em>Ingredient not confirmed</em> and is neither an exact match nor an alert. Example: B. Braun sodium chloride (VNR 389066) has the ATC code of potassium chloride and a fitting route, but its ingredient is sodium chloride.</li>
-<li><strong>Route.</strong> A route of the product (Fimea <code>Antoreitti</code>) must fit a route of the list row. A table in <a href="https://github.com/AlejandroRenalias/shortage-radar/blob/main/data/critical/routes.json"><code>data/critical/routes.json</code></a> says which Fimea route fits which EU route term. There are no keyword rules. Three broader EU terms are handled in the table: “parenteral use” fits every injection route, “intravascular use” fits a vein or an artery, and “intraocular use” fits routes into the eye (front chamber, vitreous, retina, inside the eye).</li>
+<li><strong>Route.</strong> A route of the product (Fimea <code>Antoreitti</code>) must fit a route of the list row. A table in <a href="https://github.com/AlejandroRenalias/shortage-radar/blob/main/data/critical/routes.json"><code>data/critical/routes.json</code></a> says which Fimea route fits which EU route term. There are no keyword rules. Three broader EU terms are handled in the table: “parenteral use” fits every route that the table marks as parenteral (injection, infusion or implantation into the body: a vein, artery, muscle, under the skin, a joint, a body cavity, implantation and the like), “intravascular use” fits a vein, an artery or a coronary artery, and “intraocular use” fits routes into the eye (front chamber, vitreous, retina, inside the eye). A route is marked parenteral only when the route itself says so: “into a lesion” (code 1033) is not assumed to be an injection.</li>
 <li><strong>Result.</strong> ATC code, ingredient and route fit: <em>Exact match</em>. ATC code and ingredient on the list, route does not fit: <em>Route does not fit</em> (<code>route-mismatch</code> in the downloads). ATC code on the list, ingredient not confirmed: <em>Ingredient not confirmed</em> (<code>ingredient-mismatch</code>). VNR not in the register: <em>Not in the register</em> (<code>unmatched</code>).</li>
 <li><strong>Ongoing or starts later.</strong> Fimea marks each notice as ongoing (Voimassa K, “Kyllä”) or not yet started (E, “Ei”). The counts show ongoing shortages only; notices that start later are listed apart, marked “Starts later”, with their start date. The counts carry the date of the shortage file.</li>
 <li><strong>Route unclear.</strong> If Fimea gives no route, or only “route not relevant”, or a route that is not in our table, the package is not matched on route. It is shown as <em>Route does not fit</em> and the note says “Route unclear”. We do not guess.</li>
 <li><strong>Cross-check.</strong> Fimea’s flag <code>EUKriittinenValmiste</code> is not used to decide. Where it disagrees with the match, the note and the CSV say so.</li></ol></section>
-<section id="checked"><h2>Four rows checked by hand</h2>
+<section id="checked"><h2>Rows checked by hand</h2>
 <div class="eu-scroll"><table class="eu-table"><thead><tr><th scope="col">Package</th><th scope="col">VNR</th><th scope="col">Result</th><th scope="col">Why</th></tr></thead><tbody>{check_rows}</tbody></table></div>
 <p class="note">Tests in the repository check the route rule on these four cases.</p></section>
 <section id="limits"><h2>Known limits</h2><ul class="steps">
@@ -221,7 +220,7 @@ def methods_page(data):
 <li>These pages are in English only.</li></ul></section>
 <section id="alerts"><h2>Alerts</h2><p>The alert feeds list new shortages of packages with an exact match: the first capture that lists the shortage, with its VNR, ATC code, company and dates, and whether Fimea marks it ongoing or not yet started. Each shortage has one entry with a fixed id; an edited notice or one that returns after a missing capture is not a new alert. The daily build writes the feeds. Shortages already on the list when the archive started, or already listed for the same VNR in the capture before, are not new.</p>{downloads()}</section>
 </div></div>'''
-    return document('critical', body, meta=meta_for(FILE['methods'], 'How the critical medicines match works | Shortage Radar',
+    return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['methods'], 'How the critical medicines match works | Shortage Radar',
                     'Sources, licences, the match rule and the limits of the critical medicines page.'))
 
 
