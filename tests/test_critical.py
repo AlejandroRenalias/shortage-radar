@@ -349,7 +349,7 @@ def test_named_cases_389066_and_the_minirin_packs():
     assert C.new_alerts(events, matches, [('2026-11-01', [])], '2026-11-15') == []
 
 
-SOURCES = {'shortages_last_modified': 'Sun, 22 Nov 2026 23:20:01 GMT', 'register_last_modified': 'Mon, 23 Nov 2026 00:31:00 GMT'}
+SOURCES = {'shortages_last_modified': 'Sun, 22 Nov 2026 23:20:01 GMT', 'register_last_modified': 'Mon, 23 Nov 2026 00:31:00 GMT', 'register_file': 'Perusrekisteri2026.xml'}
 
 
 def credit_ok(text):

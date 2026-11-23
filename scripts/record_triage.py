@@ -5,22 +5,15 @@ are computed with the register of the day, the same way as the site, and kept in
 snapshot date. A later run on the same date replaces that date's entry.
 """
 import json
-import xml.etree.ElementTree as ET
 
 from build import ROOT, load_snapshots, register
+from source_age import register_date
 from triage import counts
 
 PATH = ROOT / 'data/triage-counts.json'
 NOTE = ('Impact triage counts of the latest snapshot, computed with the basic register of the day it was recorded. '
         'substitute: other packages in the substitution group are on the market and not short; critical: a group without such packages; '
         'nogroup: no substitution group; vet: veterinary medicines.')
-
-
-def register_date(path):
-    for _, el in ET.iterparse(path, events=('end',)):
-        if el.tag == 'Ajopvm':
-            return el.text or ''
-    return ''
 
 
 def entry(day, rows, register_path):

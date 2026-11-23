@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from triage import counts, level, medicine_name, newly_critical, on_market
+from triage import counts, is_available_alternative, level, medicine_name, newly_critical, on_market
 
 
 def test_levels_for_group_with_others_with_none_without_group_and_veterinary():
@@ -108,3 +108,20 @@ def test_record_keeps_one_entry_per_snapshot_date(tmp_path, monkeypatch):
     assert [c['date'] for c in data['counts']] == ['2026-11-21', '2026-11-22']
     assert data['counts'][1] == {'date': '2026-11-22', 'register_date': '2026-11-22', 'total': 2, 'substitute': 0, 'critical': 1, 'nogroup': 0, 'vet': 1}
     assert data['note']
+
+
+def test_one_definition_of_an_available_alternative():
+    p = dict(pack('000002'), short=False, shortage_flag='0')
+    assert is_available_alternative(p, {'000001'}, '2026-11-23', True) and is_available_alternative(p, {'000001'}, '2026-11-23')
+    # In the shortage file (by VNR or old VNR): not available, in both readings.
+    assert not is_available_alternative(p, {'000002'}, '2026-11-23', True)
+    assert not is_available_alternative(dict(p, old={'999999'}), {'999999'}, '2026-11-02')
+    # The register's own flags count only on the register's day; earlier captures read the dates.
+    assert not is_available_alternative(dict(p, shortage_flag='1'), set(), '2026-11-23', True)
+    assert is_available_alternative(dict(p, shortage_flag='1'), set(), '2026-11-02')
+    assert not is_available_alternative(dict(p, market='0'), set(), '2026-11-23', True)
+    assert is_available_alternative(dict(p, market='0'), set(), '2026-11-02')
+    assert not is_available_alternative(dict(p, shortage_flag=''), set(), '2026-11-23', True)
+    # Dates count in both readings.
+    assert not is_available_alternative(dict(p, entry='2026-12-01'), set(), '2026-11-23', True)
+    assert not is_available_alternative(dict(p, exit='2026-11-03'), set(), '2026-11-23', True)

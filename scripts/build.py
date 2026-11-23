@@ -7,6 +7,7 @@ import os
 import unicodedata
 from statistics import median
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import critical as eu_list
 from changes import _shift, feeds, week_summary
@@ -15,7 +16,7 @@ from packs import pack_label
 from pages import render_pages
 from removed import removed_index
 from slices import package_shards, summary
-from triage import level, medicine_name, newly_critical
+from triage import is_available_alternative, level, medicine_name, newly_critical
 
 ROOT = Path(__file__).resolve().parents[1]
 # MAX_GAP_DAYS (scripts/gaps.py): captures further apart than this are not joined into one continuous series,
@@ -24,6 +25,10 @@ MIN_DELAY_SAMPLE = 30
 # Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
 PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
+
+
+def helsinki_today():
+    return datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
 
 
 def read_snapshot(path):
@@ -58,7 +63,7 @@ def group_key(product):
     return ' '.join(unicodedata.normalize('NFKC', product.get('substitution_group', '')).split()) or None
 
 
-def register(path, wanted, current_shortages=(), members=None, details=None):
+def register(path, wanted, current_shortages=(), members=None, details=None, day=None):
     """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
     on the market, not flagged short in the register and not in the current shortage file.
 
@@ -66,7 +71,9 @@ def register(path, wanted, current_shortages=(), members=None, details=None):
     history of the groups and for the list of alternatives on the medicine page.
     When `details` is a dict, it is filled with {vnr: {'routes', 'eu_flag', 'form_id', 'substances'}} for the wanted VNRs:
     what the critical medicines join needs and the other pages do not.
+    `day` (default: today in Helsinki) is the day the register is read for; see triage.is_available_alternative.
     """
+    day = day or helsinki_today()
     packages, exact, products, substances = {}, set(), {}, {}
     candidates = []
     current_shortages = set(current_shortages)
@@ -99,11 +106,15 @@ def register(path, wanted, current_shortages=(), members=None, details=None):
     for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit in candidates:
         product = products.get(ref, {})
         key = group_key(product)
-        if key and vnr and market == '1' and shortage == '0' and not ({vnr} | old_vnrs) & current_shortages:
+        if not (key and vnr):
+            continue
+        member = {'vnr': vnr, 'old': old_vnrs, 'market': market, 'short': shortage == '1', 'shortage_flag': shortage, 'entry': entry, 'exit': exit_,
+                  'name': product['name'], 'strength': product['strength'], 'pack': pack, 'pack_label': pack_label(pack, unit, product['form']), 'company': product['holder']}
+        # The same rule as the history of newly critical groups (triage.is_available_alternative); today's register reads the flags.
+        if is_available_alternative(member, current_shortages, day, True):
             available.setdefault(key, set()).add(vnr)
-        if key and vnr and members is not None:
-            members.setdefault(key, []).append({'vnr': vnr, 'old': old_vnrs, 'market': market, 'short': shortage == '1', 'entry': entry, 'exit': exit_,
-                                                'name': product['name'], 'strength': product['strength'], 'pack': pack, 'pack_label': pack_label(pack, unit, product['form']), 'company': product['holder']})
+        if members is not None:
+            members.setdefault(key, []).append(member)
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
@@ -226,9 +237,11 @@ def read_triage_counts():
     return json.loads(path.read_text(encoding='utf-8'))['counts'] if path.exists() else []
 
 
-def group_lists(current, members, current_vnrs):
+def group_lists(current, members, current_vnrs, day=None):
     """{group: {'available': [...], 'short': [...]}} for the groups of current shortages: the other packages on the market,
-    split into those a pharmacy can usually give and those that are short too. Small, so it goes with the medicine pages."""
+    split into those a pharmacy can usually give (triage.is_available_alternative, the rule that sets the impact level) and those that are short too.
+    Small, so it goes with the medicine pages."""
+    day = day or helsinki_today()
     def item(p):
         return {k: p[k] for k in ('vnr', 'name', 'strength', 'pack_label', 'company')}
     def listed(p):
@@ -236,7 +249,7 @@ def group_lists(current, members, current_vnrs):
     out = {}
     for g in sorted({e['substitution_group'] for e in current if e.get('substitution_group')}):
         packs = sorted((p for p in members.get(g, []) if p['market'] == '1'), key=lambda p: (p['name'].casefold(), p['strength'], p['pack']))
-        out[g] = {'available': [item(p) for p in packs if not listed(p) and not p['short']],
+        out[g] = {'available': [item(p) for p in packs if is_available_alternative(p, current_vnrs, day, True)],
                   'short': [dict(item(p), listed=listed(p)) for p in packs if listed(p) or p['short']]}
     return out
 

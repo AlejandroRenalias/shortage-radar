@@ -31,13 +31,67 @@ def repository(tmp_path, monkeypatch):
     return tmp_path, metadata
 
 
-def test_identical_download_leaves_all_tracked_files_untouched(repository, monkeypatch):
+def test_identical_download_with_the_same_header_leaves_all_tracked_files_untouched(repository, monkeypatch):
     root, metadata = repository
+    metadata.write_text('{"shortages_last_modified": "same header", "snapshot_date": "2026-11-01"}' + chr(10), encoding='utf-8')
     original = metadata.read_bytes()
-    monkeypatch.setattr(archive, 'download', lambda _: (content(751), 'new header'))
+    monkeypatch.setattr(archive, 'download', lambda _: (content(751), 'same header'))
     archive.main('2026-11-02')
     assert metadata.read_bytes() == original
     assert [p.name for p in (root / 'data/snapshots').iterdir()] == ['2026-11-01.txt']
+
+
+def test_identical_content_with_a_new_last_modified_updates_only_the_file_time(repository, monkeypatch):
+    """Fimea can change the file's modification time without changing its content; the site shows that time, so it is recorded."""
+    root, metadata = repository
+    metadata.write_text('{"shortages_last_modified": "old header", "snapshot_date": "2026-11-01"}' + chr(10), encoding='utf-8')
+    monkeypatch.setattr(archive, 'download', lambda _: (content(751), 'new header'))
+    archive.main('2026-11-02')
+    assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'new header', 'snapshot_date': '2026-11-01'}
+    assert [p.name for p in (root / 'data/snapshots').iterdir()] == ['2026-11-01.txt']
+
+
+def test_missing_last_modified_header_does_not_erase_the_stored_time(repository, monkeypatch):
+    root, metadata = repository
+    metadata.write_text('{"shortages_last_modified": "stored", "snapshot_date": "2026-11-01"}' + chr(10), encoding='utf-8')
+    monkeypatch.setattr(archive, 'download', lambda _: (content(700), None))
+    archive.main('2026-11-02')
+    assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'stored', 'snapshot_date': '2026-11-02'}
+
+
+def test_same_day_refetch_with_changed_content_does_not_fail_and_keeps_both_versions(repository, monkeypatch, capsys):
+    """The job runs four times a day. A second run on the same day that finds a changed file used to raise, which stopped
+    every later step of the workflow. Now the day's snapshot is the newer content and the earlier one is kept with its time."""
+    from datetime import datetime, timezone
+    root, metadata = repository
+    monkeypatch.setattr(archive, 'download', lambda _: (content(700), 'first'))
+    archive.main('2026-11-02', now=datetime(2026, 11, 2, 4, 35, tzinfo=timezone.utc))
+    monkeypatch.setattr(archive, 'download', lambda _: (content(720), 'second'))
+    archive.main('2026-11-02', now=datetime(2026, 11, 2, 10, 5, tzinfo=timezone.utc))
+    assert (root / 'data/snapshots/2026-11-02.txt').read_bytes() == content(720)
+    assert (root / 'data/snapshots/superseded/2026-11-02T1005Z.txt').read_bytes() == content(700)
+    assert json.loads(metadata.read_text()) == {'shortages_last_modified': 'second', 'snapshot_date': '2026-11-02'}
+    assert 'Same-day refetch' in capsys.readouterr().out
+    # A third run with the same content changes nothing.
+    archive.main('2026-11-02', now=datetime(2026, 11, 2, 15, 35, tzinfo=timezone.utc))
+    assert sorted(p.name for p in (root / 'data/snapshots/superseded').iterdir()) == ['2026-11-02T1005Z.txt']
+    # Snapshots read by the site are only the day files.
+    assert [p.name for p in sorted((root / 'data/snapshots').glob('????-??-??.txt'))] == ['2026-11-01.txt', '2026-11-02.txt']
+
+
+def test_later_steps_still_run_after_a_same_day_refetch(repository, monkeypatch, tmp_path):
+    """The ledger step that follows the archive step writes the day's rows once, from the latest snapshot."""
+    import build
+    import ledger
+    root, _ = repository
+    monkeypatch.setattr(archive, 'download', lambda _: (content(700), 'first'))
+    archive.main('2026-11-02')
+    monkeypatch.setattr(archive, 'download', lambda _: (content(720), 'second'))
+    archive.main('2026-11-02')
+    monkeypatch.setattr(ledger, 'ROOT', root)
+    monkeypatch.setattr(build, 'ROOT', root)
+    (root / 'data/source/register.xml').write_text('<Perusrekisteri><Ajopvm>2026-11-02</Ajopvm></Perusrekisteri>', encoding='utf-8')
+    assert ledger.record('2026-11-02', tmp_path / 'ledger', root / 'data/source/register.xml') == 720
 
 
 def test_partial_file_is_rejected_without_writes(repository, monkeypatch):

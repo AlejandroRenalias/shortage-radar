@@ -11,6 +11,7 @@ const setLanguage = (ctx, lang) => vm.runInContext(`language='${lang}'`, ctx);
 const copy_fi = () => vm.runInContext('copy.fi', context);
 const NOW = Date.UTC(2026, 10, 21);
 const plain = value => JSON.parse(JSON.stringify(value));
+const dict = (a, b) => Object.assign({}, a, b);
 const nb = text => String(text).replace(/ /g, ' ');
 const pages = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749)))"], {encoding: 'utf8'}));
 // A page environment with a fake document, for the scripts that draw into elements.
@@ -157,11 +158,11 @@ test('freshness uses the successful check date and distinguishes a build-only fa
   setLanguage(context, 'en');
   const today = Date.UTC(2026, 10, 21);
   const recent = context.freshnessInfo({last_checked:'2026-11-18', generated_at:'2026-11-21T12:00:00Z'}, today, today);
-  assert.equal(recent.text, 'Checked 18 Nov 2026');
+  assert.equal(recent.text, 'Checked by Shortage Radar: 18 Nov 2026');
   assert.equal(recent.stale, false);
   assert.equal(context.freshnessInfo({last_checked:'2026-11-17'}, today, today).stale, true);
   const fallback = context.freshnessInfo({last_checked:null, generated_at:'2026-11-17T00:00:00Z'}, today, today);
-  assert.match(fallback.text, /Build time; the last source check is unknown/);
+  assert.match(fallback.text, /^Checked by Shortage Radar: unknown\. Page built: 17 Nov 2026/);
   assert.equal(fallback.stale, true);
   assert.equal(context.freshnessInfo({}, today, today).text, '');
 });
@@ -177,6 +178,65 @@ test('the stale-data warning is shown on every page that loads data', () => {
   env.renderChrome({snapshot_date:today, last_checked:today, source_metadata:{}});
   assert.equal(get('stale').hidden, true);
   for (const html of Object.entries(pages).filter(([f]) => f !== '404.html')) assert.match(html[1], /id="stale"/);
+});
+
+const DAY = 86400000;
+const httpDate = daysAgo => new Date(Date.now() - daysAgo * DAY).toUTCString();
+
+test('a source file is stale only when its date is more than 2 days old, counted in Helsinki days', () => {
+  const today = Date.UTC(2026, 10, 23);
+  const stale = (meta) => plain(context.staleSources(meta, today));
+  // Fimea changed the file on a Saturday: on Monday it is exactly two days old, so no banner.
+  assert.deepEqual(stale({shortages_last_modified:'Sat, 21 Nov 2026 10:00:00 GMT', register_date:'2026-11-21'}), []);
+  assert.deepEqual(stale({shortages_last_modified:'Fri, 20 Nov 2026 10:00:00 GMT'}), [{file:'shortages', date:'2026-11-20'}]);
+  // 22:30 GMT on the 20th is already the 21st in Helsinki.
+  assert.deepEqual(stale({shortages_last_modified:'Fri, 20 Nov 2026 22:30:00 GMT'}), []);
+  assert.deepEqual(stale({register_date:'2026-11-20'}), [{file:'register', date:'2026-11-20'}]);
+  assert.deepEqual(stale({shortages_last_modified:'Fri, 20 Nov 2026 10:00:00 GMT', register_date:'2026-11-10'}).map(x => x.file), ['shortages', 'register']);
+  // An unknown date is not stale.
+  assert.deepEqual(stale({}), []);
+  assert.deepEqual(stale({shortages_last_modified:'garbage', register_date:'x'}), []);
+  assert.equal(vm.runInContext('STALE_DAYS', context), 2);
+});
+
+test('the stale-file banner names the file and its date, in English and Finnish', () => {
+  const [env, get] = pageEnv(['home.js']);
+  get('stale'); get('stale-text'); get('source-times');
+  const today = new Date().toISOString().slice(0, 10);
+  const fresh = {snapshot_date:today, last_checked:today, generated_at:new Date().toISOString()};
+  env.renderChrome(dict(fresh, {source_metadata:{shortages_last_modified:httpDate(0), register_date:today}}));
+  assert.equal(get('stale').hidden, true);
+  const old = {shortages_last_modified:'Fri, 06 Nov 2026 10:00:00 GMT', register_date:today};
+  env.renderChrome(dict(fresh, {source_metadata:old}));
+  assert.equal(get('stale').hidden, false);
+  assert.equal(get('stale-text').textContent, 'Fimea’s shortage file has not changed since 6 Nov 2026, more than 2 days ago. The list may be out of date.');
+  env.renderChrome(dict(fresh, {source_metadata:{shortages_last_modified:httpDate(0), register_date:'2026-11-05'}}));
+  assert.equal(get('stale-text').textContent, 'Fimea’s basic register is dated 5 Nov 2026, more than 2 days ago. Information on interchangeable packages may be out of date.');
+  env.renderChrome(dict(fresh, {source_metadata:{shortages_last_modified:'Fri, 06 Nov 2026 10:00:00 GMT', register_date:'2026-11-05'}}));
+  assert.match(get('stale-text').textContent, /shortage file.*register/);
+  // Switching the language redraws the banner and the footer line without a new load.
+  vm.runInContext("setLanguage('fi', null)", env);
+  assert.equal(get('stale-text').textContent, 'Fimean saatavuushäiriötiedosto on muuttunut viimeksi 6.11.2026, yli 2 päivää sitten. Lista voi olla vanhentunut. Fimean perusrekisterin päiväys on 5.11.2026, yli 2 päivää sitten. Tiedot vaihtokelpoisista valmisteista voivat olla vanhentuneita.');
+});
+
+test('the home page shows when Fimea’s file changed and when Shortage Radar checked, next to the headline', () => {
+  const [env, get] = pageEnv(['home.js']);
+  get('hero-fresh'); get('hero-file'); get('hero-checked'); get('source-times'); get('stale'); get('stale-text');
+  const meta = {snapshot_date:'2026-11-23', last_checked:'2026-11-23', generated_at:'2026-11-23T05:00:00Z', source_metadata:{shortages_last_modified:'Sun, 22 Nov 2026 23:20:01 GMT', register_date:'2026-11-23', register_last_modified:'Mon, 23 Nov 2026 00:31:00 GMT'}};
+  env.renderChrome(meta);
+  assert.equal(get('hero-fresh').hidden, false);
+  assert.equal(get('hero-file').textContent, 'Fimea file changed: 23 Nov 2026');
+  assert.equal(get('hero-checked').textContent, 'Checked by Shortage Radar: 23 Nov 2026');
+  assert.match(get('source-times').textContent, /Fimea file changed: 23 Nov 2026, 01:20 Helsinki time/);
+  vm.runInContext("setLanguage('fi', null)", env);
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muuttui: 23.11.2026');
+  assert.equal(get('hero-checked').textContent, 'Saatavuustutka tarkisti: 23.11.2026');
+  // No file time: the line says so instead of showing nothing, and a failed check date is never replaced by the build time.
+  env.renderChrome({snapshot_date:'2026-11-23', last_checked:null, generated_at:'2026-11-23T05:00:00Z', source_metadata:{}});
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muuttui: ei tiedossa');
+  assert.match(get('hero-checked').textContent, /^Saatavuustutka tarkisti: ei tiedossa\. Sivu koostettu: /);
+  assert.match(pages['index.html'], /id="hero-fresh"[^>]* hidden/);
+  assert.ok(pages['index.html'].indexOf('id="hero-line"') < pages['index.html'].indexOf('id="hero-fresh"') && pages['index.html'].indexOf('id="hero-fresh"') < pages['index.html'].indexOf('id="hero-label"'));
 });
 
 test('history and delay rendering uses translated dates and explains the sample', () => {

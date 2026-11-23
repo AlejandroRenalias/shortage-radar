@@ -212,7 +212,7 @@ def credit(meta, sources=None):
     return (f"EU list: European Medicines Agency (EMA), Union list of critical medicines, version {meta['version']} ({meta['reference']}), {meta['published']}, {EMA_PAGE}. "
             f"EMA is the source of the list and is acknowledged as such. "
             f"Shortages: Finnish Medicines Agency Fimea, file Shortages.txt (also published as Saatavuushairiot.txt), {modified('shortages_last_modified')}. "
-            f"Register: Fimea, file Perusrekisteri2026.xml, {modified('register_last_modified')}. "
+            f"Register: Fimea, file {sources.get('register_file') or 'Perusrekisteri (year not recorded)'}, {modified('register_last_modified')}. "
             f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; neither EMA nor Fimea endorses the result.")
 
 
@@ -228,7 +228,7 @@ def csv_rows(rows, meta, sources=None):
 
 
 def json_data(rows, meta, source_metadata, snapshot_date):
-    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified')}
+    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified', 'register_file')}
     text = credit(meta, sources)
     return {'title': 'Critical medicines in Finland', 'snapshot_date': snapshot_date, 'list': {k: meta[k] for k in ('version', 'reference', 'published', 'source_url', 'retrieved', 'rows')},
             'counts': counts(rows), 'source_credit': text,
@@ -236,7 +236,7 @@ def json_data(rows, meta, source_metadata, snapshot_date):
                                 'credit': 'European Medicines Agency (EMA)'},
                         'fimea': {'licence': 'CC BY 4.0', 'licence_url': CC_BY, 'changed': 'Shortage Radar selected, joined and changed the data',
                                   'files': [{'name': 'Shortages.txt', 'also_published_as': 'Saatavuushairiot.txt', 'file_modified': sources['shortages_last_modified'], 'file_modified_is': 'HTTP Last-Modified'},
-                                            {'name': 'Perusrekisteri2026.xml', 'file_modified': sources['register_last_modified'], 'file_modified_is': 'HTTP Last-Modified'}]}},
+                                            {'name': sources['register_file'], 'file_modified': sources['register_last_modified'], 'file_modified_is': 'HTTP Last-Modified'}]}},
             'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=text) for r in rows]}
 
 
@@ -393,7 +393,7 @@ def write_outputs(site, rows, meta, source_metadata, snapshot_date, alerts):
     with (site / 'critical.csv').open('w', encoding='utf-8-sig', newline='') as f:
         csv.writer(f).writerows(csv_rows(rows, meta, (source_metadata or {})))
     (site / 'critical.json').write_text(json.dumps(json_data(rows, meta, source_metadata, snapshot_date), ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
-    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified')}
+    sources = {k: (source_metadata or {}).get(k) for k in ('shortages_last_modified', 'register_last_modified', 'register_file')}
     items = alert_items(alerts, meta, sources)
     (site / 'critical-feed.xml').write_text(rss_feed(items, meta, snapshot_date, sources), encoding='utf-8', newline='\n')
     (site / 'critical-feed.json').write_text(json_feed(items, meta, sources), encoding='utf-8', newline='\n')

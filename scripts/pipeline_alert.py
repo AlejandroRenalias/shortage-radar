@@ -4,6 +4,12 @@ import os
 import subprocess
 
 
+MEANING = {
+    'register-source': 'the basic register source: Fimea published the file of next year, or the register is missing or has no run date (see the run log)',
+    'source-stale': 'a Fimea source file is more than 2 days old: the shortage file (Last-Modified) or the basic register (Ajopvm); the site shows a banner',
+}
+
+
 def gh(*args, data=None):
     result = subprocess.run(['gh', *args], input=json.dumps(data) if data is not None else None,
                             text=True, capture_output=True, check=True)
@@ -30,7 +36,7 @@ def main():
         return
     if not issue:
         subprocess.run(['gh', 'label', 'create', 'data-pipeline', '--repo', repo, '--force'], check=True)
-    body = 'Scheduled pipeline failures needing attention:\n\n' + ''.join(f'- {name}: {url}\n' for name, url in sorted(failures.items()))
+    body = 'Scheduled pipeline failures needing attention:\n\n' + ''.join(f'- {name}: {url}' + (f' ({MEANING[name]})' if name in MEANING else '') + '\n' for name, url in sorted(failures.items()))
     body += '\n<!-- pipeline-state:' + json.dumps(failures, separators=(',', ':')) + ' -->'
     if issue:
         gh('api', '--method', 'PATCH', f"repos/{repo}/issues/{issue['number']}", '--input', '-', data={'body': body, 'state': 'open' if failures else 'closed'})
