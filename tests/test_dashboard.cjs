@@ -759,3 +759,170 @@ test('the list search, filters and page share one address: parse, build and bad 
   const state = {q: 'a b&c', match: 'exact', status: 'ongoing', page: 3};
   assert.deepEqual(from(to('', state)), state);
 });
+
+// ---- Search finds past shortages: the list falls back to the removed events when the current list has no match.
+const REMOVED = [
+  {NordicArticleNumber:'560833', name:'Elvanse', strength:'40 mg', form:'kapseli, kova', pack_label:{en:'30 capsules', fi:'30 kapselia'}, substances:'Lisdexamfetamine dimesylate', atc:'N06BA12', Company:'Takeda', first_seen:'2026-09-15', last_seen:'2026-09-15', removed_on:'2026-09-23'},
+  {NordicArticleNumber:'510642', name:'Ozempic', strength:'0.25 mg', form:'injektioneste, liuos', pack_label:{en:'1.5 ml', fi:'1,5 ml'}, substances:'Semaglutide', atc:'A10BJ06', Company:'Novo Nordisk', first_seen:'2024-11-18', last_seen:'2024-11-18', removed_on:'2026-09-15', removed_after_gap:true},
+  {NordicArticleNumber:'427014', name:'Paramax Comp', strength:'500 mg', form:'tabletti', substances:'Paracetamol, Metoclopramide', atc:'N02', Company:'Sanofi', first_seen:'2026-09-23', last_seen:'2026-09-23', removed_on:'2026-10-06', gaps:[{from:'2026-09-23', to:'2026-10-20', days:27}]},
+  {NordicArticleNumber:'141019', name:'Ibutabs', strength:'200 mg', form:'tabletti', substances:'Ibuprofen', atc:'M01AE01', Company:'Orion', first_seen:'2024-11-18', last_seen:'2024-11-18', removed_on:'2026-09-15', removed_after_gap:true}
+];
+const CURRENT = [{NordicArticleNumber:'100001', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', atc:'M02AA13', form:'geeli', Company:'Orion', UnavailableFrom:'2026-02-02', EndingDate:'2027-02-01', removed_on:null}];
+// Runs shortages.js against a fake page with the given search; fetch serves current.json and removed.json and records what was asked for.
+async function listPage(search, {failRemoved = false, lang = 'en', gate = null, after = null} = {}) {
+  const elements = {}, requested = [];
+  const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:false, value:'', parentElement:{hidden:false}, dataset:{}, handlers:{}, addEventListener(type, fn){ this.handlers[type] = fn; }, setAttribute(){}, open:false};
+  const files = {'current.json': {events: CURRENT, snapshot_date:'2026-11-21'}, 'removed.json': {events: REMOVED}};
+  const fetch = url => { requested.push(url); return failRemoved && url === 'removed.json' ? Promise.reject(Error(url)) : (url === 'current.json' && gate ? gate : Promise.resolve()).then(() => ({ok:true, json:() => Promise.resolve(files[url])})); };
+  const root = {dataset:{}, classList:{remove(){}}};
+  const document = {getElementById:get, documentElement:root, querySelector:() => ({checked:false, value:''}), querySelectorAll:() => []};
+  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia:() => ({matches:false}), document, navigator:{language:lang}, localStorage:{getItem:() => lang, setItem(){}}, fetch, location:{search}, history:{replaceState(){}}, URL, setTimeout, clearTimeout});
+  vm.runInContext(shared + '\n' + read('shortages.js'), env);
+  const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
+  await settle();
+  if (after) { await after(get); await settle(); }
+  return {settle, list:get('list').innerHTML, count:get('result-count').textContent, requested, root, get};
+}
+
+test('a past package shows when it was last seen in a capture, never as supply returned, and links to its archived page', () => {
+  setLanguage(context, 'en');
+  const elvanse = context.pastRow(REMOVED[0]);
+  assert.match(elvanse, /<a href="medicine\.html\?vnr=560833">Elvanse<\/a>/);
+  assert.match(nb(elvanse), /<span>40 mg<\/span> <span>30 capsules<\/span>/);
+  assert.match(elvanse, /Earlier on the list: last seen 15 Sep 2026 \(capture\)/);
+  assert.match(elvanse, /Not on the list in the capture of 23 Sep 2026/);
+  assert.match(elvanse, /See the archived page/);
+  assert.doesNotMatch(elvanse, /class="impact|Shortage now|Starting soon/);
+  setLanguage(context, 'fi');
+  assert.match(context.pastRow(REMOVED[0]), /Aiemmin listalla: viimeksi nähty 15\.9\.2026 \(tilannekuva\)/);
+  setLanguage(context, 'en');
+});
+
+test('gaps between captures are shown as not observed, also for a removal after a long gap', () => {
+  setLanguage(context, 'en');
+  assert.deepEqual(plain(context.pastNotes(REMOVED[1])), ['Earlier on the list: last seen 18 Nov 2024 (capture)', 'Not observed between 18 Nov 2024 and 15 Sep 2026.']);
+  const inside = plain(context.pastNotes(REMOVED[2]));
+  assert.ok(inside.includes('Not observed between 23 Sep 2026 and 20 Oct 2026.'), inside.join('|'));
+  // A removal one capture after the last sighting is the date of a capture, not a gap.
+  assert.ok(!plain(context.pastNotes(REMOVED[0])).some(x => /Not observed/.test(x)));
+  setLanguage(context, 'fi');
+  assert.ok(plain(context.pastNotes(REMOVED[1])).includes('Ei havaintoja välillä 18.11.2024–15.9.2026.'));
+  setLanguage(context, 'en');
+});
+
+test('Finnish and English names find past packages (Elvanse, Ozempic, parasetamoli, ibuprofeeni)', () => {
+  const names = q => context.pastMatches(REMOVED, q).map(e => e.name);
+  assert.deepEqual(names('elvanse'), ['Elvanse']);
+  assert.deepEqual(names('Ozempic'), ['Ozempic']);
+  assert.deepEqual(names('semaglutide'), ['Ozempic']);
+  assert.deepEqual(names('parasetamoli'), ['Paramax Comp']);
+  assert.deepEqual(names('ibuprofeeni'), ['Ibutabs']);
+  assert.deepEqual(names('560833'), ['Elvanse']);
+  assert.deepEqual(names('nosuchmedicine'), []);
+});
+
+test('the earlier packages are read only when the current list has no match', async () => {
+  const hit = await listPage('?q=burana');
+  assert.deepEqual(hit.requested, ['current.json']);
+  assert.match(hit.list, /Buranagel/);
+  assert.equal(hit.count, '1 package');
+  const miss = await listPage('?q=elvanse');
+  assert.deepEqual(miss.requested, ['current.json', 'removed.json']);
+  assert.match(miss.list, /Elvanse[\s\S]*Earlier on the list: last seen 15 Sep 2026 \(capture\)/);
+  assert.equal(miss.count, 'Not on the list now. 1 package was on it earlier.');
+  assert.equal(miss.root.dataset.searching, 'true');
+  const none = await listPage('?q=');
+  assert.deepEqual(none.requested, ['current.json']);
+  assert.equal(none.root.dataset.searching, undefined);
+});
+
+test('Finnish names fall back to earlier packages in Finnish', async () => {
+  const page = await listPage('?q=parasetamoli', {lang:'fi'});
+  assert.match(page.list, /Paramax Comp/);
+  assert.equal(page.count, 'Ei listalla nyt. 1 pakkaus oli listalla aiemmin.');
+  const ibu = await listPage('?q=ibuprofeeni', {lang:'fi'});
+  assert.match(ibu.list, /Buranagel/);
+  assert.deepEqual(ibu.requested, ['current.json']);
+});
+
+test('the empty state keeps "not on the list" apart from "not available" and survives a failed load', async () => {
+  const none = await listPage('?q=zzzz');
+  assert.match(none.list, /Not on the list\. That does not guarantee your pharmacy has it\./);
+  assert.equal(none.count, '0 packages');
+  assert.doesNotMatch(none.list, /Earlier on the list/);
+  const failed = await listPage('?q=elvanse', {failRemoved:true});
+  assert.match(failed.list, /Not on the list\./);
+  assert.match(failed.list, /Earlier captures could not be loaded/);
+  assert.equal(failed.requested.filter(x => x === 'removed.json').length, 1);
+});
+
+test('the wording about earlier listings never says supply returned or the medicine is available', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    const text = ['pastCount', 'pastLast', 'pastGone', 'pastStatus', 'pastOpen', 'pastNote', 'pastLoading', 'pastError'].map(k => { const v = copy[lang][k]; return typeof v === 'function' ? v(2) : v; });
+    for (const line of text) assert.doesNotMatch(line, /returned|back in|restored|resolved|ended|palannut|palautunut|ratkennut|päättynyt|ei enää/i, `${lang}: ${line}`);
+    assert.match(copy[lang].pastNote, lang === 'en' ? /does not show whether a medicine is available now/ : /ei kerro, onko lääke nyt saatavilla/);
+    // "Not on the list" says where the package is; it never claims anything about the pharmacy shelf.
+    assert.doesNotMatch(copy[lang].pastStatus, /availab|saatavil/i);
+  }
+});
+
+test('a result carries a short impact chip next to the full label, and the compact phone rules hide the intro and the callout while searching', () => {
+  setLanguage(context, 'en');
+  const html = context.pkgCard({name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'N02', substitution_group:'42', other_packages_count:0}, NOW);
+  assert.match(html, /<span class="impact-chip">No interchangeable product on the market<\/span>/);
+  const css = read('style.css');
+  for (const selector of ['html[data-searching] .page-head .lead', 'html[data-searching] #search-hint', 'html[data-searching] .crit-callout']) assert.ok(css.includes(selector), selector);
+  assert.match(css, /@media \(max-width:719px\)\{\s*html\[data-searching\] \.page-head\{/);
+});
+
+test('nothing is answered, and the archive is not read, while current.json is still loading; early input is kept', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const early = await listPage('', {gate, after: async get => { get('search').value = 'ibuprofeeni'; get('search').handlers.input(); }});
+  assert.deepEqual(early.requested, ['current.json']);
+  assert.doesNotMatch(early.list, /Not on the list|Ibutabs|Earlier on the list|Buranagel/);
+  assert.equal(early.count, '');
+  release();
+  await early.settle();
+  assert.deepEqual(early.requested, ['current.json']);
+  assert.match(early.get('list').innerHTML, /Buranagel/);
+  assert.doesNotMatch(early.get('list').innerHTML, /Ibutabs|Earlier on the list/);
+  assert.equal(early.get('search').value, 'ibuprofeeni');
+});
+
+test('a search that a filter limits says so, keeps the query and offers to clear the filters (?q=burana&status=soon)', async () => {
+  const page = await listPage('?q=burana&status=soon');
+  assert.match(page.list, /No package on the current list matches this search with these filters\./);
+  assert.match(page.list, /id="clear-inline">Clear filters</);
+  assert.doesNotMatch(page.list, /Not on the list\./);
+  assert.deepEqual(page.requested, ['current.json']);
+  assert.equal(page.get('search').value, 'burana');
+  const fi = await listPage('?q=burana&status=soon', {lang:'fi'});
+  assert.match(fi.list, /Nykyisellä listalla ei ole tähän hakuun sopivaa pakkausta näillä suodattimilla\./);
+  assert.match(fi.list, /Tyhjennä suodattimet/);
+  // Without a filter the old messages stay.
+  assert.match((await listPage('?q=zzzz')).list, /Not on the list\./);
+  assert.match((await listPage('?status=soon')).list, /Nothing matches these filters/);
+});
+
+test('the filter panel starts closed on a phone while a search is on, and open without a search, on a wide screen', async () => {
+  const withSearch = await listPage('?q=burana&status=now');
+  assert.equal(withSearch.get('filters').open, false);
+  assert.match(withSearch.get('filters-count').textContent, /\(1\)/);
+  assert.equal((await listPage('?status=now')).get('filters').open, true);
+  assert.equal((await listPage('?q=burana')).get('filters').open, false);
+});
+
+test('the phone chip states only what the register shows, in both languages', () => {
+  const copy = vm.runInContext('copy', context);
+  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
+  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
+  for (const lang of ['en', 'fi']) for (const level of ['substitute', 'critical', 'nogroup', 'vet']) {
+    assert.doesNotMatch(copy[lang]['impactChip_' + level], /usually|yleensä|available|saatavilla|substitute|can give/i, `${lang} ${level}`);
+    setLanguage(context, lang);
+    const html = context.pkgCard({name:'T', UnavailableFrom:'2026-11-06', atc: level === 'vet' ? 'QN02' : 'N02', substitution_group: level === 'nogroup' ? '' : '42', other_packages_count: level === 'substitute' ? 2 : 0}, NOW);
+    assert.ok(html.includes(`<span class="impact-chip">${copy[lang]['impactChip_' + level]}</span>`), `${lang} ${level}`);
+  }
+  setLanguage(context, 'en');
+});

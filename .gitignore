@@ -17,6 +17,7 @@ site/about.html
 site/404.html
 site/p/
 site/summary.json
+site/removed.json
 data/source/*.xlsx
 data/source/*.csv
 data/source/*.xml

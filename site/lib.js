@@ -220,7 +220,7 @@ function impactLine(e) {
 }
 function impactBadge(e, tag = 'p') {
   const level = impactOf(e);
-  return `<${tag} class="impact impact-${level}">${uiIcon(level, 20)}<span>${esc(impactLine(e))}</span></${tag}>`;
+  return `<${tag} class="impact impact-${level}">${uiIcon(level, 20)}<span>${esc(impactLine(e))}</span><span class="impact-chip">${esc(copy[language]['impactChip_' + level])}</span></${tag}>`;
 }
 // Strengths of one medicine side by side: "10/20/30 mg" when they share a unit, else listed in order.
 function mergedStrengths(list) {
@@ -256,6 +256,26 @@ function filterPackages(rows, f, now = todayUTC()) {
   return rows.filter(e => (!f.q || searchMatches(e, f.q)) && (!f.impact || impactOf(e) === f.impact) && (!f.status || statusOf(e, now) === f.status || (f.status === 'now' && statusOf(e, now) === 'unknown')) && (!f.group || groupKey(e.atc) === f.group) && (!f.form || formKind(e.form) === f.form) && (!f.company || e.Company === f.company));
 }
 const relevant = rows => rows.filter(e => !e.removed_on);
+
+// ---- Earlier on the list: packages from removed.json (scripts/removed.py), searched only when the current list has no match.
+// removed.json is loaded on that first miss, so the first page stays light. A past listing says nothing about supply.
+let removedPromise;
+const loadRemoved = () => removedPromise || (removedPromise = fetchJson('removed.json').catch(error => { removedPromise = undefined; throw error; }));
+function pastMatches(rows, query) { return rows.filter(e => searchMatches(e, query)); }
+// What the captures show: the last capture that listed the package, then each stretch that was not observed (scripts/gaps.py).
+function pastNotes(e) {
+  const t = copy[language], d = dateText, notes = [t.pastLast(d(e.last_seen))];
+  for (const g of e.gaps || []) notes.push(t.tlGap(d(g.from), d(g.to)));
+  if (e.removed_on) notes.push(e.removed_after_gap ? t.tlGap(d(e.last_seen), d(e.removed_on)) : t.pastGone(d(e.removed_on)));
+  return notes;
+}
+function pastRow(e, level = 3) {
+  const t = copy[language], spec = [strengthShown(e), packText(e)].filter(Boolean), vnr = e.NordicArticleNumber || '';
+  return `<article class="pkg pkg-past"><p class="pkg-tab">${uiIcon('ended', 18)}<span>${esc(t.pastStatus)}</span></p>`
+    + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(formKind(e.form)))}">${formIcon(formKind(e.form), 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="medicine.html?vnr=${esc(vnr)}">${esc(e.name || t.unavailable)}</a></h${level}>`
+    + (spec.length ? `<p class="form pkg-spec">${spec.map(x => `<span>${esc(x)}</span>`).join(' ')}</p>` : '')
+    + `<ul class="past-notes">${pastNotes(e).map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="past-open">${esc(t.pastOpen)}${uiIcon('chevron', 16)}</p></div></div></article>`;
+}
 
 // ---- Package card: the shelf label. Status tab, pictogram, name, strength and pack, form and group, dates.
 const daysBetween = (from, to) => Math.floor((to - from) / DAY);
