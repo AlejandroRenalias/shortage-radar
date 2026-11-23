@@ -83,6 +83,11 @@ function whatMarkup(e, status) {
   const advice = isVet(e) ? t.whatTextVet : asked ? t.whatTextRest : t.whatText;
   return `<section class="panel what" aria-labelledby="what-title"><h2 id="what-title">${esc(t.whatTitle)}</h2><p>${esc(advice)}</p><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${esc(t.moreInfoUrl)}">${esc(t.moreInfoLink)}</a></p><p><a href="about.html#what-to-do">${esc(t.whatLink)}</a></p></section>`;
 }
+// An ended record names the captures that bound it, not the date of today's file.
+function sourceLine(e, left, snapshotDate) {
+  const t = copy[language];
+  return left && e.removed_on ? t.sourceNoteEnded(dateText(e.last_seen), dateText(e.removed_on)) : t.sourceNote(dateText(snapshotDate));
+}
 function notFound(root) {
   const t = copy[language];
   document.title = `${t.nfTitle} | ${t.brand}`;
@@ -100,7 +105,7 @@ function render() {
   root.innerHTML = `<a class="back" href="shortages.html">${uiIcon('back', 18)}<span>${esc(t.medBack)}</span></a><div class="med-layout"><div class="med-main">${labelMarkup(e, status)}${left ? '' : impactMarkup(e, shard.groups)}${timelineMarkup(e, left)}${whatMarkup(e, status)}`
     + (events.length > 1 ? `<section class="panel"><h2>${esc(t.otherNotice)}</h2><div class="pkg-list">${events.slice(1).map(x => pkgCard(x, now)).join('')}</div></section>` : '')
     + `</div><aside class="med-side">${detailsMarkup(e)}<section class="panel share" aria-labelledby="share-title"><h2 id="share-title">${esc(t.shareTitle)}</h2><button type="button" class="btn" id="copy-page">${uiIcon('copy', 18)}<span>${esc(t.copyPage)}</span></button> <span id="copy-status" role="status"></span></section>`
-    + `<p class="source-note">${esc(t.sourceNote(dateText(shard.snapshot_date)))} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceLink)}</a></p></aside></div>`;
+    + `<p class="source-note">${esc(sourceLine(e, left, shard.snapshot_date))} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceLink)}</a></p></aside></div>`;
   $('copy-page').addEventListener('click', () => {
     const done = () => { $('copy-status').textContent = copy[language].linkCopied; setTimeout(() => { $('copy-status').textContent = ''; }, 2500); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(`${location.origin}${location.pathname}?vnr=${encodeURIComponent(vnr)}`).then(done, () => {});

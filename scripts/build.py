@@ -319,7 +319,7 @@ def build():
     alerts = eu_list.new_alerts(es, matches, snapshots, _shift(history[-1]['date'], eu_list.ALERT_DAYS))
     eu_list.write_outputs(ROOT / 'site', rows, eu['meta'], metadata, history[-1]['date'], alerts)
     critical_data = {'eu': eu, 'rows': rows, 'counts': eu_list.counts(rows), 'history': eu_list.history(es, matches, [d for d, _ in snapshots]), 'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata}
-    for name, html in render_pages(len(current), home['impact'], critical_data).items():
+    for name, html in render_pages(home['short_now'], home['impact'], critical_data, home['expected_soon']).items():
         (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)} eu_list={eu_list.counts(rows)} eu_alerts={len(alerts)}")
 

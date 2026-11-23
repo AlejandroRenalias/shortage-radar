@@ -8,6 +8,7 @@ const shared = read('i18n.js') + '\n' + read('lib.js');
 const context = vm.createContext({Intl, Date, URLSearchParams});
 vm.runInContext(shared, context);
 const setLanguage = (ctx, lang) => vm.runInContext(`language='${lang}'`, ctx);
+const copy_fi = () => vm.runInContext('copy.fi', context);
 const NOW = Date.UTC(2026, 10, 21);
 const plain = value => JSON.parse(JSON.stringify(value));
 const nb = text => String(text).replace(/ /g, ' ');
@@ -64,7 +65,13 @@ test('the built pages carry the same English text as the copy file, so a string 
     for (const [, pairs] of html.matchAll(/data-i18n-attr="([^"]+)"/g)) for (const pair of pairs.split(';')) assert.equal(typeof en[pair.split('=')[1]], 'string', `${file}: ${pair}`);
   }
   assert.ok(checked > 80);
-  assert.match(pages['index.html'], new RegExp(en.heroLine(749).replace('.', '\\.')));
+  assert.match(pages['index.html'], new RegExp(en.heroLine(749, 0).replace('.', '\\.')));
+  assert.equal(en.heroLine(714, 43), 'Fimea: 714 short now, 43 more expected within 2 weeks.');
+  assert.equal(copy_fi().heroLine(714, 43), 'Fimea: 714 saatavuushäiriötä nyt, 43 lisää odotettavissa 2 viikon sisällä.');
+  assert.equal(en.sourceNoteEnded('1 Nov 2026', '2 Nov 2026'), 'Source: Fimea shortage file. Last seen in the capture of 1 Nov 2026, absent on 2 Nov 2026. The company reports the dates.');
+  assert.doesNotMatch(copy_fi().listIntro + copy_fi().trendsIntro, /puutteelli|listaa/);
+  assert.match(copy_fi().impactCaveat1, /kaupan/);
+  assert.doesNotMatch(copy_fi().impactCaveat1, /markkinoilla/);
 });
 
 test('no label is all capitals, no numbered markers, no middle-dot strings or arrows in the copy', () => {
@@ -528,6 +535,15 @@ test('veterinary packages are told to ask the veterinarian or pharmacy, not give
   assert.match(env.whatMarkup({atc:'N02BA', Company:'Oy', other_packages_count:0}, 'left'), /<p>Ask your pharmacy\./);
   const vetImpact = env.impactMarkup({atc:'QN02BA', NordicArticleNumber:'123456'}, {});
   assert.match(vetImpact, /Ask your veterinarian or pharmacy/); assert.doesNotMatch(vetImpact, /Substitution group /);
+});
+
+test('an ended record names the capture it was last seen in and the capture it was absent in, not the file date', () => {
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  const ended = {last_seen: '2026-11-10', removed_on: '2026-11-12'};
+  assert.match(env.sourceLine(ended, true, '2026-11-23'), /Last seen in the capture of 10 Nov 2026, absent on 12 Nov 2026\./);
+  assert.doesNotMatch(env.sourceLine(ended, true, '2026-11-23'), /23 Nov/);
+  assert.match(env.sourceLine({last_seen: '2026-11-23', removed_on: null}, false, '2026-11-23'), /data of 23 Nov 2026/);
 });
 
 test('the medicine page shows the impact label with the other packages of the group, so it can be checked', () => {

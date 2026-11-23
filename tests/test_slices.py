@@ -26,6 +26,7 @@ def test_summary_counts_and_picks_the_oldest_and_newest_started_packages():
     current.append(event('999999', '2027-01-01'))
     s = summary(current, META)
     assert s['total'] == 21 and s['company_count'] == 3
+    assert (s['short_now'], s['expected_soon']) == (20, 1)
     assert s['forms'] == {'kapseli': 5, 'tabletti': 16}
     assert s['atc']['S01'] == 3 and s['atc']['N02'] == 18
     assert len(s['longest']) == LONGEST and s['longest'][0]['UnavailableFrom'] == '2026-11-01'
