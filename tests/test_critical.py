@@ -162,8 +162,8 @@ def test_upcoming_notices_are_counted_apart_from_ongoing_ones():
     assert counts['ongoing']['exact'] == 1 and counts['upcoming']['exact'] == 2
     assert [r['status'] for r in rows if r['match_type'] == 'exact'] == ['ongoing', 'upcoming', 'upcoming']   # ongoing first
     page = render_critical({'eu': EU, 'rows': rows, 'counts': counts, 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {}})['critical.html']
-    assert 'saved on <strong>23 Nov 2026</strong>' in page and 'Starts later' in page and 'on 30 Nov 2026' in page and 'on 7 Dec 2026' in page
-    assert 'Not counted above: 2 packages' in page
+    assert 'Fimea file saved' in page and '>23 Nov 2026<' in page and 'Starts later' in page and 'on 30 Nov 2026' in page and 'on 7 Dec 2026' in page
+    assert 'Not counted as ongoing: 2 exact match' in page
     assert 'data-status="upcoming"' in page and 'id="eu-status"' in page
 
 
