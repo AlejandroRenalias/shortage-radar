@@ -121,7 +121,7 @@ def history_block(code, h, archive_start):
     lines = [f'<p>Our archive holds {h["count"]:,} {"shortage" if h["count"] == 1 else "shortages"} for packages with this code since {E(D(archive_start))}: '
              f'{h["listed_now"]:,} listed now, {h["gone"]:,} no longer listed. A notice that Fimea edited, or that was missing from some captures and came back, is counted as one shortage.</p>']
     if h['measured']:
-        lines.append(f'<p>For {h["measured"]:,} no longer listed shortages whose start we saw and with no gap in the captures, the days between the first and the last capture that listed them were '
+        lines.append(f'<p>For {h["measured"]:,} no longer listed shortages whose start we know and with no gap in the captures, the days between the first and the last capture that listed them were '
                      f'{E(days_text(h["days_min"]))} at least, {E(days_text(round(h["days_median"])))} in the middle and {E(days_text(h["days_max"]))} at most. '
                      'These are days between captures, not exact lengths: a shortage may have started before the first capture and lasted after the last.</p>')
     else:
@@ -129,7 +129,12 @@ def history_block(code, h, archive_start):
     rows = []
     for n in h['notices']:
         seen = 'Still listed' if n['removed_on'] is None else f'Last seen {E(D(n["last_seen"]))}'
-        first = f'Listed in the first capture ({E(D(n["first_seen"]))})' if n['listed_at_first_capture'] else E(D(n['first_seen']))
+        if n['listed_at_first_capture']:
+            first = f'Listed in the first capture ({E(D(n["first_seen"]))}). Start unknown.'
+        elif n['start_unknown']:
+            first = f'{E(D(n["first_seen"]))}. Start unknown: no capture for {n["start_gap_days"]} days before it.'
+        else:
+            first = E(D(n['first_seen']))
         notes = []
         if n['edits']:
             notes.append(f'Notice edited {n["edits"]} {"time" if n["edits"] == 1 else "times"}; counted as one shortage.')
@@ -143,7 +148,7 @@ def history_block(code, h, archive_start):
     lines.append('<div class="eu-scroll"><table class="eu-table eu-history"><thead><tr><th scope="col">Package</th><th scope="col">Match</th><th scope="col">Reported start</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Days between captures</th></tr></thead>'
                  f'<tbody>{"".join(rows)}</tbody></table></div>')
     lines.append('<p class="note">The archive is made of captures of Fimea’s file, not daily readings; before 21 Nov 2026 the captures come from the Internet Archive and have gaps. '
-                 'A gap in the captures is unknown time: it is not a new start and not an end. '
+                 'A gap in the captures is unknown time: it is not a new start and not an end. The start of a shortage is unknown when it was already listed in the first capture, or when the capture before its first sighting is more than 14 days earlier. '
                  '“Last seen” is the last capture that listed the shortage. A shortage that is not listed any more is not proof that supply returned.</p>')
     return ''.join(lines)
 
@@ -210,7 +215,7 @@ def methods_page(data):
 <section id="limits"><h2>Known limits</h2><ul class="steps">
 <li>Fimea’s shortage file has no history, and its dates are estimates. Our history starts when we first saved the file; it is made of captures, not daily readings.</li>
 <li>A package that leaves the file is “last seen” on the date of the last capture. That is not proof that supply returned.</li>
-<li>A notice that Fimea edits (a changed start, end or notification date) shows in the file as a new notice. We count a notice that was edited, or that was missing from some captures and came back, as one shortage. A gap between captures is unknown time, not a new start. The length we give is “days between captures”: from the first to the last capture that listed the shortage.</li>
+<li>A notice that Fimea edits (a changed start, end or notification date) shows in the file as a new notice. We count a notice that was edited, or that was missing from some captures and came back, as one shortage. A gap between captures is unknown time, not a new start. A gap is long when two captures are more than 14 days apart. The length we give is “days between captures”: from the first to the last capture that listed the shortage.</li>
 <li>The register describes today. We join old notices to today’s register, so a product that changed ATC code or route since then is shown as it is today.</li>
 <li>The EU list names a substance and routes, not dosage forms or strengths. A match says that the substance and route are on the list, not that this exact product is one the EU list is about.</li>
 <li>Combination products are matched by their own ATC code, and the list substance must be among their ingredients. The other ingredients are not checked against the list.</li>
@@ -218,7 +223,7 @@ def methods_page(data):
 <li>The EU list changes. We keep version {E(meta['version'])} until we check and update it.</li>
 <li>The match and the alerts are facts from public files. They give no advice, no risk score and no forecast. They do not name alternatives.</li>
 <li>These pages are in English only.</li></ul></section>
-<section id="alerts"><h2>Alerts</h2><p>The alert feeds list new shortages of packages with an exact match: the first capture that lists the shortage, with its VNR, ATC code, company and dates, and whether Fimea marks it ongoing or not yet started. Each shortage has one entry with a fixed id; an edited notice or one that returns after a missing capture is not a new alert. The daily build writes the feeds. Shortages already on the list when the archive started, or already listed for the same VNR in the capture before, are not new.</p>{downloads()}</section>
+<section id="alerts"><h2>Alerts</h2><p>The alert feeds list new shortages of packages with an exact match: the first capture that lists the shortage, with its VNR, ATC code, company and dates, and whether Fimea marks it ongoing or not yet started. Each shortage has one entry with a fixed id; an edited notice or one that returns after a missing capture is not a new alert. The daily build writes the feeds. Shortages already on the list when the archive started, already listed for the same VNR in the capture before, or first seen more than 14 days after the capture before (their start is unknown), are not new.</p>{downloads()}</section>
 </div></div>'''
     return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['methods'], 'How the critical medicines match works | Shortage Radar',
                     'Sources, licences, the match rule and the limits of the critical medicines page.'))

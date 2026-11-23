@@ -1,4 +1,5 @@
 import io
+from datetime import date, timedelta
 import json
 import sys
 import xml.etree.ElementTree as ET
@@ -114,7 +115,8 @@ def test_every_code_with_shortages_today_keeps_its_exact_matches():
         assert C.ingredient_fit(EU['rows'][atc]['description'], names, RULES), atc
 
 
-def event(vnr, first, last, removed=None, first_after='2026-11-01', at_first=False, start='2026-11-02', valid='K', notified='2026-10-30', end='2026-12-01', edited=False):
+def event(vnr, first, last, removed=None, first_after=None, at_first=False, start='2026-11-02', valid='K', notified='2026-10-30', end='2026-12-01', edited=False):
+    first_after = first_after or (date.fromisoformat(first) - timedelta(days=1)).isoformat()   # by default the capture before is a day earlier
     return {'NordicArticleNumber': vnr, 'Valid': valid, 'UnavailableFrom': start, 'EndingDate': end, 'DateOfTheNotification': notified, 'Company': 'Co',
             'first_seen': first, 'last_seen': last, 'removed_on': removed, 'listed_at_first_capture': at_first, 'first_seen_after': first_after, 'vnr_listed_at_removal': edited}
 
@@ -398,3 +400,31 @@ def test_english_content_is_marked_lang_en_whatever_language_the_menu_has():
     assert 'documentElement.lang' not in script       # the page language stays what the visitor chose; only the content is English
     css = (Path(__file__).resolve().parents[1] / 'site/style.css').read_text(encoding='utf-8')
     assert '.eu-table td>span{min-width:0;overflow-wrap:break-word}' in css
+
+
+def test_mitomycin_start_after_a_666_day_gap_is_unknown():
+    """Mitomycin (L01DC03) was first seen on 15 Sep 2026; the capture before it is from 18 Nov 2024, 666 days earlier."""
+    assert (date(2026, 9, 15) - date(2024, 11, 18)).days == 666
+    mito = event('777777', '2026-09-15', '2026-10-20', removed='2026-10-23', first_after='2024-11-18')
+    close = event('777778', '2026-11-10', '2026-11-20', removed='2026-11-21', first_after='2026-11-06')
+    days = ['2024-11-18', '2026-09-15', '2026-10-20', '2026-10-23', '2026-11-06', '2026-11-10', '2026-11-20', '2026-11-21']
+    long_gap, near = C.shortages([mito, close], days)[0], C.shortages([close], days)[0]
+    assert long_gap['start_unknown'] and long_gap['start_gap_days'] == 666
+    assert not near['start_unknown'] and near['start_gap_days'] == 4
+    # The threshold is "more than 14 days".
+    on_edge = event('777779', '2026-11-20', '2026-11-21', first_after='2026-11-06')
+    over = event('777780', '2026-11-21', '2026-11-21', first_after='2026-11-06')
+    assert not C.shortages([on_edge], [])[0]['start_unknown'] and C.shortages([over], [])[0]['start_unknown']
+    products = {'777777': product('L01DC03', 'Mitomycin medac', 'Mitomycin'), '777778': product('L01DC03', 'Mitomycin other', 'Mitomycin')}
+    details = {v: detail(['1047'], substances=['Mitomycin']) for v in products}
+    matches = matches_of([mito, close], products, details)
+    h = C.history([mito, close], matches, days)['L01DC03']
+    # Only the shortage with a known start is in the summary of lengths: 10 days, not 35.
+    assert (h['count'], h['measured'], h['days_min'], h['days_max']) == (2, 1, 10, 10)
+    page = render_critical({'eu': EU, 'rows': [], 'counts': C.counts([]), 'history': {'L01DC03': h}, 'archive_start': '2024-11-18', 'snapshot_date': '2026-11-23', 'source_metadata': {}})
+    html = page['critical-L01DC03.html']
+    assert 'Start unknown: no capture for 666 days before it.' in html and 'whose start we know' in html
+    assert 'more than 14 days' in page['critical-methods.html']
+    # A shortage first seen after a long gap is not a new alert.
+    events = [dict(mito, removed_on=None, first_seen='2026-11-20', first_seen_after='2026-09-20')]
+    assert C.new_alerts(events, matches, [('2026-09-20', [])], '2026-11-15') == []

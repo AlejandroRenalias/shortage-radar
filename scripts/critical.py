@@ -278,6 +278,10 @@ def shortages(events, capture_days=()):
         n.pop('_last')
         n['gaps'] = [{'from': a, 'to': b, 'days': _days(a, b)} for a, b in zip(days, days[1:]) if n['first_seen'] <= a and b <= n['last_seen'] and _days(a, b) > MAX_GAP_DAYS]
         n['days_between_captures'] = _days(n['first_seen'], n['last_seen'])
+        # The start is known only if the capture just before the first sighting is close: after a long gap the shortage may have begun any time in it.
+        before = n['first_seen_after']
+        n['start_gap_days'] = _days(before, n['first_seen']) if before else None
+        n['start_unknown'] = n['listed_at_first_capture'] or before is None or n['start_gap_days'] > MAX_GAP_DAYS
     return out
 
 
@@ -287,8 +291,8 @@ def history(events, matches, capture_days=()):
     The archive is made of captures, not daily observations, so a shortage has a first and a last capture that listed it,
     not an exact start or end. One that is no longer listed shows the date it was `last seen`. `days_between_captures`
     counts from the first to the last capture that listed it, so it is a lower bound that includes any unknown stretch;
-    shortages already listed in the first capture of the archive have no known start and are left out of the lengths,
-    and so are those with a gap in the captures inside them.
+    shortages with an unknown start (already listed in the first capture, or first seen more than MAX_GAP_DAYS after the capture
+    before) are left out of the lengths, and so are those with a gap in the captures inside them.
     """
     by_code = {}
     for n in shortages([e for e in events if matches.get(e['NordicArticleNumber'], {}).get('atc')], capture_days):
@@ -298,7 +302,7 @@ def history(events, matches, capture_days=()):
     out = {}
     for atc, notices in by_code.items():
         notices.sort(key=lambda n: (n['first_seen'], n['NordicArticleNumber']), reverse=True)
-        measured = [n['days_between_captures'] for n in notices if n['removed_on'] and not n['listed_at_first_capture'] and not n['gaps'] and not n['unseen']]
+        measured = [n['days_between_captures'] for n in notices if n['removed_on'] and not n['start_unknown'] and not n['gaps'] and not n['unseen']]
         out[atc] = {'notices': notices, 'count': len(notices), 'listed_now': sum(1 for n in notices if n['removed_on'] is None),
                     'gone': sum(1 for n in notices if n['removed_on']), 'measured': len(measured),
                     'days_min': min(measured) if measured else None, 'days_median': median(measured) if measured else None, 'days_max': max(measured) if measured else None}
@@ -315,7 +319,7 @@ def new_alerts(events, matches, snapshots, since):
     out = []
     for n in shortages(events, [d for d, _ in snapshots]):
         m = matches.get(n['NordicArticleNumber'])
-        if (m and m['match_type'] == 'exact' and n['first_seen'] > since and not n['listed_at_first_capture']
+        if (m and m['match_type'] == 'exact' and n['first_seen'] > since and not n['start_unknown']
                 and n['NordicArticleNumber'] not in listed.get(n['first_seen_after'], ())):
             out.append((n, m))
     out.sort(key=lambda x: (x[0]['first_seen'], x[1]['atc'], x[0]['NordicArticleNumber']), reverse=True)
@@ -325,7 +329,7 @@ def new_alerts(events, matches, snapshots, since):
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 TAG_BASE = 'tag:alejandrorenalias.github.io,2026:shortage-radar/critical/'
 ALERT_DAYS = 30
-MAX_GAP_DAYS = 14  # captures further apart than this tell nothing about the days between them
+MAX_GAP_DAYS = 14  # captures further apart than this (more than 14 days) tell nothing about the days between them
 ALERT_MAX = 100
 FEED_TITLE = 'Critical medicines in Finland: new shortages'
 FEED_SUBTITLE = 'New shortage notices in Fimea’s file for packages that match the EU Union list of critical medicines by ATC code and route.'
