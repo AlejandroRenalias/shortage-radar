@@ -33,6 +33,8 @@ jobs:
       checked: ${{ steps.check.outputs.date }}
       changed: ${{ steps.commit.outputs.changed }}
       pages_current: ${{ steps.pages_status.outputs.current }}
+      register: ${{ steps.register.outcome }}
+      age: ${{ steps.age.outputs.status }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -52,7 +54,9 @@ jobs:
           fi
           echo "date=$(date +%F)" >> "$GITHUB_OUTPUT"
       - name: Record impact triage counts
-        # The register has no history, so the counts are kept with the register of the day. A failure here does not stop the archive.
+        # The register has no history, so the counts are kept with the register of the day. A failure here does not stop the archive,
+        # and does not stay quiet: the alert job opens the pipeline issue for it (register-source).
+        id: register
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -67,6 +71,12 @@ jobs:
         env:
           TZ: Europe/Helsinki
         run: python scripts/ledger.py
+      - name: Check age of the source files
+        # Fails when the shortage file's Last-Modified or the register's run date is more than 2 days old. It does not stop the archive; the alert job opens the pipeline issue (source-stale).
+        id: age
+        continue-on-error: true
+        timeout-minutes: 2
+        run: python scripts/source_age.py
       - name: Preserve rejected download
         if: failure() && steps.check.outcome == 'failure'
         uses: actions/upload-artifact@v7
@@ -140,4 +150,9 @@ jobs:
           python scripts/pipeline_alert.py
           if [ '${{ needs.archive.result }}' = success ]; then
             PIPELINE=archive-stale RESULT=success python scripts/pipeline_alert.py
+            # The register step and the age check continue on error; their outcome opens or closes the issue entry here.
+            PIPELINE=register-source RESULT=${{ needs.archive.outputs.register == 'failure' && 'failure' || 'success' }} python scripts/pipeline_alert.py
+            # Stale opens the alert, fresh closes it; unknown (a missing or unreadable date, or a step that did not finish) leaves it as it is.
+            if [ '${{ needs.archive.outputs.age }}' = stale ]; then PIPELINE=source-stale RESULT=failure python scripts/pipeline_alert.py; fi
+            if [ '${{ needs.archive.outputs.age }}' = fresh ]; then PIPELINE=source-stale RESULT=success python scripts/pipeline_alert.py; fi
           fi

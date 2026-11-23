@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from triage import counts, level, medicine_name, newly_critical, on_market
+from triage import counts, is_available_alternative, level, medicine_name, newly_critical, on_market
 
 
 def test_levels_for_group_with_others_with_none_without_group_and_veterinary():
@@ -108,3 +108,46 @@ def test_record_keeps_one_entry_per_snapshot_date(tmp_path, monkeypatch):
     assert [c['date'] for c in data['counts']] == ['2026-11-21', '2026-11-22']
     assert data['counts'][1] == {'date': '2026-11-22', 'register_date': '2026-11-22', 'total': 2, 'substitute': 0, 'critical': 1, 'nogroup': 0, 'vet': 1}
     assert data['note']
+
+
+def test_one_definition_of_an_available_alternative():
+    p = dict(pack('000002'), short=False, shortage_flag='0')
+    assert is_available_alternative(p, {'000001'}, '2026-11-23', True) and is_available_alternative(p, {'000001'}, '2026-11-23')
+    # In the shortage file (by VNR or old VNR): not available, in both readings.
+    assert not is_available_alternative(p, {'000002'}, '2026-11-23', True)
+    assert not is_available_alternative(dict(p, old={'999999'}), {'999999'}, '2026-11-02')
+    # The register's own flags count only on the register's day; earlier captures read the dates.
+    assert not is_available_alternative(dict(p, shortage_flag='1'), set(), '2026-11-23', True)
+    assert is_available_alternative(dict(p, shortage_flag='1'), set(), '2026-11-02')
+    assert not is_available_alternative(dict(p, market='0'), set(), '2026-11-23', True)
+    assert is_available_alternative(dict(p, market='0'), set(), '2026-11-02')
+    assert not is_available_alternative(dict(p, shortage_flag=''), set(), '2026-11-23', True)
+    # Dates count in both readings.
+    assert not is_available_alternative(dict(p, entry='2026-12-01'), set(), '2026-11-23', True)
+    assert not is_available_alternative(dict(p, exit='2026-11-03'), set(), '2026-11-23', True)
+
+
+def test_register_flags_apply_only_to_the_capture_of_the_registers_date():
+    """A listed 17 Nov, A+B 18 Nov, A 19 Nov. B is short in the register of 23 Nov. That flag describes 23 Nov, so it must
+    not decide the 19 Nov capture: by the dates B is an alternative on 19 Nov, so the loss on 18 Nov (A and B both listed) is not confirmed."""
+    members = {'42': [dict(pack('A'), shortage_flag='0'), dict(pack('B'), shortage_flag='1')]}
+    shots = captures(['2026-11-17', '2026-11-18', '2026-11-19'], [['A'], ['A', 'B'], ['A']])
+    assert newly_critical(shots, members, '2026-11-23') == []
+    assert newly_critical(shots, members) == []
+    # The same flag in a register dated 19 Nov does describe the 19 Nov capture: B is short there, so the loss holds in two captures.
+    assert [e['date'] for e in newly_critical(shots, members, '2026-11-19')] == ['2026-11-18']
+
+
+def test_the_flag_is_read_only_in_the_capture_dated_like_the_register():
+    members = {'42': [dict(pack('A'), shortage_flag='0'), dict(pack('B'), shortage_flag='1')]}
+    from triage import group_states
+    rows = [{'NordicArticleNumber': 'A'}]
+    alias = {'A': '42', 'B': '42'}
+    assert group_states('2026-11-23', rows, members, alias, True) == {'42': True}      # the register's day: B is flagged short
+    assert group_states('2026-11-22', rows, members, alias, False) == {'42': False}    # any other day: the dates make B an alternative
+
+
+def test_market_flag_decides_a_package_without_an_entry_date_in_every_capture():
+    """The public text says so: on_market reads the dates, and today's market flag only where there is no entry date."""
+    assert on_market({'market': '1', 'entry': '', 'exit': ''}, '2026-01-01')
+    assert not on_market({'market': '0', 'entry': '', 'exit': ''}, '2026-01-01')

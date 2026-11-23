@@ -46,6 +46,7 @@ function filter() {
 }
 // The pages are in English only; their content carries lang="en", so the page language the visitor chose stays on the menu and footer.
 start();
+loadSource().then(renderChrome).catch(() => {});
 if (input) {
   if (matchMedia('(max-width:719px)').matches) $('eu-charts-fold').open = false;   // charts start closed on a phone, so the list is near the top
   [input, select, status].forEach(el => el.addEventListener(el === input ? 'input' : 'change', filter));

@@ -142,6 +142,8 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     current = json.loads((tmp_path / 'site/current.json').read_text(encoding='utf-8'))
     history = json.loads((tmp_path / 'site/history.json').read_text(encoding='utf-8'))
     assert len(current['events']) == 1 and 'history' not in current
+    source = json.loads((tmp_path / 'site/source.json').read_text(encoding='utf-8'))      # for the EU list pages, which load no other data
+    assert source['last_checked'] == '2026-11-02' and set(source) == {'archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked'}
     assert history['first_capture_count'] == 1 and 'events' not in history
     assert len(data['events']) == 1 and data['history'] == history['history']
     raw = (tmp_path / 'site/shortages.csv').read_bytes()
@@ -221,3 +223,44 @@ def test_substitution_group_code_decides_not_strength_or_form_text(tmp_path):
     assert found['000005']['substitution_group'] == '' and found['000005']['other_packages_count'] == 0
     assert sorted(members) == ['42', '43'] and [p['vnr'] for p in members['42']] == ['000001', '000002', '000003']
     assert 'holder' not in found['000001']
+
+
+def test_current_view_and_history_use_one_definition_of_an_available_alternative(tmp_path):
+    """F14: the impact level (register()), the medicine page list (group_lists) and the latest capture of the history
+    (group_states) all call triage.is_available_alternative, so they cannot disagree on the same register. Every combination of
+    the fields the rule reads is tried against one listed package."""
+    import itertools
+    from build import group_lists, helsinki_today
+    from triage import group_states
+    day = '2026-11-23'
+    cases = list(itertools.product(['1', '0'], ['0', '1', ''], ['', '2020-01-01', '2026-12-01'], ['', '2026-01-01', '2030-01-01']))
+    packages, products = [], ''
+    for n, (market, short, entry, exit_) in enumerate(cases):
+        group = f'g{n}'
+        for vnr, listed_one in ((f'1{n:05}', True), (f'2{n:05}', False)):
+            kaupanolo = f'<Kaupanolo><Kaupan>{market if not listed_one else 1}</Kaupan>' + (f'<Kauppaantulopaiva>{entry}</Kauppaantulopaiva>' if entry and not listed_one else '') + (f'<Kaupastapoistumispaiva>{exit_}</Kaupastapoistumispaiva>' if exit_ and not listed_one else '') + '</Kaupanolo>'
+            flag = f'<SaatavuushairioTiedot><Saatavuushairio>{short if not listed_one else 1}</Saatavuushairio></SaatavuushairioTiedot>'
+            packages.append(f'<Pakkaus Laakevalmiste-ref="{group}"><VNR-numero>{vnr}</VNR-numero>{kaupanolo}{flag}</Pakkaus>')
+        products += f'<Laakevalmiste id="{group}"><Vahvuus>1 mg</Vahvuus><Laakemuoto value="tabletti"/><Substituutioryhma value="{group}"/></Laakevalmiste>'
+    path = tmp_path / 'register.xml'
+    path.write_text('<Perusrekisteri>' + ''.join(packages) + products + '</Perusrekisteri>', encoding='utf-8')
+    listed = {f'1{n:05}' for n in range(len(cases))}
+    members = {}
+    found = register(path, listed, listed, members, day=day)
+    alias = {p['vnr']: g for g, ps in members.items() for p in ps}
+    states = group_states(day, [{'NordicArticleNumber': v} for v in sorted(listed)], members, alias, True)
+    current = [{'substitution_group': found[v]['substitution_group']} for v in sorted(listed)]
+    lists = group_lists(current, members, listed, day)
+    for n, (market, short, entry, exit_) in enumerate(cases):
+        group = f'g{n}'
+        count = found[f'1{n:05}']['other_packages_count']
+        assert (count > 0) == (not states[group]) == bool(lists[group]['available']), (market, short, entry, exit_)
+    # Reading the cases: the flag must say on the market and not short, and the dates must not contradict it.
+    by_case = {c: found[f'1{n:05}']['other_packages_count'] for n, c in enumerate(cases)}
+    assert by_case[('1', '0', '', '')] == 1
+    assert by_case[('1', '0', '2020-01-01', '')] == 1
+    assert by_case[('0', '0', '2020-01-01', '')] == 0     # the nine packages of 23 Nov 2026: dates say yes, the register flag says no
+    assert by_case[('1', '1', '', '')] == 0 and by_case[('1', '', '', '')] == 0
+    assert by_case[('1', '0', '2026-12-01', '')] == 0 and by_case[('1', '0', '2020-01-01', '2026-01-01')] == 0
+    assert by_case[('1', '0', '2020-01-01', '2030-01-01')] == 1
+    assert helsinki_today() >= '2026-11-23'

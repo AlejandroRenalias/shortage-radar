@@ -80,8 +80,19 @@ function freshnessInfo(d, now = Date.now(), today = todayUTC()) {
   const t=copy[language], checked=parsedDate(d.last_checked);
   if (checked) return {text:t.checked(dateText(d.last_checked)), stale:today-checked.valueOf()>3*86400000, warning:t.stale};
   const built=d.generated_at && new Date(d.generated_at);
-  if (built && !Number.isNaN(built.valueOf())) return {text:`${t.checked(timestampText(d.generated_at))}. ${t.buildOnly}`, stale:now-built.valueOf()>3*86400000, warning:t.staleBuild};
+  if (built && !Number.isNaN(built.valueOf())) return {text:t.buildOnly(timestampText(d.generated_at)), stale:now-built.valueOf()>3*86400000, warning:t.staleBuild};
   return {text:'', stale:false, warning:''};
+}
+// A source file is stale when its date is more than STALE_DAYS days before today (Helsinki time). Fimea has changed the shortage file on
+// weekends, so the limit is two days. The same limit and rule are STALE_DAYS and stale_reasons in scripts/source_age.py, which opens the maintainer's issue.
+const STALE_DAYS = 2;
+// The Helsinki calendar day of an HTTP date such as 'Sun, 22 Nov 2026 23:20:01 GMT', as YYYY-MM-DD; '' when it cannot be read.
+function helsinkiDay(s) { const d=new Date(s || ''); return Number.isNaN(d.valueOf()) ? '' : new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit'}).format(d); }
+// The Fimea file date and the register date of the source metadata. An unknown date is not stale.
+function sourceDays(meta) { return {shortages:helsinkiDay((meta||{}).shortages_last_modified), register:parsedDate((meta||{}).register_date) ? meta.register_date : ''}; }
+function staleSources(meta, today = todayUTC()) {
+  const days = sourceDays(meta);
+  return ['shortages','register'].filter(file => days[file] && today - parsedDate(days[file]).valueOf() > STALE_DAYS*86400000).map(file => ({file, date:days[file]}));
 }
 // Modified-release and similar forms are named exactly, because a pharmacy does not swap them for ordinary tablets or capsules.
 // The form filter still groups them with their pictogram (formKind).
@@ -323,19 +334,32 @@ function applyStatic() {
   document.querySelectorAll('[data-fimea]').forEach(el => { el.href = ({group: language === 'fi' ? 'https://fimea.fi/myyntiluvat/laakevaihto' : 'https://fimea.fi/en/marketing_authorisations/interchangeable_medicinal_products', search: t.moreInfoUrl, data: language === 'fi' ? 'https://fimea.fi/avoin_data' : 'https://fimea.fi/en/about_us/open-data'})[el.dataset.fimea]; });
   document.querySelectorAll('[data-lang-btn]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.langBtn === language)));
 }
+let chromeData = null;
 function renderChrome(d) {
-  const t = copy[language], meta = d.source_metadata || {}, times = [];
-  if (meta.shortages_last_modified && timestampText(meta.shortages_last_modified)) times.push(`${t.shortageFile}: ${timestampText(meta.shortages_last_modified)}`);
+  chromeData = d;
+  const t = copy[language], meta = d.source_metadata || {}, times = [], days = sourceDays(meta);
+  if (meta.shortages_last_modified && timestampText(meta.shortages_last_modified)) times.push(`${t.fileChanged(timestampText(meta.shortages_last_modified))}`);
   if (meta.register_last_modified && timestampText(meta.register_last_modified)) times.push(`${t.register}: ${timestampText(meta.register_last_modified)}`);
+  if (days.register) times.push(t.registerDate(dateText(days.register)));
   const checked = parsedDate(d.last_checked), snapshot = parsedDate(d.snapshot_date), newer = checked && snapshot && d.snapshot_date > d.last_checked;
   const freshness = freshnessInfo(d), show = !newer && freshness.text;
   if ($('source-times')) $('source-times').textContent = [t.latest(dateText(d.snapshot_date)), show ? freshness.text : '', ...times].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. ') + '.';
-  if ($('stale')) { const stale = !newer && freshness.stale; $('stale').hidden = !stale; $('stale-text').textContent = stale ? freshness.warning : ''; }
+  // Next to the headline on the home page: when Fimea's file last changed (HTTP Last-Modified) and when our job last checked it.
+  if ($('hero-fresh')) {
+    $('hero-file').textContent = t.fileChanged(days.shortages ? dateText(days.shortages) : t.dateUnknown);
+    $('hero-checked').textContent = show ? freshness.text : '';
+    $('hero-fresh').hidden = false;
+  }
+  if ($('stale')) {
+    const warnings = staleSources(meta).map(x => x.file === 'shortages' ? t.staleFile(dateText(x.date)) : t.staleRegister(dateText(x.date)));
+    if (!newer && freshness.stale) warnings.push(freshness.warning);
+    $('stale').hidden = !warnings.length; $('stale-text').textContent = warnings.join(' ');
+  }
 }
 function setLanguage(next, render) {
   language = next;
   try { localStorage.setItem('language', language); } catch (_) {}
-  applyStatic(); if (render) render();
+  applyStatic(); if (chromeData) renderChrome(chromeData); if (render) render();
 }
 function start(render) {
   document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => setLanguage(b.dataset.langBtn, render)));
@@ -346,6 +370,8 @@ function start(render) {
 const fetchJson = url => fetch(url).then(r => { if (!r.ok) throw Error(url); return r.json(); });
 let currentPromise;
 const loadCurrent = () => currentPromise || (currentPromise = fetchJson('current.json'));
+// The small file with the source dates of this build, for pages that load no other data (the EU list pages).
+const loadSource = () => fetchJson('source.json');
 let summaryPromise;
 const loadSummary = () => summaryPromise || (summaryPromise = fetchJson('summary.json'));
 function showLoadError() {
