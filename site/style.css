@@ -524,6 +524,8 @@ html:not(.js) .needs-js{display:none}
 .eu-info-text{margin-top:var(--s1);padding-top:var(--s2);border-top:1px solid var(--line);color:var(--text);font-size:.9375rem;line-height:1.45}
 .eu-notes{margin:var(--s3) 0 var(--s5);padding:0 var(--s4);border:1px solid var(--line);border-radius:var(--r);background:var(--white)}
 .eu-notes>summary{min-height:44px;display:flex;align-items:center}
+/* long URLs (the EMA link in the source credit) wrap instead of widening the page */
+.eu-notes,.eu-info-text,.eu-list,.eu-more,.eu-code-page,.eu-facts{overflow-wrap:anywhere}
 .eu-notes[open]{padding-bottom:var(--s3)}.eu-notes p{margin:var(--s2) 0}
 .eu-atc-fact{display:none}
 .eu-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3);margin:var(--s4) 0 var(--s5)}

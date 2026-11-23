@@ -471,3 +471,8 @@ def test_timeline_strip_hatches_a_notice_that_vanished_for_a_capture():
     assert 'Not listed in the captures 2026-10-01 to 2026-10-10: unknown' in svg
     steady = dict(n, unseen=[])
     assert 'class="eu-tl-gap"><title>' not in charts.timeline_strip([steady], '2026-09-15', '2026-11-23')
+
+
+def test_long_urls_wrap_in_the_notes_and_other_credit_text():
+    css = (Path(__file__).resolve().parents[1] / 'site/style.css').read_text(encoding='utf-8')
+    assert '.eu-notes,.eu-info-text,.eu-list,.eu-more,.eu-code-page,.eu-facts{overflow-wrap:anywhere}' in css
