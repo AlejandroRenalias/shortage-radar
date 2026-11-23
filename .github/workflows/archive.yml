@@ -80,7 +80,9 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/snapshots data/source/metadata.json data/triage-counts.json data/ledger
+          git add data/snapshots data/source/metadata.json data/triage-counts.json
+          # The ledger is optional output: it does not exist when its step failed before writing the first file.
+          if [ -d data/ledger ]; then git add data/ledger; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update Fimea shortage data'
             for attempt in 1 2 3; do

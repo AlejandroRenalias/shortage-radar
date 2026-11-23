@@ -139,7 +139,7 @@ def home(count, impact=None, soon=0):
     line = f'Fimea: {count:,} short now{f", {soon:,} more expected within 2 weeks" if soon else ""}.'
     impact = impact or {}
     sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
-    answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the pharmacy can usually give a substitute.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
+    answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the register lists an interchangeable package that is on the market and not flagged short.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
     return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head"><div class="hero-text">
 <h1 id="hero-line" data-count="{count}" data-soon="{soon}">{line}</h1>

@@ -5,6 +5,7 @@
 short; null when there is no group), the `register_date` of the basic register used, and the SHA-256 of the two source files
 (`shortages_sha256`, `register_sha256`) so a row can be tied to the files it came from.
 
+A VNR with several notices in the file gets one row: the notice with the latest notification date (then the latest start date, then the company).
 The job can run several times a day. The first run of a day writes its rows; later runs on that day add nothing, so a day is
 never listed twice. A day is never changed afterwards. The ledger describes only what the files said on the day; a gap in the
 dates means the job did not record those days.
@@ -37,8 +38,15 @@ def rows_for(day, rows, register_path, shortage_path):
     vnrs = {r['NordicArticleNumber'] for r in rows}
     products = register(register_path, vnrs, vnrs)
     hashes = {'shortages_sha256': sha256(shortage_path), 'register_sha256': sha256(register_path)}
-    out = []
+    # One row for each VNR: when a VNR has several notices, the one with the latest notification date wins, then the latest
+    # start date, then the company name, so the same file always gives the same row.
+    chosen = {}
     for r in rows:
+        key = (r['DateOfTheNotification'], r['UnavailableFrom'], r['Company'])
+        if r['NordicArticleNumber'] not in chosen or key > chosen[r['NordicArticleNumber']][0]:
+            chosen[r['NordicArticleNumber']] = (key, r)
+    out = []
+    for _, r in chosen.values():
         product = dict({'other_packages_count': 0}, **products.get(r['NordicArticleNumber'], {}), **r)
         group = product.get('substitution_group') or ''
         out.append(dict({'date': day, 'vnr': r['NordicArticleNumber'], 'group': group, 'impact': level(product),

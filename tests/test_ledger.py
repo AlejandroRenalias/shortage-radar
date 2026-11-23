@@ -61,3 +61,19 @@ def test_a_new_day_appends_and_a_new_month_starts_a_new_file(tmp_path, monkeypat
     assert after.startswith(before) and len(read(folder, '2026-11.jsonl')) == 4
     ledger.record('2026-12-01', folder, register)
     assert sorted(p.name for p in folder.iterdir()) == ['2026-11.jsonl', '2026-12.jsonl']
+
+
+def test_a_vnr_with_two_notices_gets_one_row_with_a_fixed_rule(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    extra = '012345;K;2026-11-01;2026-12-01;2026-10-15;2026-11-01;Company\n'
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(SNAPSHOT + extra, encoding='utf-8')
+    assert ledger.record('2026-11-23', folder, register) == 2
+    rows = read(folder, '2026-11.jsonl')
+    assert [r['vnr'] for r in rows] == ['012345', '012347']
+    assert ledger.record('2026-11-23', folder, register) == 0
+    assert len(read(folder, '2026-11.jsonl')) == 2
+    # The rule does not depend on the order of the rows in the file.
+    snapshot = SNAPSHOT.splitlines(True)
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(snapshot[0] + extra + ''.join(snapshot[1:]), encoding='utf-8')
+    reversed_rows = ledger.rows_for('2026-11-23', build.read_snapshot(tmp_path / 'data/snapshots/2026-11-22.txt'), register, tmp_path / 'data/snapshots/2026-11-22.txt')
+    assert [(r['vnr'], r['impact']) for r in reversed_rows] == [(r['vnr'], r['impact']) for r in rows]
