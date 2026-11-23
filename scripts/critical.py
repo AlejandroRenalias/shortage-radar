@@ -21,12 +21,14 @@ from changes import date_text
 
 ROOT = Path(__file__).resolve().parents[1]
 FOLDER = ROOT / 'data/critical'
-TYPES = ('exact', 'route-mismatch', 'unmatched')
-TYPE_NAMES = {'exact': 'Exact match', 'route-mismatch': 'Route does not fit', 'unmatched': 'Not in the register'}
+TYPES = ('exact', 'route-mismatch', 'ingredient-mismatch', 'unmatched')
+ORDER = {'exact': 0, 'route-mismatch': 1, 'ingredient-mismatch': 2, 'unmatched': 3, 'flag-only': 4}
+STATUS_NAMES = {'ongoing': 'Ongoing', 'upcoming': 'Starts later'}
+TYPE_NAMES = {'exact': 'Exact match', 'route-mismatch': 'Route does not fit', 'unmatched': 'Not in the register', 'ingredient-mismatch': 'Ingredient not confirmed'}
 SOURCE_CREDIT = ('EU list: European Medicines Agency (EMA), Union list of critical medicines, version {version} ({reference}), {published}. '
                  'Shortages and register: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed by Shortage Radar.')
 # Rows of a captured notice that the history keeps.
-EVENT_KEYS = ('NordicArticleNumber', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Company', 'first_seen', 'last_seen', 'removed_on', 'listed_at_first_capture')
+EVENT_KEYS = ('NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Company', 'first_seen', 'last_seen', 'removed_on', 'listed_at_first_capture')
 
 
 def load_eu_list(folder=FOLDER):
@@ -44,6 +46,46 @@ def load_routes(folder=FOLDER):
 def load_forms(folder=FOLDER):
     with (folder / 'forms.csv').open(encoding='utf-8', newline='') as f:
         return {r['id']: r['name_en'] for r in csv.DictReader(f)}
+
+
+def load_ingredient_rules(folder=FOLDER):
+    return json.loads((folder / 'ingredients.json').read_text(encoding='utf-8'))['overrides']
+
+
+def _norm(text, brackets=False):
+    """Lower case, hyphens as spaces, spaces collapsed; with `brackets`, text in brackets (a comment on a list entry) is removed."""
+    text = text.casefold().replace('-', ' ')
+    while brackets and '(' in text and ')' in text and text.index('(') < text.index(')'):
+        text = text[:text.index('(')] + ' ' + text[text.index(')') + 1:]
+    return ' '.join(text.split())
+
+
+def _word_start(fragment, text):
+    """Does `fragment` occur in `text` at the start of a word? "adrenaline" is not found in "noradrenaline"."""
+    i = text.find(fragment)
+    while i >= 0:
+        if i == 0 or not text[i - 1].isalpha():
+            return True
+        i = text.find(fragment, i + 1)
+    return False
+
+
+def ingredient_fit(description, substances, rules=None):
+    """Is the EU list substance among the product's active ingredients? Extra ingredients are allowed (combinations).
+
+    By default every substance the list entry names ("PIPERACILLIN, TAZOBACTAM" names two) must be an active ingredient
+    of the product, as the same name or as the start of its name ("Ipratropium bromide" for IPRATROPIUM). `rules`
+    (ingredients.json) holds the entries the register names differently; for those, each group of fragments needs one
+    found at the start of a word in an ingredient name. A product with no ingredients given cannot be confirmed.
+    """
+    names = [_norm(x) for x in substances if x]
+    if not names:
+        return False
+    key = _norm(description, True)
+    if rules and key in rules:
+        return all(any(_word_start(_norm(f), n) for f in group for n in names) for group in rules[key])
+    parts = [_norm(x, True) for x in description.split(',') if _norm(x, True)]
+    return all(any(n == p or n.startswith(p + ' ') or n.startswith(p + ',') for n in names) for p in parts)
 
 
 def list_routes(text):
@@ -76,25 +118,29 @@ def note_for(match_type, status, flag, record):
     parts = []
     if match_type == 'unmatched':
         return 'This VNR is not in the Fimea register, so its ATC code and route are not known.'
-    if match_type == 'exact':
-        parts.append('The ATC code is on the list and the route fits.')
+    if match_type == 'ingredient-mismatch':
+        have = ', '.join(record['substance_list']) or 'none given'
+        parts.append(f"The ATC code is on the list, but the active ingredient is not confirmed. List substance: {record['list_description'].title()}. Product ingredients: {have}.")
+    elif match_type == 'exact':
+        parts.append('The ATC code and the active ingredient are on the list and the route fits.')
     elif status == 'unclear':
         parts.append('The ATC code is on the list. Route unclear: Fimea gives no usable route for this product, so no route match is made.')
     else:
         parts.append(f"The ATC code is on the list, but the route does not fit. Product route: {', '.join(record['product_routes'])}. List route: {record['list_route']}.")
     if flag == '0':
-        parts.append('Fimea does not flag this product as EU-critical; the ATC code and route match the list.' if match_type == 'exact'
+        parts.append('Fimea does not flag this product as EU-critical; the ATC code, ingredient and route match the list.' if match_type == 'exact'
                      else 'Fimea does not flag this product as EU-critical.')
     elif flag == '1' and match_type != 'exact':
         parts.append('Fimea flags this product as EU-critical.')
     return ' '.join(parts)
 
 
-def classify(vnr, product, detail, eu, table, forms):
+def classify(vnr, product, detail, eu, table, forms, rules=None):
     """One match record for a VNR, or None when the VNR is in the register but its ATC code is not on the list and Fimea does not flag it.
 
-    Packages that Fimea flags as EU-critical although their ATC code is not on the list get the type `flag-only`; they
-    are kept out of the three counts and shown apart.
+    The ATC code is checked first, then the active ingredient (`ingredient-mismatch` when the list substance is not among the
+    ingredients, or none are given), then the route. Packages that Fimea flags as EU-critical although their ATC code is not
+    on the list get the type `flag-only`; they are kept out of the counts and shown apart.
     """
     if product is None:
         return {'vnr': vnr, 'match_type': 'unmatched', 'atc': '', 'name': '', 'strength': '', 'form': '', 'form_en': '', 'substances': '', 'pack': '', 'product_routes': [],
@@ -110,17 +156,21 @@ def classify(vnr, product, detail, eu, table, forms):
             return None
         return dict(base, match_type='flag-only', list_row=None, list_route='', note='Fimea flags this product as EU-critical, but its ATC code is not on the EU list.')
     status, _ = route_fit(detail.get('routes', []), row['route'], table)
-    match_type = 'exact' if status == 'fits' else 'route-mismatch'
-    record = dict(base, match_type=match_type, route_status={'fits': 'fits', 'no': 'does not fit', 'unclear': 'unclear'}[status], list_row=row['row'], list_route=row['route'], list_description=row['description'])
+    substances = detail.get('substances') or [x for x in product.get('substances', '').split(', ') if x]
+    if not ingredient_fit(row['description'], substances, rules):
+        match_type = 'ingredient-mismatch'
+    else:
+        match_type = 'exact' if status == 'fits' else 'route-mismatch'
+    record = dict(base, substance_list=substances, match_type=match_type, route_status={'fits': 'fits', 'no': 'does not fit', 'unclear': 'unclear'}[status], list_row=row['row'], list_route=row['route'], list_description=row['description'])
     record['note'] = note_for(match_type, status, flag, record)
     return record
 
 
-def match_all(events, products, details, eu, table, forms):
+def match_all(events, products, details, eu, table, forms, rules=None):
     """{vnr: record} for every VNR of the events (current or gone) that is on the list, flagged by Fimea, or not in the register."""
     out = {}
     for vnr in sorted({e['NordicArticleNumber'] for e in events}):
-        record = classify(vnr, products.get(vnr), details.get(vnr, {}), eu, table, forms)
+        record = classify(vnr, products.get(vnr), details.get(vnr, {}), eu, table, forms, rules)
         if record:
             out[vnr] = record
     return out
@@ -136,16 +186,19 @@ def current_rows(events, matches):
                 latest[e['NordicArticleNumber']] = e
     rows = []
     for vnr, e in latest.items():
-        rows.append(dict(matches[vnr], company=e['Company'], start=e['UnavailableFrom'], end=e['EndingDate'], notified=e['DateOfTheNotification'], first_seen=e['first_seen']))
-    return sorted(rows, key=lambda r: ({'exact': 0, 'route-mismatch': 1, 'unmatched': 2, 'flag-only': 3}[r['match_type']], r['atc'], r['name'], r['vnr']))
+        # Fimea's Voimassa: K = ongoing (Kyllä), E = not started yet (Ei). Upcoming notices are not counted as current shortages.
+        rows.append(dict(matches[vnr], company=e['Company'], start=e['UnavailableFrom'], end=e['EndingDate'], notified=e['DateOfTheNotification'], first_seen=e['first_seen'],
+                         status='ongoing' if e['Valid'] == 'K' else 'upcoming'))
+    return sorted(rows, key=lambda r: (r['status'] != 'ongoing', ORDER[r['match_type']], r['atc'], r['name'], r['vnr']))
 
 
 def counts(rows):
-    out = dict.fromkeys(TYPES, 0)
-    out['flag-only'] = 0
+    """{'ongoing': {type: n}, 'upcoming': {type: n}, 'disagree': n}: ongoing (Voimassa K) and not yet started (E) are counted apart."""
+    out = {status: dict.fromkeys(TYPES + ('flag-only',), 0) for status in STATUS_NAMES}
     for r in rows:
-        out[r['match_type']] += 1
-    out['disagree'] = sum(1 for r in rows if r['match_type'] in ('exact', 'route-mismatch') and r['fimea_flag'] in ('0', '1') and (r['fimea_flag'] == '1') != (r['match_type'] == 'exact'))
+        out[r['status']][r['match_type']] += 1
+    out['disagree'] = sum(1 for r in rows if r['status'] == 'ongoing' and r['match_type'] in ('exact', 'route-mismatch') and r['fimea_flag'] in ('0', '1')
+                          and (r['fimea_flag'] == '1') != (r['match_type'] == 'exact'))
     return out
 
 
@@ -155,43 +208,82 @@ def credit(meta):
 
 def csv_rows(rows, meta):
     """CSV lines for the download: every current match, with the list version, the list row and the source credit."""
-    header = ['VNR', 'ATC', 'name', 'strength', 'form', 'active substances', 'company', 'start date', 'estimated end date', 'notification date', 'match type',
+    header = ['VNR', 'ATC', 'name', 'strength', 'form', 'active substances', 'company', 'status', 'start date', 'estimated end date', 'notification date', 'match type',
               'route status', 'product route', 'list route', 'list version', 'list row', 'Fimea EU-critical flag', 'note', 'source credit']
     yield header
     for r in rows:
-        yield [r['vnr'], r['atc'], r.get('name', ''), r.get('strength', ''), r.get('form_en') or r.get('form', ''), r.get('substances', ''), r.get('company', ''), r.get('start', ''), r.get('end', ''),
+        yield [r['vnr'], r['atc'], r.get('name', ''), r.get('strength', ''), r.get('form_en') or r.get('form', ''), r.get('substances', ''), r.get('company', ''), STATUS_NAMES[r['status']].lower(), r.get('start', ''), r.get('end', ''),
                r.get('notified', ''), r['match_type'], r.get('route_status', ''), '; '.join(r.get('product_routes', [])), r.get('list_route', ''), meta['version'],
                r['list_row'] if r.get('list_row') else '', {'0': 'no', '1': 'yes'}.get(r.get('fimea_flag', ''), ''), r['note'], credit(meta)]
 
 
 def json_data(rows, meta, source_metadata, snapshot_date):
-    return {'title': 'Critical medicines in Finland', 'generated_for_snapshot': snapshot_date, 'list': {k: meta[k] for k in ('version', 'reference', 'published', 'source_url', 'retrieved', 'rows')},
+    return {'title': 'Critical medicines in Finland', 'snapshot_date': snapshot_date, 'list': {k: meta[k] for k in ('version', 'reference', 'published', 'source_url', 'retrieved', 'rows')},
             'counts': counts(rows), 'source_credit': credit(meta),
             'sources': {'shortages_last_modified': source_metadata.get('shortages_last_modified'), 'register_last_modified': source_metadata.get('register_last_modified')},
             'matches': [dict({k: v for k, v in r.items() if k not in ('first_seen', 'form')}, list_version=meta['version'], source_credit=credit(meta)) for r in rows]}
 
 
-def history(events, matches):
-    """Per ATC code: the notices of the archive for packages with that code, and what they show.
+def _days(a, b):
+    return (date.fromisoformat(b) - date.fromisoformat(a)).days
 
-    The archive is made of captures, not daily observations, so a notice has a first and a last capture that listed it,
-    not an exact end. A notice that is no longer listed shows the date it was `last seen`. `days_listed` counts from the
-    first to the last capture that listed it, so it is a lower bound; notices already listed in the first capture
-    of the archive have no known start and are left out of the lengths.
+
+def shortages(events, capture_days=()):
+    """Join the notices of a VNR that are one shortage: the notice edited (a changed start, end or notification date shows
+    up in the archive as a removal and a new notice in the same capture), and the notice that vanishes for some captures and
+    returns. Returns merged shortages, each with `edits`, `unseen` (stretches between captures that did not list it, which
+    are unknown) and `gaps` (spans between two captures further apart than MAX_GAP_DAYS, also unknown).
+
+    A gap in the captures is not a new start and not an end: nothing is known about those days.
+    """
+    out = []
+    by_vnr = {}
+    for e in sorted(events, key=lambda e: (e['first_seen'], e['UnavailableFrom'])):
+        by_vnr.setdefault(e['NordicArticleNumber'], []).append(e)
+    days = sorted(capture_days)
+    for chain in by_vnr.values():
+        current = None
+        for e in chain:
+            identity = (e['UnavailableFrom'], e['DateOfTheNotification'], e['Company'])
+            if current is not None:
+                prev = current['_last']
+                edited = prev.get('vnr_listed_at_removal') and prev['removed_on'] == e['first_seen']
+                returned = prev['removed_on'] is not None and (prev['UnavailableFrom'], prev['DateOfTheNotification'], prev['Company']) == identity
+                if edited or returned:
+                    if edited:
+                        current['edits'] += 1
+                    else:
+                        current['unseen'].append({'from': prev['last_seen'], 'to': e['first_seen']})
+                    current.update({k: e[k] for k in ('Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Company', 'last_seen', 'removed_on')}, _last=e)
+                    continue
+            current = {k: e[k] for k in EVENT_KEYS}
+            current.update(_last=e, edits=0, unseen=[], first_seen_after=e['first_seen_after'], origin=(e['NordicArticleNumber'], *identity))
+            out.append(current)
+    for n in out:
+        n.pop('_last')
+        n['gaps'] = [{'from': a, 'to': b, 'days': _days(a, b)} for a, b in zip(days, days[1:]) if n['first_seen'] <= a and b <= n['last_seen'] and _days(a, b) > MAX_GAP_DAYS]
+        n['days_between_captures'] = _days(n['first_seen'], n['last_seen'])
+    return out
+
+
+def history(events, matches, capture_days=()):
+    """Per ATC code: the shortages of the archive for packages with that code, and what they show.
+
+    The archive is made of captures, not daily observations, so a shortage has a first and a last capture that listed it,
+    not an exact start or end. One that is no longer listed shows the date it was `last seen`. `days_between_captures`
+    counts from the first to the last capture that listed it, so it is a lower bound that includes any unknown stretch;
+    shortages already listed in the first capture of the archive have no known start and are left out of the lengths,
+    and so are those with a gap in the captures inside them.
     """
     by_code = {}
-    for e in events:
-        m = matches.get(e['NordicArticleNumber'])
-        if not m or not m['atc'] or m['match_type'] == 'unmatched':
-            continue
-        n = {k: e[k] for k in EVENT_KEYS}
+    for n in shortages([e for e in events if matches.get(e['NordicArticleNumber'], {}).get('atc')], capture_days):
+        m = matches[n['NordicArticleNumber']]
         n.update(match_type=m['match_type'], name=m['name'], strength=m['strength'])
-        n['days_listed'] = (date.fromisoformat(e['last_seen']) - date.fromisoformat(e['first_seen'])).days
         by_code.setdefault(m['atc'], []).append(n)
     out = {}
     for atc, notices in by_code.items():
         notices.sort(key=lambda n: (n['first_seen'], n['NordicArticleNumber']), reverse=True)
-        measured = [n['days_listed'] for n in notices if n['removed_on'] and not n['listed_at_first_capture']]
+        measured = [n['days_between_captures'] for n in notices if n['removed_on'] and not n['listed_at_first_capture'] and not n['gaps'] and not n['unseen']]
         out[atc] = {'notices': notices, 'count': len(notices), 'listed_now': sum(1 for n in notices if n['removed_on'] is None),
                     'gone': sum(1 for n in notices if n['removed_on']), 'measured': len(measured),
                     'days_min': min(measured) if measured else None, 'days_median': median(measured) if measured else None, 'days_max': max(measured) if measured else None}
@@ -199,17 +291,18 @@ def history(events, matches):
 
 
 def new_alerts(events, matches, snapshots, since):
-    """Notices of exact matches that first appeared in a capture after `since`: the alert feed.
+    """[(shortage, match)] for exact matches whose shortage first appeared in a capture after `since`: the alert feed, one for each shortage.
 
-    A notice listed in the first capture of the archive, or whose VNR was already listed in the capture before it, is not new.
+    A shortage listed in the first capture of the archive, or whose VNR was already listed in the capture before it, is not
+    new. A notice that was edited, or that vanished and returned, is the same shortage and is not new again.
     """
     listed = {day: {r['NordicArticleNumber'] for r in rows} for day, rows in snapshots}
     out = []
-    for e in events:
-        m = matches.get(e['NordicArticleNumber'])
-        if (m and m['match_type'] == 'exact' and e['first_seen'] > since and not e['listed_at_first_capture']
-                and e['NordicArticleNumber'] not in listed.get(e['first_seen_after'], ())):
-            out.append((e, m))
+    for n in shortages(events, [d for d, _ in snapshots]):
+        m = matches.get(n['NordicArticleNumber'])
+        if (m and m['match_type'] == 'exact' and n['first_seen'] > since and not n['listed_at_first_capture']
+                and n['NordicArticleNumber'] not in listed.get(n['first_seen_after'], ())):
+            out.append((n, m))
     out.sort(key=lambda x: (x[0]['first_seen'], x[1]['atc'], x[0]['NordicArticleNumber']), reverse=True)
     return out
 
@@ -217,6 +310,7 @@ def new_alerts(events, matches, snapshots, since):
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 TAG_BASE = 'tag:alejandrorenalias.github.io,2026:shortage-radar/critical/'
 ALERT_DAYS = 30
+MAX_GAP_DAYS = 14  # captures further apart than this tell nothing about the days between them
 ALERT_MAX = 100
 FEED_TITLE = 'Critical medicines in Finland: new shortages'
 FEED_SUBTITLE = 'New shortage notices in Fimea’s file for packages that match the EU Union list of critical medicines by ATC code and route.'
@@ -226,23 +320,37 @@ def _day_text(value):
     return date_text(value, 'en') or 'not given'
 
 
-def alert_item(e, m, meta):
-    """One alert as plain facts: what appeared, when we first saw it, and the match."""
-    name = ' '.join(x for x in (m['name'], m['strength']) if x) or f"VNR {e['NordicArticleNumber']}"
-    key = '|'.join([e['NordicArticleNumber'], e['UnavailableFrom'], e['DateOfTheNotification'], e['Company']])
-    lines = [f"First seen in the capture of {_day_text(e['first_seen'])}.", f"ATC code: {m['atc']} ({m['list_description']}). Match: exact (EU list version {meta['version']}, row {m['list_row']}).",
+def alert_item(n, m, meta):
+    """One alert as plain facts: what appeared, when we first saw it, and the match.
+
+    The id comes from the first notice of the shortage (VNR, start, notification date, company), so it does not change when the
+    notice is edited or returns after missing from a capture.
+    """
+    name = ' '.join(x for x in (m['name'], m['strength']) if x) or f"VNR {n['NordicArticleNumber']}"
+    upcoming = n['Valid'] != 'K'
+    lines = [f"First seen in the capture of {_day_text(n['first_seen'])}." + (' Fimea lists it as not started yet (Voimassa E).' if upcoming else ' Fimea lists it as ongoing (Voimassa K).'),
+             f"ATC code: {m['atc']} ({m['list_description']}). Match: exact (EU list version {meta['version']}, row {m['list_row']}).",
              f"Product route: {', '.join(m['product_routes']) or 'not given'}. List route: {m['list_route']}.",
-             f"Reported start: {_day_text(e['UnavailableFrom'])}. Company’s estimated end: {_day_text(e['EndingDate'])}. Notified: {_day_text(e['DateOfTheNotification'])}.",
-             f"Company: {e['Company']}. VNR: {e['NordicArticleNumber']}."]
+             f"Reported start: {_day_text(n['UnavailableFrom'])}. Company’s estimated end: {_day_text(n['EndingDate'])}. Notified: {_day_text(n['DateOfTheNotification'])}.",
+             f"Company: {n['Company']}. VNR: {n['NordicArticleNumber']}."]
     if m['fimea_flag'] == '0':
         lines.append('Fimea does not flag this product as EU-critical.')
     lines.append(credit(meta))
-    return {'id': f"{TAG_BASE}{e['NordicArticleNumber']}/{hashlib.sha1(key.encode('utf-8')).hexdigest()[:10]}", 'title': f"New shortage: {name} ({m['atc']})",
-            'url': f"{SITE_URL}critical-{m['atc']}.html", 'date': e['first_seen'], 'text': '\n'.join(lines), 'atc': m['atc'], 'vnr': e['NordicArticleNumber']}
+    key = '|'.join(n['origin'])
+    return {'id': f"{TAG_BASE}{n['NordicArticleNumber']}/{hashlib.sha1(key.encode('utf-8')).hexdigest()[:10]}",
+            'title': f"New {'upcoming ' if upcoming else ''}shortage: {name} ({m['atc']})", 'url': f"{SITE_URL}critical-{m['atc']}.html", 'date': n['first_seen'],
+            'text': '\n'.join(lines), 'atc': m['atc'], 'vnr': n['NordicArticleNumber']}
 
 
 def alert_items(alerts, meta):
-    return [alert_item(e, m, meta) for e, m in alerts[:ALERT_MAX]]
+    """Feed items, newest first, one for each id: a repeated id keeps its earliest entry."""
+    seen, items = set(), []
+    for n, m in alerts:
+        item = alert_item(n, m, meta)
+        if item['id'] not in seen:
+            seen.add(item['id'])
+            items.append(item)
+    return items[:ALERT_MAX]
 
 
 def rss_feed(items, meta, latest):

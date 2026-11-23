@@ -1,0 +1,362 @@
+{
+ "note": "EU list entries whose name the register spells differently. Each entry: normalised list name (brackets removed, hyphens as spaces) -> groups of name fragments; every group needs one fragment found at the start of a word in an active substance name. Entries not listed here are checked by name: each substance of the list entry must be a product substance, or the start of its name.",
+ "overrides": {
+  "influenza vaccine": [
+   [
+    "influenza",
+    "h1n1",
+    "h3n2",
+    "like strain",
+    "like virus"
+   ]
+  ],
+  "cholera vaccine": [
+   [
+    "cholera"
+   ]
+  ],
+  "meningococcal group c vaccine": [
+   [
+    "neisseria meningitidis c"
+   ]
+  ],
+  "meningococcal group b vaccine": [
+   [
+    "neisseria meningitidis group b"
+   ]
+  ],
+  "diphtheria, tetanus, pertussis vaccine": [
+   [
+    "diphtheri"
+   ],
+   [
+    "tetan"
+   ],
+   [
+    "pertussis"
+   ]
+  ],
+  "diphtheria, tetanus vaccine": [
+   [
+    "diphtheri"
+   ],
+   [
+    "tetan"
+   ]
+  ],
+  "diphtheria, tetanus, pertussis, poliomyelitis vaccine": [
+   [
+    "diphtheri"
+   ],
+   [
+    "tetan"
+   ],
+   [
+    "pertussis"
+   ],
+   [
+    "polio"
+   ]
+  ],
+  "typhoid vaccine": [
+   [
+    "salmonella typhi"
+   ]
+  ],
+  "encephalitis": [
+   [
+    "japanese encephalitis"
+   ]
+  ],
+  "hepatitis b vaccine": [
+   [
+    "hepatitis b"
+   ]
+  ],
+  "hepatitis a vaccine": [
+   [
+    "hepatitis a"
+   ]
+  ],
+  "hepatitis a and b vaccine": [
+   [
+    "hepatitis a"
+   ],
+   [
+    "hepatitis b"
+   ]
+  ],
+  "measles, mumps, rubella vaccine": [
+   [
+    "measles"
+   ],
+   [
+    "mumps"
+   ],
+   [
+    "rubella"
+   ]
+  ],
+  "measles, mumps, rubella, varicella vaccine": [
+   [
+    "measles"
+   ],
+   [
+    "mumps"
+   ],
+   [
+    "rubella"
+   ],
+   [
+    "varicella"
+   ]
+  ],
+  "poliomyelitis vaccine": [
+   [
+    "poliovirus"
+   ]
+  ],
+  "rabies vaccine": [
+   [
+    "rabies"
+   ]
+  ],
+  "rotavirus pentavalent vaccine": [
+   [
+    "rotavirus"
+   ]
+  ],
+  "varicella vaccine": [
+   [
+    "varicella"
+   ]
+  ],
+  "yellow fever vaccine": [
+   [
+    "yellow fever"
+   ]
+  ],
+  "papillomavirus vaccine": [
+   [
+    "papillomavirus",
+    "hpv"
+   ]
+  ],
+  "human papillomavirus vaccine": [
+   [
+    "papillomavirus",
+    "hpv"
+   ]
+  ],
+  "bcg vaccine": [
+   [
+    "bacillus calmette",
+    "mycobacterium bovis bcg",
+    "bcg"
+   ]
+  ],
+  "human normal immunoglobulin": [
+   [
+    "immunoglobulin",
+    "globulin immune"
+   ]
+  ],
+  "human anti d immunoglobulin": [
+   [
+    "immunoglobulin",
+    "globulin immune"
+   ]
+  ],
+  "human tetanus immunoglobulin": [
+   [
+    "immunoglobulin",
+    "globulin immune"
+   ]
+  ],
+  "antilymphocyte immunoglobulin": [
+   [
+    "lymphocyte immunoglobulin"
+   ]
+  ],
+  "antithymocyte immunoglobulin": [
+   [
+    "lymphocyte immunoglobulin"
+   ]
+  ],
+  "human prothrombin complex": [
+   [
+    "human coagulation factor ix"
+   ],
+   [
+    "human coagulation factor x"
+   ]
+  ],
+  "human coagulation factor viii": [
+   [
+    "octocog",
+    "simoctocog",
+    "turoctocog",
+    "damoctocog",
+    "efanesoctocog",
+    "rurioctocog",
+    "lonoctocog",
+    "moroctocog",
+    "susoctocog",
+    "human coagulation factor viii",
+    "efmoroctocog",
+    "factor viii"
+   ]
+  ],
+  "human coagulation factor ix": [
+   [
+    "nonacog",
+    "albutrepenonacog",
+    "eftrenonacog",
+    "human coagulation factor ix"
+   ]
+  ],
+  "human coagulation factor xiii": [
+   [
+    "factor xiii"
+   ]
+  ],
+  "eptacog alfa": [
+   [
+    "eptacog"
+   ]
+  ],
+  "antithrombin iii": [
+   [
+    "antithrombin"
+   ]
+  ],
+  "plasma protein fraction": [
+   [
+    "plasma protein"
+   ]
+  ],
+  "complement c1 esterase inhibitor": [
+   [
+    "c1 esterase inhibitor"
+   ]
+  ],
+  "albumin": [
+   [
+    "albumin",
+    "human albumin",
+    "99mtc technetium human albumin"
+   ]
+  ],
+  "radium dichloride": [
+   [
+    "radium"
+   ]
+  ],
+  "folinic acid": [
+   [
+    "calcium folinate",
+    "folinic acid"
+   ]
+  ],
+  "epinephrine": [
+   [
+    "adrenaline",
+    "epinephrine"
+   ]
+  ],
+  "norepinephrine": [
+   [
+    "noradrenaline",
+    "norepinephrine"
+   ]
+  ],
+  "isoprenaline": [
+   [
+    "isoprenalin"
+   ]
+  ],
+  "glyceryl trinitrate": [
+   [
+    "glycerol trinitrate",
+    "glyceryl trinitrate"
+   ]
+  ],
+  "hydroxocobalamin": [
+   [
+    "hydroxocobalamin"
+   ]
+  ],
+  "hydroxycarbamide": [
+   [
+    "hydroxyurea",
+    "hydroxycarbamide"
+   ]
+  ],
+  "isavuconazole": [
+   [
+    "isavuconazonium",
+    "isavuconazole"
+   ]
+  ],
+  "valproic acid": [
+   [
+    "valpro"
+   ]
+  ],
+  "medicinal charcoal": [
+   [
+    "charcoal"
+   ]
+  ],
+  "insulin human": [
+   [
+    "human insulin",
+    "insulin human",
+    "insulinum monocomponent",
+    "protamine insulin"
+   ]
+  ],
+  "polystyrene sulfonic acid": [
+   [
+    "polystyrene sulphonate",
+    "polystyrene sulfonate"
+   ]
+  ],
+  "amoxicillin, clavulanic acid": [
+   [
+    "amoxicillin"
+   ],
+   [
+    "clavulan"
+   ]
+  ],
+  "co trimoxazole": [
+   [
+    "sulfamethoxazole",
+    "co trimoxazole"
+   ]
+  ],
+  "colistin": [
+   [
+    "colisti"
+   ]
+  ],
+  "amphotericin b": [
+   [
+    "amphotericin"
+   ]
+  ],
+  "phenoxymethylpenicillin": [
+   [
+    "phenoxymethylpenicillin",
+    "pneoxymethylpenicillin"
+   ]
+  ],
+  "ciprofloxacin": [
+   [
+    "ciprofloxacin",
+    "ciprifloxacin"
+   ]
+  ]
+ }
+}

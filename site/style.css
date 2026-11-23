@@ -446,13 +446,13 @@ html:not(.js) .needs-js{display:none}
   .list-meta .btn-quiet{margin-left:0}
 }
 /* Critical medicines: counts, match table (a card list on a phone), chips and the per-code pages */
-.eu-counts{list-style:none;margin:var(--s4) 0 var(--s3);padding:0;display:grid;gap:var(--s3);grid-template-columns:minmax(0,1fr)}
+.eu-counts{list-style:none;margin:var(--s3) 0;padding:0;display:grid;gap:var(--s3);grid-template-columns:minmax(0,1fr)}
 .eu-count{display:flex;gap:var(--s4);align-items:flex-start;padding:var(--s4);border:1px solid var(--line);border-radius:var(--r);background:var(--white)}
 .eu-num{font-size:2rem;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums;min-width:3.2ch}
 .eu-label{display:grid;gap:2px;font-size:.9375rem;color:var(--muted)}.eu-label strong{color:var(--ink);font-size:1.0625rem}
-.eu-exact{border-color:var(--sub-line)}.eu-route-mismatch{border-color:var(--crit-line)}.eu-unmatched{border-color:var(--nog-line)}
+.eu-asof{margin:var(--s3) 0 0}.eu-exact{border-color:var(--sub-line)}.eu-route-mismatch{border-color:var(--crit-line)}.eu-ingredient-mismatch{border-color:var(--nog-line)}.eu-unmatched{border-color:var(--nog-line)}
 .eu-chip{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid;font-size:.875rem;line-height:1.5;white-space:nowrap}
-.eu-chip.eu-exact{background:var(--sub-tint);color:var(--sub)}.eu-chip.eu-route-mismatch{background:var(--crit-tint);color:var(--crit)}.eu-chip.eu-unmatched,.eu-chip.eu-flag-only{background:var(--nog-tint);color:var(--nog);border-color:var(--nog-line)}
+.eu-chip.eu-exact{background:var(--sub-tint);color:var(--sub)}.eu-chip.eu-route-mismatch{background:var(--crit-tint);color:var(--crit)}.eu-chip.eu-ingredient-mismatch,.eu-chip.eu-unmatched,.eu-chip.eu-flag-only{background:var(--nog-tint);color:var(--nog);border-color:var(--nog-line)}
 .eu-filter{display:grid;gap:var(--s2);margin:var(--s3) 0}.eu-filter label{color:var(--ink)}
 .eu-filter input,.eu-filter select{font:inherit;min-height:44px;padding:0 var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--white);color:var(--ink);width:100%}
 .eu-scroll{margin:var(--s3) 0}
@@ -467,8 +467,8 @@ html:not(.js) .needs-js{display:none}
 .eu-card{padding:var(--s4);border:1px solid var(--line);border-radius:var(--r);background:var(--white)}.eu-card dl{display:grid;grid-template-columns:auto 1fr;gap:2px var(--s4);margin:var(--s2) 0 0;font-size:.9375rem}.eu-card dt{color:var(--muted)}.eu-card dd{margin:0}
 .eu-card strong{display:block}.eu-card .note{display:block}
 @media (min-width:720px){
-  .eu-counts{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .eu-filter{grid-template-columns:auto minmax(0,2fr) auto minmax(0,1fr);align-items:center}.eu-filter .note{grid-column:1/-1;margin:0}
+  .eu-counts{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .eu-filter{grid-template-columns:auto minmax(0,2fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center}.eu-filter .note{grid-column:1/-1;margin:0}
   .eu-facts{grid-template-columns:14rem 1fr}.eu-facts dt{margin-top:0}
 }
 @media (max-width:719px){

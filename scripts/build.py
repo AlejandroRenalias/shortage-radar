@@ -109,9 +109,10 @@ def register(path, wanted, current_shortages=(), members=None, details=None):
             product = {k: v for k, v in products[ref].items() if k not in PRIVATE}
             key = group_key(product)
             count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
-            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s)), other_packages_count=count)
+            names = list(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))
+            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(names), other_packages_count=count)
             if details is not None:
-                details[vnr] = {k: products[ref][k] for k in ('routes', 'eu_flag', 'form_id')}
+                details[vnr] = dict({k: products[ref][k] for k in ('routes', 'eu_flag', 'form_id')}, substances=names)
     return result
 
 
@@ -305,11 +306,11 @@ def build():
     for name, text in feeds(es, snapshots, history, critical).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
     eu = eu_list.load_eu_list()
-    matches = eu_list.match_all(es, products, details, eu, eu_list.load_routes(), eu_list.load_forms())
+    matches = eu_list.match_all(es, products, details, eu, eu_list.load_routes(), eu_list.load_forms(), eu_list.load_ingredient_rules())
     rows = eu_list.current_rows(es, matches)
     alerts = eu_list.new_alerts(es, matches, snapshots, _shift(history[-1]['date'], eu_list.ALERT_DAYS))
     eu_list.write_outputs(ROOT / 'site', rows, eu['meta'], metadata, history[-1]['date'], alerts)
-    critical_data = {'eu': eu, 'rows': rows, 'counts': eu_list.counts(rows), 'history': eu_list.history(es, matches), 'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata}
+    critical_data = {'eu': eu, 'rows': rows, 'counts': eu_list.counts(rows), 'history': eu_list.history(es, matches, [d for d, _ in snapshots]), 'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata}
     for name, html in render_pages(len(current), home['impact'], critical_data).items():
         (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
     print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)} eu_list={eu_list.counts(rows)} eu_alerts={len(alerts)}")

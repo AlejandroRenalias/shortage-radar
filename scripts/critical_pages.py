@@ -6,17 +6,18 @@ They are in English only. Facts only: no advice, no score, no forecast.
 from html import escape
 
 from changes import date_text
-from critical import TYPE_NAMES, credit
+from critical import STATUS_NAMES, TYPE_NAMES, TYPES, credit
 from pages import SITE_URL, document
 
 E = lambda value: escape(str(value if value is not None else ''), quote=True)
 D = lambda value: date_text(value, 'en') or 'not given'
 FIMEA_LICENCE = 'https://fimea.fi/en/about_us/open-data'
 EMA_NOTICE = 'https://www.ema.europa.eu/en/about-us/legal-notice'
-EMA_LIST = 'https://www.ema.europa.eu/en/human-regulatory-overview/post-authorisation/medicine-shortages-and-availability-issues/union-list-critical-medicines'
+EMA_LIST = 'https://www.ema.europa.eu/en/human-regulatory-overview/post-authorisation/medicine-shortages-availability-issues/availability-medicines-during-crises/union-list-critical-medicines'
 TYPE_EXPLAINED = {
-    'exact': 'The ATC code is on the EU list and a route of the product fits a route of the list row.',
-    'route-mismatch': 'The ATC code is on the EU list, but no route of the product fits the list row, or Fimea gives no usable route.',
+    'exact': 'The ATC code is on the EU list, the active ingredient is the list substance and a route of the product fits a route of the list row.',
+    'route-mismatch': 'The ATC code and ingredient are on the EU list, but no route of the product fits the list row, or Fimea gives no usable route.',
+    'ingredient-mismatch': 'The ATC code is on the EU list, but the list substance is not among the active ingredients of the product, or no ingredients are given.',
     'unmatched': 'The VNR is not in the Fimea register, so the code is not known.',
 }
 FILE = {'critical': 'critical.html', 'methods': 'critical-methods.html'}
@@ -46,14 +47,21 @@ def route_cell(r):
     if r['match_type'] == 'unmatched':
         return '<span class="note">not known</span>'
     product = ', '.join(r.get('product_routes') or []) or 'not given'
-    return f'<span class="eu-route"><b>Product:</b> {E(product)}</span><span class="eu-route"><b>List:</b> {E(r.get("list_route") or "—")}</span>'
+    return f'<span><span class="eu-route"><b>Product:</b> {E(product)}</span><span class="eu-route"><b>List:</b> {E(r.get("list_route") or "—")}</span></span>'
+
+
+def status_cell(r):
+    """Fimea's Voimassa: K is ongoing, E has not started yet; the start date shows when."""
+    if r['status'] == 'ongoing':
+        return f'<span>Ongoing<span class="note">since {E(D(r["start"]))}</span></span>'
+    return f'<span>Starts later<span class="note">on {E(D(r["start"]))}</span></span>'
 
 
 def notice_row(r):
     atc = f'<a href="{code_file(r["atc"])}">{E(r["atc"])}</a>' if r.get('atc') and r['match_type'] != 'flag-only' else E(r.get('atc') or '—')
     text = ' '.join(str(r.get(k, '')) for k in ('vnr', 'atc', 'name', 'substances', 'company', 'list_description')).casefold()
-    return (f'<tr data-type="{E(r["match_type"])}" data-text="{E(text)}"><td data-label="Medicine">{name_cell(r)}<span class="eu-note">{E(r["note"])}</span></td>'
-            f'<td data-label="ATC code">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Route">{route_cell(r)}</td>'
+    return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}"><td data-label="Medicine">{name_cell(r)}<span class="eu-note">{E(r["note"])}</span></td>'
+            f'<td data-label="ATC code">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Route">{route_cell(r)}</td>'
             f'<td data-label="Company">{E(r.get("company", ""))}</td><td data-label="Estimated end">{E(D(r.get("end")))}</td><td data-label="VNR">{E(r["vnr"])}</td></tr>')
 
 
@@ -72,26 +80,32 @@ def source_block(meta, snapshot_date, source_metadata):
 
 def critical_page(data):
     meta, rows, counts = data['eu']['meta'], data['rows'], data['counts']
+    ongoing, upcoming = counts['ongoing'], counts['upcoming']
     tiles = ''.join(
-        f'<li class="eu-count eu-{t}"><span class="eu-num">{counts[t]:,}</span><span class="eu-label"><strong>{E(TYPE_NAMES[t])}</strong><span>{E(TYPE_EXPLAINED[t])}</span></span></li>'
-        for t in ('exact', 'route-mismatch', 'unmatched'))
-    flag_line = (f'<p class="note">Fimea’s own EU-critical flag differs from this match for {counts["disagree"]:,} {"package" if counts["disagree"] == 1 else "packages"}'
-                 + (f', and Fimea flags {counts["flag-only"]:,} more whose ATC code is not on the list' if counts['flag-only'] else '') + '. The note on each row says so.</p>')
-    body_rows = ''.join(notice_row(r) for r in rows) or '<tr><td colspan="7">No shortage packages match the EU list today.</td></tr>'
+        f'<li class="eu-count eu-{t}"><span class="eu-num">{ongoing[t]:,}</span><span class="eu-label"><strong>{E(TYPE_NAMES[t])}</strong><span>{E(TYPE_EXPLAINED[t])}</span></span></li>'
+        for t in TYPES)
+    later = {t: upcoming[t] for t in TYPES if upcoming[t]}
+    later_line = (f'<p class="note">Not counted above: {sum(later.values()):,} {"package" if sum(later.values()) == 1 else "packages"} that Fimea lists as starting later '
+                  f'({"; ".join(f"{n:,} {E(TYPE_NAMES[t]).lower()}" for t, n in later.items())}). They are in the table, marked “Starts later”.</p>') if later else ''
+    flag_line = (f'<p class="note">Fimea’s own EU-critical flag differs from this match for {counts["disagree"]:,} ongoing {"package" if counts["disagree"] == 1 else "packages"}'
+                 + (f', and Fimea flags {ongoing["flag-only"] + upcoming["flag-only"]:,} more whose ATC code is not on the list' if ongoing['flag-only'] + upcoming['flag-only'] else '') + '. The note on each row says so.</p>')
+    body_rows = ''.join(notice_row(r) for r in rows) or '<tr><td colspan="8">No shortage packages match the EU list today.</td></tr>'
     codes = ''.join(
         f'<li><a href="{code_file(a)}"><span class="eu-code">{E(a)}</span> {E(row["description"].title())}</a>'
         + (f' <span class="note">{data["history"][a]["count"]:,} in archive</span>' if a in data['history'] else '') + '</li>'
         for a, row in sorted(data['eu']['rows'].items()))
     body = f'''<div class="wrap page-head"><h1>Critical medicines in Finland</h1>
-<p class="lead">Medicines on the EU Union list of critical medicines (version {E(meta['version'])}, {E(D(meta['published']))}) that Fimea lists as short in Finland today.</p>
+<p class="lead">Medicines on the EU Union list of critical medicines (version {E(meta['version'])}, {E(D(meta['published']))}) that Fimea lists as short in Finland.</p>
 <p class="note"><strong>This is not medical advice.</strong> A listing does not tell you whether a medicine is available at your pharmacy. Ask a pharmacist or doctor about your medicines. <a href="{FILE['methods']}">How the match works</a></p></div>
 <section class="wrap" aria-labelledby="eu-counts-title"><h2 id="eu-counts-title" class="sr-only">Counts</h2>
-<ul class="eu-counts">{tiles}</ul>{flag_line}</section>
+<p class="eu-asof">Ongoing shortages in the Fimea file saved on <strong>{E(D(data['snapshot_date']))}</strong>. Fimea marks a notice as ongoing (Voimassa K) or not yet started (E).</p>
+<ul class="eu-counts">{tiles}</ul>{later_line}{flag_line}</section>
 <section class="wrap eu-list" aria-labelledby="eu-table-title"><h2 id="eu-table-title">Shortage packages that match the EU list</h2>
 <form class="eu-filter needs-js" id="eu-filter"><label for="eu-q">Search</label><input id="eu-q" type="search" autocomplete="off" maxlength="100" placeholder="Name, substance, ATC code, company or VNR">
-<label for="eu-type">Match</label><select id="eu-type"><option value="">All matches</option><option value="exact">{E(TYPE_NAMES['exact'])}</option><option value="route-mismatch">{E(TYPE_NAMES['route-mismatch'])}</option><option value="unmatched">{E(TYPE_NAMES['unmatched'])}</option></select>
+<label for="eu-type">Match</label><select id="eu-type"><option value="">All matches</option><option value="exact">{E(TYPE_NAMES['exact'])}</option><option value="route-mismatch">{E(TYPE_NAMES['route-mismatch'])}</option><option value="ingredient-mismatch">{E(TYPE_NAMES['ingredient-mismatch'])}</option><option value="unmatched">{E(TYPE_NAMES['unmatched'])}</option></select>
+<label for="eu-status">Status</label><select id="eu-status"><option value="">Ongoing and starts later</option><option value="ongoing">Ongoing</option><option value="upcoming">Starts later</option></select>
 <p class="note" id="eu-shown" role="status"></p></form>
-<div class="eu-scroll"><table class="eu-table"><thead><tr><th scope="col">Medicine</th><th scope="col">ATC code</th><th scope="col">Match</th><th scope="col">Route</th><th scope="col">Company</th><th scope="col">Estimated end</th><th scope="col">VNR</th></tr></thead><tbody id="eu-body">{body_rows}</tbody></table></div>
+<div class="eu-scroll"><table class="eu-table"><thead><tr><th scope="col">Medicine</th><th scope="col">ATC code</th><th scope="col">Match</th><th scope="col">Status</th><th scope="col">Route</th><th scope="col">Company</th><th scope="col">Estimated end</th><th scope="col">VNR</th></tr></thead><tbody id="eu-body">{body_rows}</tbody></table></div>
 <p class="note">Estimated end dates are the company’s estimates. Fimea’s file keeps no history and its dates can change.</p></section>
 <section class="wrap eu-more" aria-labelledby="eu-dl-title"><h2 id="eu-dl-title">Download</h2>{downloads()}
 <details class="data-table"><summary>All {len(data['eu']['rows'])} codes on the EU list</summary><ul class="eu-codes">{codes}</ul></details>
@@ -106,26 +120,34 @@ def days_text(n):
 
 def history_block(code, h, archive_start):
     if not h:
-        return '<p>No shortage notice for this code is in our archive.</p>'
-    lines = [f'<p>Our archive holds {h["count"]:,} {"notice" if h["count"] == 1 else "notices"} for packages with this code since {E(D(archive_start))}: '
-             f'{h["listed_now"]:,} listed now, {h["gone"]:,} no longer listed.</p>']
+        return '<p>No shortage for this code is in our archive.</p>'
+    lines = [f'<p>Our archive holds {h["count"]:,} {"shortage" if h["count"] == 1 else "shortages"} for packages with this code since {E(D(archive_start))}: '
+             f'{h["listed_now"]:,} listed now, {h["gone"]:,} no longer listed. A notice that Fimea edited, or that was missing from some captures and came back, is counted as one shortage.</p>']
     if h['measured']:
-        lines.append(f'<p>For {h["measured"]:,} no longer listed notices whose start we saw, the time between the first and the last capture that listed them was '
+        lines.append(f'<p>For {h["measured"]:,} no longer listed shortages whose start we saw and with no gap in the captures, the days between the first and the last capture that listed them were '
                      f'{E(days_text(h["days_min"]))} at least, {E(days_text(round(h["days_median"])))} in the middle and {E(days_text(h["days_max"]))} at most. '
-                     'These are lower bounds, because a notice may have stayed on the list between captures.</p>')
+                     'These are days between captures, not exact lengths: a shortage may have started before the first capture and lasted after the last.</p>')
     else:
-        lines.append('<p>No notice that left the list has a start we saw, so no length can be given.</p>')
+        lines.append('<p>No shortage that left the list has a known start and a gap-free record, so no days between captures can be given.</p>')
     rows = []
     for n in h['notices']:
         seen = 'Still listed' if n['removed_on'] is None else f'Last seen {E(D(n["last_seen"]))}'
         first = f'Listed in the first capture ({E(D(n["first_seen"]))})' if n['listed_at_first_capture'] else E(D(n['first_seen']))
-        rows.append(f'<tr><td data-label="Package">{E(" ".join(x for x in (n["name"], n["strength"]) if x))}<span class="note">VNR {E(n["NordicArticleNumber"])}, {E(n["Company"])}</span></td>'
+        notes = []
+        if n['edits']:
+            notes.append(f'Notice edited {n["edits"]} {"time" if n["edits"] == 1 else "times"}; counted as one shortage.')
+        notes += [f'Not listed in the captures between {E(D(u["from"]))} and {E(D(u["to"]))}: unknown.' for u in n['unseen']]
+        notes += [f'No capture for {g["days"]} days ({E(D(g["from"]))} to {E(D(g["to"]))}): unknown.' for g in n['gaps']]
+        between = 'unknown' if (n['gaps'] or n['unseen']) else str(n['days_between_captures'])
+        rows.append(f'<tr><td data-label="Package">{E(" ".join(x for x in (n["name"], n["strength"]) if x))}<span class="note">VNR {E(n["NordicArticleNumber"])}, {E(n["Company"])}</span>'
+                    + ''.join(f'<span class="note">{x}</span>' for x in notes) + '</td>'
                     f'<td data-label="Match">{chip(n["match_type"])}</td><td data-label="Reported start">{E(D(n["UnavailableFrom"]))}</td>'
-                    f'<td data-label="First seen">{first}</td><td data-label="Last seen">{seen}</td><td data-label="Days between">{n["days_listed"]}</td></tr>')
-    lines.append('<div class="eu-scroll"><table class="eu-table eu-history"><thead><tr><th scope="col">Package</th><th scope="col">Match</th><th scope="col">Reported start</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Days between</th></tr></thead>'
+                    f'<td data-label="First seen">{first}</td><td data-label="Last seen">{seen}</td><td data-label="Days between captures">{between}</td></tr>')
+    lines.append('<div class="eu-scroll"><table class="eu-table eu-history"><thead><tr><th scope="col">Package</th><th scope="col">Match</th><th scope="col">Reported start</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Days between captures</th></tr></thead>'
                  f'<tbody>{"".join(rows)}</tbody></table></div>')
     lines.append('<p class="note">The archive is made of captures of Fimea’s file, not daily readings; before 21 Nov 2026 the captures come from the Internet Archive and have gaps. '
-                 '“Last seen” is the last capture that listed the notice. A notice that is not listed any more is not proof that supply returned.</p>')
+                 'A gap in the captures is unknown time: it is not a new start and not an end. '
+                 '“Last seen” is the last capture that listed the shortage. A shortage that is not listed any more is not proof that supply returned.</p>')
     return ''.join(lines)
 
 
@@ -134,7 +156,7 @@ def code_page(code, row, data):
     notices = [r for r in data['rows'] if r.get('atc') == code]
     current = ''.join(
         f'<li class="eu-card"><div>{name_cell(r)}</div><div>{chip(r["match_type"])}</div><p class="note">{E(r["note"])}</p>'
-        f'<dl><dt>Company</dt><dd>{E(r["company"])}</dd><dt>Reported start</dt><dd>{E(D(r["start"]))}</dd><dt>Estimated end</dt><dd>{E(D(r["end"]))}</dd>'
+        f'<dl><dt>Status</dt><dd>{E(STATUS_NAMES[r["status"]])}</dd><dt>Company</dt><dd>{E(r["company"])}</dd><dt>Reported start</dt><dd>{E(D(r["start"]))}</dd><dt>Estimated end</dt><dd>{E(D(r["end"]))}</dd>'
         f'<dt>Notified</dt><dd>{E(D(r["notified"]))}</dd><dt>VNR</dt><dd>{E(r["vnr"])}</dd><dt>Product route</dt><dd>{E(", ".join(r["product_routes"]) or "not given")}</dd></dl></li>'
         for r in notices)
     current = f'<ul class="eu-cards">{current}</ul>' if current else '<p>Fimea lists no shortage package with this code today.</p>'
@@ -176,9 +198,11 @@ def methods_page(data):
 <p>Source credit used in the downloads: {E(credit(meta))}</p>
 <p>Code on this site: MIT licence.</p></section>
 <section id="rule"><h2>The match rule</h2><ol class="steps">
-<li><strong>ATC code.</strong> The ATC level 5 code of the product in the Fimea register must be exactly a code on the EU list. Fimea gives one ATC code for each product. A combination product is matched by its own code only; we show all its active substances next to it.</li>
+<li><strong>ATC code.</strong> The ATC level 5 code of the product in the Fimea register must be exactly a code on the EU list. Fimea gives one ATC code for each product.</li>
+<li><strong>Active ingredient.</strong> The substance of the list row must be among the product’s active ingredients (all of them, for a list row that names several, such as piperacillin and tazobactam). A name counts when it is the same, or when the register name starts with it (“Ipratropium bromide” for IPRATROPIUM). A few list names are spelled differently in the register (adrenaline and epinephrine, vaccines, blood products); they are in <a href="https://github.com/AlejandroRenalias/shortage-radar/blob/main/data/critical/ingredients.json"><code>data/critical/ingredients.json</code></a>. Extra ingredients are allowed, so a combination product with the list substance passes. If the substance is not there, or Fimea gives no ingredients, the package is shown as <em>Ingredient not confirmed</em> and is neither an exact match nor an alert. Example: B. Braun sodium chloride (VNR 389066) has the ATC code of potassium chloride and a fitting route, but its ingredient is sodium chloride.</li>
 <li><strong>Route.</strong> A route of the product (Fimea <code>Antoreitti</code>) must fit a route of the list row. A table in <a href="https://github.com/AlejandroRenalias/shortage-radar/blob/main/data/critical/routes.json"><code>data/critical/routes.json</code></a> says which Fimea route fits which EU route term. There are no keyword rules. Three broader EU terms are handled in the table: “parenteral use” fits every injection route, “intravascular use” fits a vein or an artery, and “intraocular use” fits routes into the eye (front chamber, vitreous, retina, inside the eye).</li>
-<li><strong>Result.</strong> ATC code and route fit: <em>Exact match</em>. ATC code on the list, route does not fit: <em>Route does not fit</em> (<code>route-mismatch</code> in the downloads). VNR not in the register: <em>Not in the register</em> (<code>unmatched</code>).</li>
+<li><strong>Result.</strong> ATC code, ingredient and route fit: <em>Exact match</em>. ATC code and ingredient on the list, route does not fit: <em>Route does not fit</em> (<code>route-mismatch</code> in the downloads). ATC code on the list, ingredient not confirmed: <em>Ingredient not confirmed</em> (<code>ingredient-mismatch</code>). VNR not in the register: <em>Not in the register</em> (<code>unmatched</code>).</li>
+<li><strong>Ongoing or starts later.</strong> Fimea marks each notice as ongoing (Voimassa K, “Kyllä”) or not yet started (E, “Ei”). The counts show ongoing shortages only; notices that start later are listed apart, marked “Starts later”, with their start date. The counts carry the date of the shortage file.</li>
 <li><strong>Route unclear.</strong> If Fimea gives no route, or only “route not relevant”, or a route that is not in our table, the package is not matched on route. It is shown as <em>Route does not fit</em> and the note says “Route unclear”. We do not guess.</li>
 <li><strong>Cross-check.</strong> Fimea’s flag <code>EUKriittinenValmiste</code> is not used to decide. Where it disagrees with the match, the note and the CSV say so.</li></ol></section>
 <section id="checked"><h2>Four rows checked by hand</h2>
@@ -187,14 +211,15 @@ def methods_page(data):
 <section id="limits"><h2>Known limits</h2><ul class="steps">
 <li>Fimea’s shortage file has no history, and its dates are estimates. Our history starts when we first saved the file; it is made of captures, not daily readings.</li>
 <li>A package that leaves the file is “last seen” on the date of the last capture. That is not proof that supply returned.</li>
+<li>A notice that Fimea edits (a changed start, end or notification date) shows in the file as a new notice. We count a notice that was edited, or that was missing from some captures and came back, as one shortage. A gap between captures is unknown time, not a new start. The length we give is “days between captures”: from the first to the last capture that listed the shortage.</li>
 <li>The register describes today. We join old notices to today’s register, so a product that changed ATC code or route since then is shown as it is today.</li>
 <li>The EU list names a substance and routes, not dosage forms or strengths. A match says that the substance and route are on the list, not that this exact product is one the EU list is about.</li>
-<li>Combination products are matched by their own ATC code only.</li>
+<li>Combination products are matched by their own ATC code, and the list substance must be among their ingredients. The other ingredients are not checked against the list.</li>
 <li>Shortages of products without a VNR are not in Fimea’s file, so they are not here.</li>
 <li>The EU list changes. We keep version {E(meta['version'])} until we check and update it.</li>
 <li>The match and the alerts are facts from public files. They give no advice, no risk score and no forecast. They do not name alternatives.</li>
 <li>These pages are in English only.</li></ul></section>
-<section id="alerts"><h2>Alerts</h2><p>The alert feeds list new shortages of packages with an exact match: the first capture that lists a notice, with its VNR, ATC code, company and dates. The daily build writes them. Notices already on the list when the archive started, or already listed for the same VNR in the capture before, are not new.</p>{downloads()}</section>
+<section id="alerts"><h2>Alerts</h2><p>The alert feeds list new shortages of packages with an exact match: the first capture that lists the shortage, with its VNR, ATC code, company and dates, and whether Fimea marks it ongoing or not yet started. Each shortage has one entry with a fixed id; an edited notice or one that returns after a missing capture is not a new alert. The daily build writes the feeds. Shortages already on the list when the archive started, or already listed for the same VNR in the capture before, are not new.</p>{downloads()}</section>
 </div></div>'''
     return document('critical', body, meta=meta_for(FILE['methods'], 'How the critical medicines match works | Shortage Radar',
                     'Sources, licences, the match rule and the limits of the critical medicines page.'))
