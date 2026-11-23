@@ -16,23 +16,29 @@ ATC_GROUPS = {
     'L': 'Antineoplastic and immunomodulating agents', 'M': 'Musculo-skeletal system', 'N': 'Nervous system', 'P': 'Antiparasitic products',
     'R': 'Respiratory system', 'S': 'Sensory organs', 'V': 'Various',
 }
-INJECTION = {'into a vein', 'into a muscle', 'under the skin', 'into a joint', 'around a joint', 'into a bursa', 'into the skin', 'epidural', 'into the front chamber of the eye', 'into the bladder'}
+INJECTION = {'into a vein', 'into a muscle', 'under the skin', 'into a joint', 'around a joint', 'into a bursa', 'into the skin', 'epidural'}
 ORAL = {'by mouth', 'under the tongue'}
-ROUTE_NAMES = {'injection': 'Injection or infusion', 'oral': 'By mouth', 'other': 'Other route'}
+ROUTE_NAMES = {'injection': 'Injection or infusion', 'oral': 'By mouth', 'eye': 'Into the eye', 'other': 'Other or mixed route'}
 ICON = {
     'injection': '<path d="M15 4l5 5M13.500 6.500l4 4M10 10l5.500-5.500 4 4L14 14M10 10l-6 6v4h4l6-6M7 17l-3 3M9.500 12.500l2 2"/>',
     'oral': '<rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.500 8.500l5 7"/>',
+    'eye': '<path d="M2 12s3.500-7 10-7 10 7 10 7-3.500 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     'other': '<circle cx="12" cy="12" r="8"/><path d="M8 12h8"/>',
 }
 
 
-def route_kind(routes):
-    routes = set(routes or [])
-    if routes & INJECTION:
+def route_group(route):
+    if 'eye' in route.split():
+        return 'eye'
+    if route in INJECTION:
         return 'injection'
-    if routes & ORAL:
-        return 'oral'
-    return 'other'
+    return 'oral' if route in ORAL else 'other'
+
+
+def route_kind(routes):
+    """The one group that all routes of the package belong to; several groups, or none, count as "other or mixed"."""
+    groups = {route_group(r) for r in routes or []}
+    return groups.pop() if len(groups) == 1 else 'other'
 
 
 def route_icon(kind, size=18):
@@ -48,7 +54,7 @@ def route_label(routes):
 def route_counts(rows, status='ongoing'):
     out = dict.fromkeys(ROUTE_NAMES, 0)
     for r in rows:
-        if r['status'] == status and r['match_type'] != 'unmatched':
+        if r['status'] == status and r['match_type'] == 'exact':
             out[route_kind(r.get('product_routes'))] += 1
     return out
 
@@ -56,7 +62,7 @@ def route_counts(rows, status='ongoing'):
 def route_row(rows):
     counts = route_counts(rows)
     items = ''.join(f'<li>{route_icon(k, 22)}<span><strong>{n:,}</strong> {E(ROUTE_NAMES[k]).lower()}</span></li>' for k, n in counts.items())
-    return f'<ul class="eu-routes" aria-label="Ongoing shortages by route of the product">{items}</ul>'
+    return f'<ul class="eu-routes" aria-label="Ongoing exact matches by route of the product">{items}</ul>'
 
 
 HATCH = ('<defs><pattern id="eu-hatch-later" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--white)"/>'
@@ -81,8 +87,8 @@ def match_bars(ongoing, types, names):
         f'<li class="eu-bar-row"><span class="eu-bar-name">{E(names[t])}</span><span class="eu-bar-track">{bar_svg([(f"eu-bar-{t}", ongoing[t])], top)}</span>'
         f'<span class="eu-bar-value">{ongoing[t]:,}</span></li>' for t in types)
     table = ''.join(f'<tr><th scope="row">{E(names[t])}</th><td>{ongoing[t]:,}</td></tr>' for t in types)
-    return (f'<figure class="eu-chart"><figcaption>Ongoing shortages by match</figcaption><ul class="eu-bars" aria-hidden="true">{bars}</ul>'
-            f'<div class="sr-only"><table><caption>Ongoing shortages by match</caption><thead><tr><th scope="col">Match</th><th scope="col">Packages</th></tr></thead><tbody>{table}</tbody></table></div></figure>')
+    return (f'<figure class="eu-chart"><figcaption>Ongoing packages checked, by match</figcaption><ul class="eu-bars" aria-hidden="true">{bars}</ul>'
+            f'<div class="sr-only"><table><caption>Ongoing packages checked, by match</caption><thead><tr><th scope="col">Match</th><th scope="col">Packages</th></tr></thead><tbody>{table}</tbody></table></div></figure>')
 
 
 def group_bars(rows):
@@ -90,7 +96,7 @@ def group_bars(rows):
     groups = {}
     for r in rows:
         letter = (r.get('atc') or '')[:1]
-        if letter in ATC_GROUPS and r['match_type'] != 'flag-only':
+        if letter in ATC_GROUPS and r['match_type'] == 'exact':
             g = groups.setdefault(letter, {'ongoing': 0, 'upcoming': 0})
             g[r['status']] += 1
     if not groups:
@@ -104,8 +110,8 @@ def group_bars(rows):
                     f'<span class="eu-bar-value">{g["ongoing"] + g["upcoming"]:,}</span></li>')
         table.append(f'<tr><th scope="row">{letter} {E(ATC_GROUPS[letter])}</th><td>{g["ongoing"]:,}</td><td>{g["upcoming"]:,}</td></tr>')
     legend = f'<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-ongoing"/></svg>Ongoing</span><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-later"/></svg>Starts later</span></p>'
-    return (f'<figure class="eu-chart"><figcaption>Shortages by ATC group (first letter of the code)</figcaption>{legend}<ul class="eu-bars" aria-hidden="true">{"".join(bars)}</ul>'
-            '<div class="sr-only"><table><caption>Shortages by ATC group</caption><thead><tr><th scope="col">ATC group</th><th scope="col">Ongoing</th><th scope="col">Starts later</th></tr></thead>'
+    return (f'<figure class="eu-chart"><figcaption>Exact matches by ATC group (first letter of the code)</figcaption>{legend}<ul class="eu-bars" aria-hidden="true">{"".join(bars)}</ul>'
+            '<div class="sr-only"><table><caption>Exact matches by ATC group</caption><thead><tr><th scope="col">ATC group</th><th scope="col">Ongoing</th><th scope="col">Starts later</th></tr></thead>'
             f'<tbody>{"".join(table)}</tbody></table></div></figure>')
 
 
@@ -139,6 +145,9 @@ def timeline_strip(notices, archive_start, snapshot_date):
         for g in n['gaps']:
             gx0, gx1 = x(g['from']), x(g['to'])
             parts.append(f'<rect x="{gx0:.1f}" y="{y}" width="{max(gx1 - gx0, 2):.1f}" height="12" class="eu-tl-gap"><title>No capture {E(g["from"])} to {E(g["to"])}: unknown</title></rect>')
+        for u in n['unseen']:
+            ux0, ux1 = x(u['from']), x(u['to'])
+            parts.append(f'<rect x="{ux0:.1f}" y="{y}" width="{max(ux1 - ux0, 2):.1f}" height="12" class="eu-tl-gap"><title>Not listed in the captures {E(u["from"])} to {E(u["to"])}: unknown</title></rect>')
         rows_text.append(label)
     key = ('<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect width="24" height="10" rx="3" class="eu-tl-bar"/></svg>Listed</span>'
            '<span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect x="1" y="1" width="22" height="8" rx="3" class="eu-tl-bar eu-tl-unknown"/></svg>Start unknown</span>'

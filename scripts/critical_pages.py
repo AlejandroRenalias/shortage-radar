@@ -88,10 +88,10 @@ def split_text(counts_by_type):
 def critical_page(data):
     meta, rows, counts = data['eu']['meta'], data['rows'], data['counts']
     ongoing, upcoming = counts['ongoing'], counts['upcoming']
-    n_ongoing, n_upcoming = sum(ongoing[t] for t in TYPES), sum(upcoming[t] for t in TYPES)
+    checked_ongoing, checked_upcoming = sum(ongoing[t] for t in TYPES), sum(upcoming[t] for t in TYPES)
     tiles = ''.join((
-        tile(f'{n_ongoing:,}', 'Ongoing shortages', 'on the EU list'),
-        tile(f'{n_upcoming:,}', 'Start later', (f'Not counted as ongoing: {split_text(upcoming)}' if n_upcoming else 'None listed')),
+        tile(f'{ongoing["exact"]:,}', 'Ongoing exact matches', f'of {plural(checked_ongoing, "ongoing package")} checked against the EU list'),
+        tile(f'{upcoming["exact"]:,}', 'Exact matches that start later', (f'of {plural(checked_upcoming, "package")} checked that start later: {split_text(upcoming)}' if checked_upcoming else 'None listed')),
         tile(E(D(data['snapshot_date'])), 'Fimea file saved', 'Date of the data on this page', True)))
     flag = counts['disagree']
     flag_only = ongoing['flag-only'] + upcoming['flag-only']
