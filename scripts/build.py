@@ -13,6 +13,7 @@ from changes import _shift, feeds, week_summary
 from gaps import MAX_GAP_DAYS, add_capture, days_between, gaps_of, is_gap
 from packs import pack_label
 from pages import render_pages
+from removed import removed_index
 from slices import package_shards, summary
 from triage import level, medicine_name, newly_critical
 
@@ -308,6 +309,7 @@ def build():
     shard_dir.mkdir(exist_ok=True)
     for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs)).items():
         (shard_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (ROOT / 'site/removed.json').write_text(json.dumps(dict(meta, events=removed_index(es)), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     home = summary(current, meta)
     (ROOT / 'site/summary.json').write_text(json.dumps(home, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')

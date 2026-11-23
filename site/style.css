@@ -453,6 +453,30 @@ html:not(.js) .needs-js{display:none}
   .list-meta{flex-direction:column;align-items:flex-start}
   .list-meta .btn-quiet{margin-left:0}
 }
+/* Search results: earlier packages, and a compact row on a phone while a search is active (the intro, the hint and the callout step aside) */
+.impact-chip{display:none}
+.past-notes{margin:var(--s1) 0 0;padding:0;list-style:none;color:var(--muted);font-size:.9375rem}
+.past-notes li+li{margin-top:2px}
+.past-open{display:flex;align-items:center;gap:4px;margin:var(--s2) 0 0;color:var(--green-ink);font-size:.9375rem}
+.pkg-past{--tab-fg:var(--muted)}
+.pkg-past .pkg-main{padding-bottom:var(--s4)}
+.state.past-note{grid-column:1/-1;margin:0 0 var(--s3);padding:0;background:none;border-radius:0;color:var(--muted);font-size:.9375rem}
+@media (max-width:719px){
+  html[data-searching] .page-head{padding-block:8px 0}
+  html[data-searching] .page-head h1{font-size:1.5rem;margin-bottom:0}
+  html[data-searching] .page-head .lead,html[data-searching] #search-hint,html[data-searching] .crit-callout{display:none}
+  html[data-searching] .list-meta{margin:8px 0}
+  html[data-searching] .list-meta .btn-quiet{display:none}
+  html[data-searching] #list{gap:var(--s2)}
+  html[data-searching] #list>.pkg{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s3);padding:var(--s3) var(--s4);margin:0}
+  html[data-searching] #list>.pkg>.pkg-main{order:1;flex:1 0 100%;display:block;padding:0}
+  html[data-searching] #list>.pkg .pkg-icon,html[data-searching] #list>.pkg .pkg-kind,html[data-searching] #list>.pkg .pkg-dates{display:none}
+  html[data-searching] #list>.pkg .pkg-name{font-size:1.0625rem;margin:0}
+  html[data-searching] #list>.pkg>.pkg-tab{order:2;padding:0}
+  html[data-searching] #list>.pkg>.impact{order:3;margin:0;padding:1px 10px;border:1px solid var(--lvl-line);border-radius:999px;font-size:.8125rem;line-height:1.4}
+  html[data-searching] #list>.pkg>.impact .uicon,html[data-searching] #list>.pkg>.impact>span:not(.impact-chip){display:none}
+  html[data-searching] #list>.pkg .impact-chip{display:inline}
+}
 /* Critical medicines: key tiles, charts, match table (a card list on a phone), chips, timeline and the per-code pages */
 .about-layout .prose{overflow-wrap:anywhere}
 .eu-head{display:grid;gap:var(--s5);align-items:center;padding-block:var(--s5) var(--s4)}
