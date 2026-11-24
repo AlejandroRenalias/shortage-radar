@@ -1162,3 +1162,24 @@ test('a search result opens its own package on the medicine page, and falls back
   assert.match(html, /is-selected" aria-labelledby="pk-222222"/); assert.doesNotMatch(html, /is-selected" aria-labelledby="pk-111111"/);
   assert.match(html, /<h3 id="pk-222222" class="med-pkg-name">pack 222222 <span class="md-vnr">VNR 222222<\/span><\/h3>/);
 });
+
+test('Home and Trends read the old count key in files saved before the rename, and an explicit new value wins', () => {
+  const [home] = pageEnv(['home.js']);
+  // The real summary.json before the rename: only `critical`.
+  vm.runInContext("data = {impact: {substitute: 539, critical: 61, nogroup: 117, vet: 39}}", home);
+  const legacy = home.impactCounts();
+  assert.equal(legacy.no_alternative, 61); assert.equal(legacy.substitute, 539);
+  assert.match(home.triageMarkup(legacy), /impact=no_alternative"[^>]*>.*?<span class="tri-num">61<\/span>/);
+  // Both keys: the new one is read, even when it is 0.
+  vm.runInContext("data = {impact: {substitute: 5, no_alternative: 0, critical: 61, nogroup: 1, vet: 0}}", home);
+  assert.equal(home.impactCounts().no_alternative, 0);
+  vm.runInContext("data = {impact: {substitute: 5, no_alternative: 7, critical: 7, nogroup: 1, vet: 0}}", home);
+  assert.equal(home.impactCounts().no_alternative, 7);
+  const [trends, get] = pageEnv(['trends.js']);
+  const history = [{date:'2026-11-23', gap_days:1}, {date:'2026-11-24', gap_days:1}];
+  const row = (date, extra) => Object.assign({date, register_date: date, total: 9, substitute: 1, nogroup: 2, vet: 3}, extra);
+  trends.drawCritical({history, max_gap_days: 14, newly_critical: [], triage_counts: [row('2026-11-24', {critical: 61}), row('2026-11-23', {no_alternative: 0, critical: 60})]});
+  const table = get('triage-record').innerHTML;
+  assert.match(table, /<td>24 Nov 2026<\/td><td>1<\/td><td>61<\/td><td>2<\/td><td>3<\/td>/);
+  assert.match(table, /<td>23 Nov 2026<\/td><td>1<\/td><td>0<\/td><td>2<\/td><td>3<\/td>/);
+});

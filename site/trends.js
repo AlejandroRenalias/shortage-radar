@@ -55,7 +55,7 @@ function drawCritical(h) {
   }).join('') || `<li>${esc(t.newCritNone)}</li>`;
   $('new-crit-method').textContent = t.newCritMethod(numberText(list.length), dateText(from));
   const rec = h.triage_counts || [];
-  $('triage-record').innerHTML = rec.length ? `<h3>${esc(t.triageRecTitle)}</h3><p class="note">${esc(t.triageRecNote(dateText(rec[0].date)))}</p><div class="data-table"><table><thead><tr><th scope="col">${esc(t.thDate)}</th>${IMPACT_LEVELS.map(k => `<th scope="col">${esc(t['impact_' + k])}</th>`).join('')}</tr></thead><tbody>${rec.slice().reverse().map(r => `<tr><td>${esc(dateText(r.date))}</td>${IMPACT_LEVELS.map(k => `<td>${numberText(r[k] || 0)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+  $('triage-record').innerHTML = rec.length ? `<h3>${esc(t.triageRecTitle)}</h3><p class="note">${esc(t.triageRecNote(dateText(rec[0].date)))}</p><div class="data-table"><table><thead><tr><th scope="col">${esc(t.thDate)}</th>${IMPACT_LEVELS.map(k => `<th scope="col">${esc(t['impact_' + k])}</th>`).join('')}</tr></thead><tbody>${rec.slice().reverse().map(r => `<tr><td>${esc(dateText(r.date))}</td>${IMPACT_LEVELS.map(k => `<td>${numberText(impactCount(r, k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
 }
 function drawDates(d) {
   $('data-date').textContent = copy[language].dataDate(dateText(d.snapshot_date));

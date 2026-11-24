@@ -223,6 +223,11 @@ const IMPACT_LEVELS = ['substitute', 'no_alternative', 'nogroup', 'vet'];
 // `critical` is the old name of `no_alternative`: old links (?impact=critical) and files saved earlier still work. Remove after one release.
 const IMPACT_ALIASES = {critical: 'no_alternative'};
 const impactName = level => IMPACT_ALIASES[level] || level;
+// The count of one level from a counts object. A file saved before the rename has only the old key; an explicit new value, even 0, wins.
+function impactCount(counts, level) {
+  const old = Object.keys(IMPACT_ALIASES).find(k => IMPACT_ALIASES[k] === level);
+  return Number.isFinite(counts?.[level]) ? counts[level] : Number.isFinite(counts?.[old]) ? counts[old] : 0;
+}
 function impactOf(e) {
   const named = impactName(e.impact);
   if (IMPACT_LEVELS.includes(named)) return named;
