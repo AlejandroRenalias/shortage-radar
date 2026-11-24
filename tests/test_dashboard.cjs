@@ -1175,6 +1175,10 @@ test('Home and Trends read the old count key in files saved before the rename, a
   assert.equal(home.impactCounts().no_alternative, 0);
   vm.runInContext("data = {impact: {substitute: 5, no_alternative: 7, critical: 7, nogroup: 1, vet: 0}}", home);
   assert.equal(home.impactCounts().no_alternative, 7);
+  // Raw legacy counts (older HTML with the new script): the number, the share and the bar all use the old key.
+  const raw = home.triageMarkup({substitute: 531, critical: 61, nogroup: 117});
+  assert.match(raw, /impact=no_alternative"[^>]*>.*?<span class="tri-num">61<\/span>/);
+  assert.match(raw, /impact=no_alternative".*?class="part" width="8.60"/);
   const [trends, get] = pageEnv(['trends.js']);
   const history = [{date:'2026-11-23', gap_days:1}, {date:'2026-11-24', gap_days:1}];
   const row = (date, extra) => Object.assign({date, register_date: date, total: 9, substitute: 1, nogroup: 2, vet: 3}, extra);
