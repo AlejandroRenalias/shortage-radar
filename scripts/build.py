@@ -24,6 +24,18 @@ ROOT = Path(__file__).resolve().parents[1]
 # and a change of an end date across a wider gap is not counted (end_date_changes).
 # Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
 PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
+CC_BY = 'https://creativecommons.org/licenses/by/4.0/'
+
+
+def fimea_credit(sources):
+    """The credit that goes with every copy of the shortage data (CSV, JSON): Fimea, the file times, the licence and the note that the data was changed.
+    The EU list files carry their own credit (critical.credit), which names EMA as well."""
+    modified = lambda key: f"file modification time {sources[key]} (HTTP Last-Modified)" if sources.get(key) else 'file modification time not recorded'
+    return (f"Shortages: Finnish Medicines Agency Fimea, file Shortages.txt (also published as Saatavuushairiot.txt), {modified('shortages_last_modified')}. "
+            f"Register: Fimea, file {sources.get('register_file') or 'Perusrekisteri (year not recorded)'}, {modified('register_last_modified')}. "
+            f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; Fimea does not endorse the result.")
+
+
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
 
 
@@ -268,6 +280,7 @@ def build():
     register_metadata = ROOT / 'data/source/register-metadata.json'
     if register_metadata.exists():
         metadata.update(json.loads(register_metadata.read_text(encoding='utf-8')))
+    metadata['source_credit'] = fimea_credit(metadata)
     # The register's own run date: the history reads the register's flags only for the capture of that day.
     register_path = ROOT / 'data/source/register.xml'
     critical = critical_events(snapshots, members, products, metadata.get('register_date') or (register_date(register_path) if register_path.exists() else None))
@@ -280,12 +293,12 @@ def build():
               'newly_critical': critical, 'triage_counts': read_triage_counts()}
     output['generated_at'] = shard_meta['generated_at']
     output['last_checked'] = shard_meta['last_checked']
-    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact']
+    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact', 'source credit']
     with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(csv_columns)
         for e in current:
-            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else '', e.get('substitution_group', ''), e['impact']])
+            writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else '', e.get('substitution_group', ''), e['impact'], metadata['source_credit']])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current

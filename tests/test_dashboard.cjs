@@ -481,13 +481,13 @@ test('the pages keep the head tags, the one search, the report link and the cita
   assert.match(home, /og:image:alt/);
   assert.equal((list.match(/id="search"/g) || []).length, 1);
   assert.match(list, /id="result-count" aria-live="polite" aria-atomic="true"/);
-  assert.match(about, /issues\/new\?template=data-problem\.yml/);
+  assert.match(about, /issues\/new\?template=error-report\.yml/);
   assert.match(about, /id="citation"/); assert.match(trends, /id="cite-box"/);
   assert.match(trends, /id="chart-table"/);
-  assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
+  assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/error-report.yml'));
   assert.ok(fs.existsSync('site/sitemap.xml'));
   assert.match(about, /id="what-to-do"/); assert.match(about, /id="privacy"/); assert.match(about, /id="licence"/);
-  assert.doesNotMatch(Object.values(pages).join(''), /https?:\/\/(?!alejandrorenalias|fimea|creativecommons|web\.archive|github)/);
+  assert.doesNotMatch(Object.values(pages).join(''), /https?:\/\/(?!alejandrorenalias|fimea|(?:www\.)?ema\.europa|creativecommons|web\.archive|github)/);
 });
 
 test('every current card carries one impact label with its reason, in both languages', () => {
@@ -1186,4 +1186,14 @@ test('Home and Trends read the old count key in files saved before the rename, a
   const table = get('triage-record').innerHTML;
   assert.match(table, /<td>24 Nov 2026<\/td><td>1<\/td><td>61<\/td><td>2<\/td><td>3<\/td>/);
   assert.match(table, /<td>23 Nov 2026<\/td><td>1<\/td><td>0<\/td><td>2<\/td><td>3<\/td>/);
+});
+
+test('the About page and the footer feedback link exist in English and Finnish', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) for (const key of ['aboutShortTitle', 'aboutNot1', 'aboutNot2', 'aboutNot3', 'aboutSrcFimea', 'aboutSrcEma', 'aboutSrcChanged', 'aboutLimTitle', 'feedbackTitle', 'feedbackLink', 'footerFeedback']) assert.ok(copy[lang][key], lang + ' ' + key);
+  assert.match(copy.en.aboutNot1, /unavailable everywhere/); assert.match(copy.fi.aboutNot1, /ei tarkoita, ettei lääke ole saatavilla missään/);
+  assert.match(copy.en.aboutNot2, /not necessarily available/); assert.match(copy.fi.aboutNot2, /ei tarkoita, että se on saatavilla/);
+  assert.match(copy.en.aboutNot3, /not medical advice/); assert.match(copy.fi.aboutNot3, /ei lääketieteellinen neuvo/);
+  for (const html of Object.values(pages)) assert.match(html, /href="(?:\/shortage-radar\/)?about\.html#feedback" data-i18n="footerFeedback"/);
+  assert.match(pages['about.html'], /id="feedback"/);
 });
