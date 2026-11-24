@@ -211,6 +211,8 @@ function uiIcon(name, size = 20) { return `<svg class="uicon" viewBox="0 0 24 24
 
 // ---- Status, sorting and filters
 const DAY = 86400000;
+// 'Starting within 2 weeks': the start is after the data date and at most 14 days after it. scripts/slices.py SOON_DAYS is the same.
+const SOON_DAYS = 14;
 function statusOf(e, now = todayUTC()) {
   const start = parsedDate(e.UnavailableFrom);
   return !start ? 'unknown' : start.valueOf() > now ? 'soon' : 'now';
@@ -279,15 +281,28 @@ const FILTER_KEYS = ['impact', 'status', 'group', 'form', 'company'];
 function parseFilters(search) {
   const params = new URLSearchParams(search), pick = (key, max = 100) => (params.get(key) || '').trim().slice(0, max);
   const status = pick('status'), sort = pick('sort'), form = pick('form'), impact = impactName(pick('impact'));
-  return {q: pick('q'), impact: IMPACT_LEVELS.includes(impact) ? impact : '', status: ['now', 'soon'].includes(status) ? status : '', group: pick('group', 10), form: KINDS.includes(form) ? form : '', company: pick('company', 120), sort: ['name', 'longest', 'end'].includes(sort) ? sort : ''};
+  const out = {q: pick('q'), impact: IMPACT_LEVELS.includes(impact) ? impact : '', status: ['now', 'soon'].includes(status) ? status : '', group: pick('group', 10), form: KINDS.includes(form) ? form : '', company: pick('company', 120), sort: ['name', 'longest', 'end'].includes(sort) ? sort : ''};
+  // From the home page tiles: count as of the data date (asof) and, for the 2-week tile, only starts up to `within` days after it.
+  const asof = pick('asof'), within = Number(pick('within', 3));
+  if (parsedDate(asof)) out.asof = asof;
+  if (parsedDate(asof) && out.status === 'soon' && Number.isInteger(within) && within >= 1 && within <= 60) out.within = String(within);
+  return out;
+}
+// The date a list is read at: the data date from a home tile link when there is one, else today (Helsinki).
+function listNow(f) { return f.asof && parsedDate(f.asof) ? parsedDate(f.asof).valueOf() : todayUTC(); }
+// A saved tile link names the data date it was counted at. Once a newer capture is loaded the list uses the loaded date, so a package
+// that has started since is never shown as upcoming. Returns the saved date when it was replaced, else ''.
+function reconcileAsof(f, snapshotDate) {
+  if (!f.asof || !parsedDate(snapshotDate) || f.asof === snapshotDate) return '';
+  const saved = f.asof; f.asof = snapshotDate; return saved;
 }
 function filtersToQuery(f) {
   const params = new URLSearchParams();
-  for (const key of ['q', ...FILTER_KEYS, 'sort']) if (f[key]) params.set(key, f[key]);
+  for (const key of ['q', ...FILTER_KEYS, 'asof', 'within', 'sort']) if (f[key]) params.set(key, f[key]);
   return params.toString();
 }
 function filterPackages(rows, f, now = todayUTC()) {
-  return rows.filter(e => (!f.q || searchMatches(e, f.q)) && (!f.impact || impactOf(e) === f.impact) && (!f.status || statusOf(e, now) === f.status || (f.status === 'now' && statusOf(e, now) === 'unknown')) && (!f.group || groupKey(e.atc) === f.group) && (!f.form || formKind(e.form) === f.form) && (!f.company || e.Company === f.company));
+  return rows.filter(e => (!f.q || searchMatches(e, f.q)) && (!f.impact || impactOf(e) === f.impact) && (!f.status || statusOf(e, now) === f.status || (f.status === 'now' && statusOf(e, now) === 'unknown')) && (!f.within || f.status !== 'soon' || !parsedDate(e.UnavailableFrom) || parsedDate(e.UnavailableFrom).valueOf() <= now + Number(f.within) * DAY) && (!f.group || groupKey(e.atc) === f.group) && (!f.form || formKind(e.form) === f.form) && (!f.company || e.Company === f.company));
 }
 const relevant = rows => rows.filter(e => !e.removed_on);
 
@@ -414,8 +429,9 @@ function renderChrome(d) {
   if ($('source-times')) $('source-times').textContent = [t.latest(dateText(d.snapshot_date)), show ? freshness.text : '', ...times].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. ') + '.';
   // Next to the headline on the home page: when Fimea's file last changed (HTTP Last-Modified) and when our job last checked it.
   if ($('hero-fresh')) {
-    $('hero-file').textContent = t.fileChanged(days.shortages ? dateText(days.shortages) : t.dateUnknown);
-    $('hero-checked').textContent = show ? freshness.text : '';
+    $('hero-file').textContent = t.heroFile(days.shortages ? dateText(days.shortages) : t.dateUnknown);
+    // One short line; when the check date is missing, the longer text with the page build time still shows.
+    $('hero-checked').textContent = !show ? '' : parsedDate(d.last_checked) ? t.heroChecked(dateText(d.last_checked)) : freshness.text;
     $('hero-fresh').hidden = false;
   }
   if ($('stale')) {

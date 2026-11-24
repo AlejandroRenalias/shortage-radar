@@ -7,6 +7,7 @@ from html import escape
 
 from critical_charts import hero_art
 
+
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 PREVIEW = SITE_URL + 'preview.png'
 PREVIEW_ALT = 'Shortage Radar / Saatavuustutka: medicine shortages in Finland'
@@ -139,31 +140,55 @@ def triage_list(impact):
     return ''.join(rows)
 
 
-def home(count, impact=None, soon=0):
-    """`count` packages are short now, and `soon` more are expected within two weeks."""
+def strip_tile(key, href, num, label, text, hidden=False):
+    return (f'<li{" hidden" if hidden else ""} id="strip-{key}"><a class="strip-tile strip-{key}" id="strip-{key}-link" href="{href}"><span class="strip-num" id="strip-{key}-num">{num:,}</span>'
+            f'<span class="strip-label" data-i18n="{label}">{text}</span>'
+            '<svg class="uicon strip-go" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></a></li>')
+
+
+def _en_date(iso):
+    y, m, d = iso.split('-')
+    return f"{int(d)} {'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split()[int(m) - 1]} {y}"
+
+
+def strip_href(query, as_of):
+    """A tile's list link: the same data date as the tile's count, so the list shows exactly the packages counted."""
+    return 'shortages.html?' + query + (f'&asof={as_of}' if as_of else '')
+
+
+def home(count, impact=None, soon=0, as_of=''):
+    """`count` packages are short now, and `soon` more are expected within two weeks, both counted as of the data date `as_of`."""
     line = f'Fimea’s list: {count:,} {"package" if count == 1 else "packages"} in shortage now{f", {soon:,} more expected to start within 2 weeks" if soon else ""}.'
     impact = impact or {}
     sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
-    answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
+    answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">Of all packages on Fimea’s list, including any that start after 2 weeks: for {sub:,}, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
+    asof_text = f'Counts are as of {_en_date(as_of)}. “Starting within 2 weeks” means a start date up to 14 days after that date.' if as_of else ''
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
-    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head"><div class="hero-text">
+    strip = ''.join([strip_tile('now', strip_href('status=now', as_of), count, 'stripNow', 'Short now'),
+                     strip_tile('soon', strip_href('status=soon&within=14', as_of), soon, 'stripSoon', 'Starting within 2 weeks'),
+                     strip_tile('sub', strip_href('impact=substitute', as_of), sub, 'stripSub', 'Listed packages with an interchangeable package found in the data', hidden=not impact)])
+    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head">
 <h1 id="hero-line" data-count="{count}" data-soon="{soon}">{line}</h1>
 <p class="hero-fresh" id="hero-fresh" hidden><span id="hero-file"></span><span id="hero-checked"></span></p>
-<p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
-{answer}
+<ul class="strip" id="strip" aria-label="Package counts" data-i18n-attr="aria-label=stripLabel">{strip}</ul>
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
-<p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
-</div>{hero_art()}</div>
-<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data</h2>
+<details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">How to read these numbers</summary>
+<p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
+{answer}
+<p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
+<p id="strip-asof" data-asof="{as_of}">{asof_text}</p>
+<p data-i18n="stripSubNote">The third count is listed packages, short now or expected to start (including any that start after 2 weeks), for which Shortage Radar’s check found an interchangeable package in the data. It counts the listed packages, not the alternatives.</p>
+<p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
+<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
+<p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p></details>
+{hero_art()}
+</div>
+<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')) if impact else '', quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data</h2>
 <ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
 <p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a></p>
-<details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">Notes: what these numbers mean</summary>
-<p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
-<p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
-<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p></details>
 </section></div></section>
 <section class="wrap home-section needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
 <section class="wrap home-section newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>
@@ -210,6 +235,7 @@ def shortages():
 <div class="wrap results needs-js">
 <p class="crit-callout" id="crit-callout" hidden><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS['no_alternative']}</svg><span id="crit-callout-text"></span> <a href="shortages.html?impact=no_alternative" id="crit-show" data-i18n="critShow">Show them by medicine</a></p>
 <p class="crit-intro" id="crit-intro" data-i18n="critIntro" hidden>One row for each medicine and form. Open a row to see its packages. Talk to your pharmacist or doctor about these medicines before your medicine runs out.</p>
+<p class="note tile-note" id="tile-note" hidden></p>
 <div class="list-meta"><p id="result-count" aria-live="polite" aria-atomic="true"></p><button type="button" class="btn-quiet" id="copy-link" data-i18n="copyLink">Copy search link</button><span id="copy-status" role="status"></span></div>
 <div id="list" class="pkg-list"><p class="state" id="loading">Loading…</p></div>
 <div class="more"><p id="more-count"></p><button type="button" class="btn" id="more" data-i18n="more" hidden>Show more</button></div>
@@ -283,7 +309,7 @@ def not_found():
 <p><a class="btn" href="/shortage-radar/shortages.html" data-i18n="nfSearch">Search the shortage list</a> <a class="btn-quiet" href="/shortage-radar/index.html" data-i18n="navHome">Home</a></p></div>'''
 
 
-def render_pages(count, impact=None, critical=None, soon=0):
+def render_pages(count, impact=None, critical=None, soon=0, as_of=''):
     """Return {file name: html} for every page; `count` is the number of shortages that have started and `soon` the number
     expected within two weeks, shown in the home headline,
     and `impact` the counts by impact level ({'substitute': n, ...}) for the triage on the home page."""
@@ -291,7 +317,7 @@ def render_pages(count, impact=None, critical=None, soon=0):
     for key, meta in PAGES.items():
         if meta.get('own'):
             continue
-        body = {'index': lambda: home(count, impact, soon), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
+        body = {'index': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
         meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'
