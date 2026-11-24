@@ -192,7 +192,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .label .pkg-spec{font-size:1.1875rem}
 .status-line{margin:0;padding:0 16px;font-size:1.0625rem;font-weight:400;color:var(--text)}
 .tl-earlier{margin-top:18px;padding-top:14px;border-top:1px dashed var(--line-strong)}
-.tl-earlier h3{margin-bottom:4px}
+.tl-earlier :is(h3,h4,h5){margin-bottom:4px}
 .tl-earlier p{color:var(--muted);font-size:.9375rem}
 .tl-earlier ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .tl-earlier li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px}
@@ -595,3 +595,27 @@ html:not(.js) .needs-js{display:none}
   .eu-codes{columns:1}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Medicine page (medicines.html): what Fimea says and our reading are kept in separate blocks, one panel for each package */
+.med-single{display:grid;gap:var(--s4);padding-bottom:var(--s5);max-width:760px}
+.md-title{overflow-wrap:anywhere}
+.md-sub{display:flex;flex-direction:column;margin:0;color:var(--muted)}
+.md-dl{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.md-src h4{margin:0 0 var(--s2);font-size:.875rem;font-weight:500;color:var(--muted)}
+.md-src-fimea,.md-src-ours{border-left:4px solid var(--soon-line);padding-left:var(--s3)}
+.md-src-ours{border-left-color:var(--green)}
+.panel.md-src{border-left-width:4px}
+.med-pkgs{display:grid;gap:var(--s4);margin-top:var(--s3)}
+.med-pkg{display:grid;gap:var(--s3)}
+.med-pkg-name{font-size:1.25rem;overflow-wrap:anywhere}
+.md-tab{padding:0}
+.md-link{margin:0}
+.md-vnr{color:var(--muted);font-size:1rem;white-space:nowrap}
+.md-notice-source{margin:var(--s2) 0 0;font-size:.9375rem}
+.med-pkg.is-selected{border-color:var(--green-ink);border-width:2px}
+.md-ours{margin:var(--s3) 0 0;color:var(--text)}
+.med-pkg.is-soon .tl-today .tl-dot{background:var(--amber)}
+.md-more summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:400;color:var(--green-ink)}
+.md-notice{border-top:1px solid var(--line);padding-top:var(--s3);margin-top:var(--s3)}
+.md-notice-head{display:flex;flex-wrap:wrap;gap:0 var(--s3);margin:0 0 var(--s2)}
+.md-notice-head span{color:var(--muted)}

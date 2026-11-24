@@ -1021,3 +1021,147 @@ test('the phone chip states only what the register shows, in both languages', ()
   }
   setLanguage(context, 'en');
 });
+
+// ---- Medicine pages (site/medicines.js): one page for a verified group, each package apart.
+const mdEvent = (vnr, extra = {}) => ({NordicArticleNumber: vnr, name: 'Burana', strength: '400 mg', Company: 'Orion', UnavailableFrom: '2026-11-01', EndingDate: '2026-12-20', DateOfTheNotification: '2026-10-30', first_seen: '2026-11-03', last_seen: '2026-11-24', removed_on: null, listed_at_first_capture: false, end_changes: [{seen: '2026-11-03', date: '2026-12-20'}], pack_label: {en: `pack ${vnr}`, fi: `pakkaus ${vnr}`}, ...extra});
+const mdPage = {id: 'm0123456789ab', snapshot_date: '2026-11-24', medicine: {name: 'Burana', strength: '400 mg', substances: ['Ibuprofen'], form: 'tabletti, kalvopäällysteinen', routes: ['Suun kautta'], atc: 'M01AE01', container: '', unit_size: '', device: ''},
+  packages: [{vnr: '111111', events: [mdEvent('111111'), mdEvent('111111', {removed_on: '2026-10-01', last_seen: '2026-09-30', first_seen: '2026-09-01'})]}, {vnr: '222222', events: [mdEvent('222222', {removed_on: '2026-11-10', last_seen: '2026-11-09'})]}]};
+
+test('a medicine page shows each package apart, with what Fimea says and our reading in separate blocks', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'; page = ${JSON.stringify(mdPage)}`, env);
+    env.render();
+    const html = get('medicines').innerHTML, t = vm.runInContext(`copy.${lang}`, env);
+    assert.equal((html.match(/class="panel med-pkg /g) || []).length, 2, 'one panel for each package');
+    assert.equal((html.match(new RegExp(`<h4>${t.mdFimea}</h4>`, 'g')) || []).length, 2);
+    assert.equal((html.match(new RegExp(`<h4>${t.mdOurs}</h4>`, 'g')) || []).length, 2);
+    assert.match(html, /<h1 class="md-title">Burana 400.mg<\/h1>/); assert.match(html, /Ibuprofen/);
+    for (const vnr of ['111111', '222222']) assert.match(html, new RegExp(String.raw`href="medicine\.html\?vnr=${vnr}"`), 'each package keeps its package page');
+    // A package with a current and an ended notice keeps both; the ended package says when it was last listed, not that supply returned.
+    assert.equal((html.match(/<details class="md-more">/g) || []).length, 1);
+    assert.match(html, lang === 'en' ? /last listed on 9 Nov 2026/ : /viimeksi listalla 9\.11\.2026/);
+    assert.match(html, new RegExp(t.mdReading.slice(0, 30)));
+  }
+});
+
+test('a medicine page makes no substitute, stock or group claim and shows no Fimea substitution code', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  const withCode = JSON.parse(JSON.stringify(mdPage));
+  withCode.packages[0].events[0].substitution_group = '1299';
+  vm.runInContext(`language='en'; page = ${JSON.stringify(withCode)}`, env);
+  env.render();
+  const html = get('medicines').innerHTML;
+  assert.doesNotMatch(html, /1299|Substitution group|substitution group|interchangeable|suitable|alternative|other packages|on the market|available/i);
+  assert.doesNotMatch(html, /class="alts"|impact/);
+  // The only words about replacing or stock are the denial in the note.
+  const text = html.replace(/<[^>]+>/g, ' ');
+  assert.equal((text.match(/replace|in stock/gi) || []).length, 2);
+  for (const lang of ['en', 'fi']) {
+    const copy = vm.runInContext(`copy.${lang}`, context);
+    for (const [key, value] of Object.entries(copy)) if (key.startsWith('md') && typeof value === 'string' && key !== 'mdReading') assert.doesNotMatch(value, /replace|stock|interchang|suitable|alternative|substitut|korvaa|vaihto|saatavilla|sopiva/i, key);
+  }
+});
+
+test('an unknown medicine address shows a helpful state, and the copy of both languages has the same keys', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  assert.equal(env.idFromSearch('?id=%20m0123456789ab%20'), 'm0123456789ab');
+  assert.equal(env.validId('m0123456789ab'), true); assert.equal(env.validId('../x'), false); assert.equal(env.validId('0123456789ab'), false);
+  vm.runInContext("language='fi'; page = {missing: true}", env);
+  env.render();
+  assert.match(get('medicines').innerHTML, /Lääkettä ei löytynyt/); assert.match(get('medicines').innerHTML, /action="shortages\.html"/);
+  const en = Object.keys(vm.runInContext('copy.en', context)).filter(k => /^md|_medicines$/.test(k)), fi = Object.keys(vm.runInContext('copy.fi', context)).filter(k => /^md|_medicines$/.test(k));
+  assert.deepEqual(en, fi); assert.equal(en.length, 26);
+});
+
+test('search results open the medicine page when the build made one, else the package page; past shortages keep working', () => {
+  const [env] = pageEnv(['shortages.js']);
+  vm.runInContext("language='en'", env);
+  const paged = mdEvent('111111', {medicine_page: 'm0123456789ab'}), plain = mdEvent('333333');
+  const now = Date.UTC(2026, 10, 24);
+  assert.match(env.pkgCard(paged, now, 2, true), /href="medicines\.html\?id=m0123456789ab&amp;vnr=111111"/);
+  assert.match(env.pkgCard(plain, now, 2, true), /href="medicine\.html\?vnr=333333"/);
+  // Cards outside the search lists, and a bad id, keep the package page.
+  assert.match(env.pkgCard(paged, now, 2), /href="medicine\.html\?vnr=111111"/);
+  assert.match(env.pkgCard(mdEvent('111111', {medicine_page: '"><script>'}), now, 2, true), /href="medicine\.html\?vnr=111111"/);
+  const gone = mdEvent('111111', {removed_on: '2026-11-10', last_seen: '2026-11-09', medicine_page: 'm0123456789ab'});
+  assert.match(env.pastRow(gone), /href="medicines\.html\?id=m0123456789ab&amp;vnr=111111"/); assert.match(env.pastRow(mdEvent('333333', {removed_on: '2026-11-10'})), /href="medicine\.html\?vnr=333333"/);
+  assert.equal(env.pastMatches([gone], 'burana').length, 1);
+});
+
+const dateText = (lang, iso) => { const [y, m, d] = iso.split('-').map(Number); return lang === 'fi' ? `${d}.${m}.${y}` : `${d} Nov ${y}`; };
+test('a notice that left the list is not the package leaving it: the wording says notice, in English and Finnish', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  // The package is still listed under an updated notice (vnr_listed_at_removal), the older notice is gone.
+  const pkg = {vnr: '168299', events: [mdEvent('168299', {first_seen: '2026-11-24', UnavailableFrom: '2026-11-20'}), mdEvent('168299', {removed_on: '2026-11-24', last_seen: '2026-11-23', first_seen: '2026-11-03', vnr_listed_at_removal: true})]};
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'; page = ${JSON.stringify({...mdPage, packages: [pkg]})}`, env);
+    env.render();
+    const html = get('medicines').innerHTML, t = vm.runInContext(`copy.${lang}`, env);
+    const older = html.slice(html.indexOf('<details class="md-more">'));
+    assert.ok(older.includes(t.mdLeftText(dateText(lang, '2026-11-23'))), 'status line speaks of the notice');
+    assert.ok(older.includes(t.mdLastListed) && older.includes(t.mdGone(dateText(lang, '2026-11-24'))), 'timeline speaks of the notice');
+    assert.match(older, lang === 'en' ? /This notice was on the list in our captures from 3 Nov 2026 to 23 Nov 2026\./ : /Ilmoitus oli listalla tilannekuvissamme 3\.11\.2026–23\.11\.2026\./);
+    assert.doesNotMatch(older, /This package was last listed|Pakkaus oli viimeksi listalla|No longer on the list|Ei enää listalla/);
+  }
+  // The package-level tab names the notice too, and the package page's own wording is not changed.
+  vm.runInContext("language='en'", env);
+  assert.match(env.timelineMarkup(pkg.events[1], true), /Last listed/); assert.doesNotMatch(env.timelineMarkup(pkg.events[1], true), /Notice last listed/);
+  // A gap in the captures keeps its wording and the removal time stays unknown.
+  const gap = mdEvent('171603', {removed_on: '2026-09-15', last_seen: '2024-11-18', first_seen: '2024-11-03', removed_after_gap: true, gaps: []});
+  vm.runInContext(`page = ${JSON.stringify({...mdPage, packages: [{vnr: '171603', events: [gap]}]})}`, env);
+  env.render();
+  const html = get('medicines').innerHTML;
+  assert.match(html, /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+  assert.match(html, /last seen in the capture of 18 Nov 2024, not on the list in the next capture, 15 Sep 2026, and no captures between\. When it left the list is not known/);
+  assert.doesNotMatch(html, /absent on 15 Sep 2026/);
+});
+
+test('each notice names its own source and captures, and the page-level line is only the latest file date', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  vm.runInContext("language='en'", env);
+  const ended = mdEvent('222222', {removed_on: '2026-11-10', last_seen: '2026-11-09'});
+  vm.runInContext(`page = ${JSON.stringify(mdPage)}`, env);
+  assert.match(env.noticeSource(ended, '2026-11-24'), /last seen in the capture of 9 Nov 2026, absent on 10 Nov 2026/);
+  assert.doesNotMatch(env.noticeSource(ended, '2026-11-24'), /24 Nov/);
+  assert.match(env.noticeSource(mdEvent('111111'), '2026-11-24'), /data of 24 Nov 2026/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.noticeSource({...ended, removed_after_gap: true}, '2026-11-24'), /ei listalla seuraavassa tilannekuvassa 10\.11\.2026.*ei ole tiedossa/);
+  vm.runInContext("language='en'", env); env.render();
+  const html = get('medicines').innerHTML;
+  assert.match(html, /The latest file we hold is of 24 Nov 2026; each notice names its own captures/);
+  assert.equal((html.match(/class="note md-notice-source"/g) || []).length, 3, 'one source line for each of the three notices');
+});
+
+test('a search result opens its own package on the medicine page, and falls back to the package page', async () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  vm.runInContext("language='en'", env);
+  assert.equal(env.vnrFromSearch('?id=m0123456789ab&vnr=222222'), '222222'); assert.equal(env.vnrFromSearch('?id=m0123456789ab'), '');
+  assert.equal(env.packageUrlWhenAbsent(mdPage, '222222'), ''); assert.equal(env.packageUrlWhenAbsent(mdPage, ''), '');
+  assert.equal(env.packageUrlWhenAbsent(mdPage, '999999'), 'medicine.html?vnr=999999');
+  assert.equal(env.packageUrlWhenAbsent({missing: true}, '222222'), 'medicine.html?vnr=222222');
+  assert.equal(env.packageUrlWhenAbsent({missing: true}, ''), '', 'no VNR: the not-found state');
+  // The scroll is deferred: it waits for the fonts and a frame, runs once, and any reader input cancels it for good.
+  const run = async (input) => {
+    const scrolled = [], listeners = {}, frames = [];
+    let fontsReady; const fonts = {ready: new Promise(resolve => { fontsReady = resolve; })};
+    vm.runInContext('scrolled = false', env);
+    env.window = {addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); }, removeEventListener: (name, fn) => { listeners[name] = (listeners[name] || []).filter(x => x !== fn); }};
+    env.document.fonts = fonts; env.requestAnimationFrame = fn => frames.push(fn);
+    get('pk-222222').scrollIntoView = () => scrolled.push('pk-222222');
+    vm.runInContext(`selectedVnr='222222'; page = ${JSON.stringify(mdPage)}`, env);
+    env.render(); env.render();
+    assert.deepEqual(scrolled, [], 'nothing scrolls before the layout is ready');
+    if (input) for (const fn of listeners[input] || []) fn();
+    fontsReady(); await fonts.ready; await Promise.resolve();
+    frames.splice(0).forEach(fn => fn());
+    await new Promise(resolve => setTimeout(resolve, 600));   // no later timer scrolls again
+    frames.splice(0).forEach(fn => fn());
+    return {scrolled, left: Object.values(listeners).flat().length};
+  };
+  assert.deepEqual(await run(null), {scrolled: ['pk-222222'], left: 0}, 'one scroll, and its input listeners are removed');
+  for (const input of ['wheel', 'touchstart', 'keydown', 'pointerdown']) assert.deepEqual((await run(input)).scrolled, [], `${input} from the reader cancels the scroll`);
+  const html = get('medicines').innerHTML;
+  assert.match(html, /is-selected" aria-labelledby="pk-222222"/); assert.doesNotMatch(html, /is-selected" aria-labelledby="pk-111111"/);
+  assert.match(html, /<h3 id="pk-222222" class="med-pkg-name">pack 222222 <span class="md-vnr">VNR 222222<\/span><\/h3>/);
+});

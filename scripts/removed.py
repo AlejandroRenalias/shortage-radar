@@ -5,7 +5,7 @@ One row for each VNR that is not listed now: its most recently seen notice, with
 (`last_seen`) and the stretches between captures that were not observed (`gaps`, scripts/gaps.py).
 A row says only what the captures show; leaving the list does not show that supply returned.
 """
-FIELDS = ('NordicArticleNumber', 'name', 'strength', 'form', 'pack_label', 'substances', 'atc', 'Company', 'first_seen', 'last_seen', 'removed_on', 'removed_after_gap', 'gaps')
+FIELDS = ('NordicArticleNumber', 'name', 'strength', 'form', 'pack_label', 'substances', 'atc', 'Company', 'first_seen', 'last_seen', 'removed_on', 'removed_after_gap', 'gaps', 'medicine_page')
 
 
 def removed_index(events):

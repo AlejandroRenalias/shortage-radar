@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import critical as eu_list
 from changes import _shift, feeds, week_summary
 from gaps import MAX_GAP_DAYS, add_capture, days_between, gaps_of, is_gap
+from medicine_pages import build_pages
 from packs import pack_label
 from pages import render_pages
 from removed import removed_index
@@ -303,10 +304,15 @@ def build():
     # The register's own run date: the history reads the register's flags only for the capture of that day.
     register_path = ROOT / 'data/source/register.xml'
     critical = critical_events(snapshots, members, products, metadata.get('register_date') or (register_date(register_path) if register_path.exists() else None))
+    # One page for each verified group of register packages (scripts/medicine_pages.py); it puts `medicine_page` on the notices of its packages.
+    shard_meta = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata, 'generated_at': datetime.now(timezone.utc).isoformat(), 'last_checked': os.environ.get('LAST_CHECKED') or None}
+    medicine_dir = ROOT / 'site/m'
+    # Without a register file (tests that replace `register`) there are no groups and no pages.
+    medicine_counts = build_pages(register_path, register_date(register_path), current_vnrs, es, shard_meta, medicine_dir) if register_path.exists() else {}
     output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata,
               'newly_critical': critical, 'triage_counts': read_triage_counts()}
-    output['generated_at'] = datetime.now(timezone.utc).isoformat()
-    output['last_checked'] = os.environ.get('LAST_CHECKED') or None
+    output['generated_at'] = shard_meta['generated_at']
+    output['last_checked'] = shard_meta['last_checked']
     csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact']
     with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
@@ -341,7 +347,7 @@ def build():
     critical_data = {'eu': eu, 'rows': rows, 'counts': eu_list.counts(rows), 'history': eu_list.history(es, matches, [d for d, _ in snapshots]), 'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'source_metadata': metadata}
     for name, html in render_pages(home['short_now'], home['impact'], critical_data, home['expected_soon']).items():
         (ROOT / 'site' / name).write_text(html, encoding='utf-8', newline='\n')
-    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)} eu_list={eu_list.counts(rows)} eu_alerts={len(alerts)}")
+    print(f"rows={len(current)} matched_names={sum(bool(e.get('name')) for e in current)} unmatched_vnrs={len(unmatched)} impact={home['impact']} newly_critical={len(critical)} eu_list={eu_list.counts(rows)} eu_alerts={len(alerts)} medicine_pages={medicine_counts}")
 
 
 if __name__ == '__main__':
