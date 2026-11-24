@@ -264,3 +264,38 @@ def test_current_view_and_history_use_one_definition_of_an_available_alternative
     assert by_case[('1', '0', '2026-12-01', '')] == 0 and by_case[('1', '0', '2020-01-01', '2026-01-01')] == 0
     assert by_case[('1', '0', '2020-01-01', '2030-01-01')] == 1
     assert helsinki_today() >= '2026-11-23'
+
+
+def test_search_names_use_only_whole_name_pairs_of_the_register():
+    import build
+    # (substance, ATC code, ATC name) of products with one active substance, as the register has them (24 Nov 2026).
+    two = lambda *row: [row] * 2
+    single = (two('Tadalafil', 'G04BE08', 'tadalafiili') + two('Galantamine hydrobromide', 'N06DA04', 'galantamiini') + two('Gemcitabine hydrochloride', 'L01BC05', 'gemsitabiini')
+              + two('Methylprednisolone acetate', 'H02AB04', 'metyyliprednisoloni') + two('Methylprednisolone sodium succinate', 'H02AB04', 'metyyliprednisoloni')
+              + two('Prednisolone', 'H02AB06', 'prednisoloni') + two('Prednisone', 'H02AB07', 'prednisoni')
+              + two('Levonorgestrel', 'G03AC03', 'levonorgestreeli') + two('Levonorgestrel', 'G02BA03', 'progesteronia sisältävä muovikierukka')
+              + two('Clobetasol propionate', 'D07AD01', 'klobetasoli') + two('Rifampicin', 'J04AB02', 'rifampisiini')
+              + two('Insulin glargine', 'A10AE04', 'glargininsuliini') + two('Insulin lispro', 'A10AB04', 'lisproinsuliini')
+              # Gastrografin: the name of gadopentate must not reach the other meglumine salt (a shared first word).
+              + two('Meglumine gadopentate', 'V08CA01', 'gadopenteettihappo') + two('Sodium amidotrizoate', 'V08AA01', 'amidotritsoaatti')
+              # A one-word ATC class (B05BB01 "elektrolyytit") is not the name of the substance of a product with that code.
+              + two('Sodium hydrogen carbonate', 'B05BB01', 'elektrolyytit') + two('Fosaprepitant dimeglumine', 'A04AD12', 'aprepitantti')
+              + [('Progesterone', 'G03DA04', 'progesteroni')] + two('Odd substance', 'X01AA01', 'outoaine') + two('Odd substance', 'X01AA02', 'toinenaine'))
+    pairs = build.finnish_pairs(single)
+    find = lambda *names: build.search_names(list(names), pairs)
+    assert find('Tadalafil') == 'tadalafiili' and find('Galantamine hydrobromide') == 'galantamiini' and find('Gemcitabine hydrochloride') == 'gemsitabiini'
+    assert find('Methylprednisolone sodium succinate') == 'metyyliprednisoloni' and find('Methylprednisolone acetate') == 'metyyliprednisoloni'
+    assert find('Prednisolone') == 'prednisoloni' and find('Prednisone') == 'prednisoni'
+    # Whole names only: a salt or a first word of a paired name gets nothing.
+    assert find('Galantamine') == '' and find('Methylprednisolone') == '' and find('Insulin degludec') == ''
+    # Mirena: its coil code carries a class label, which is no substance name; its substance has its own name.
+    assert find('Levonorgestrel') == 'levonorgestreeli' and 'progesteroni' not in find('Levonorgestrel')
+    assert find('Clobetasol propionate') == 'klobetasoli' and find('Rifampicin') == 'rifampisiini'
+    assert find('Clobetasone butyrate') == '' and find('Rifamycin') == ''
+    # Gastrografin (sodium and meglumine amidotrizoate) is not gadopentate; a class word is not an ingredient; a prodrug is not its drug.
+    assert find('Meglumine amidotrizoate') == '' and 'gadopenteettihappo' not in find('Sodium amidotrizoate', 'Meglumine amidotrizoate')
+    assert find('Sodium hydrogen carbonate') == '' and find('Fosaprepitant dimeglumine') == ''
+    # The Finnish name must spell like a word of the English name, so an acid or a wrong code is dropped. One product is not enough.
+    assert find('Insulin glargine') == '' and find('Insulin lispro') == '' and find('Meglumine gadopentate') == ''
+    assert find('Progesterone') == '' and find('Odd substance') == '' and find('') == '' and find() == ''
+    assert find('Paracetamol', 'Tadalafil') == 'tadalafiili'

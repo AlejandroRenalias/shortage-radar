@@ -155,6 +155,44 @@ test('Finnish substance aliases and diacritics match English records', () => {
   assert.ok(vm.runInContext('Object.keys(aliases).length >= 60', context));
 });
 
+test('search finds packages by the Finnish substance name of the register (substance_fi), with Finnish endings', () => {
+  const galantamin = {name:'Galantamin Orion', substances:'Galantamine hydrobromide', substance_fi:'galantamiini', atc:'N06DA04'};
+  const methyl = {name:'Solu-Medrol', substances:'Methylprednisolone sodium succinate', substance_fi:'metyyliprednisoloni', atc:'H02AB04'};
+  const plain = {name:'Prednisolon Orion', substances:'Prednisolone', substance_fi:'prednisoloni', atc:'H02AB06'};
+  for (const query of ['galantamiini', 'Galantamiini', 'galantam', 'galantamiinia', 'galantamiinin', 'galantamiinilla', 'galantamiinit', 'galantamiini orion']) assert.ok(context.searchMatches(galantamin, query), query);
+  for (const query of ['metyyliprednisoloni', 'metyyliprednisolonin']) { assert.ok(context.searchMatches(methyl, query), query); assert.equal(context.searchMatches(plain, query), false, query); }
+  assert.ok(context.searchMatches(Object.assign({strength:'8 mg'}, galantamin), 'galantamiini 8 mg'));
+  assert.equal(context.searchMatches(Object.assign({strength:'16 mg'}, galantamin), 'galantamiini 8 mg'), false);
+  // Another substance, nonsense and short pieces do not match.
+  for (const query of ['tadalafiili', 'galantamiinivalmisteet', 'galantamiini8', 'galantamiinxyz', 'galantamiinix', 'xyzqwerty']) assert.equal(context.searchMatches(galantamin, query), false, query);
+  // The word list is the only addition: a package without it behaves as before.
+  assert.equal(context.searchMatches({name:'Galantamin Orion', substances:'Galantamine hydrobromide'}, 'galantamiini'), false);
+  // "glargiini" is not an ATC name of the register, so it is an alias.
+  assert.ok(context.searchMatches({substances:'Insulin glargine'}, 'glargiini'));
+  assert.equal(context.searchMatches({substances:'Insulin lispro', substance_fi:'insuliini'}, 'glargiini'), false);
+  // The specific alias wins over the general one; the general word still finds both.
+  const glargine = {name:'Semglee', substances:'Insulin glargine'}, lispro = {name:'Insulin Lispro Sanofi', substances:'Insulin lispro'};
+  // The new aliases take Finnish endings only, and a bad tail finds nothing (not the generic insulin).
+  for (const query of ['glargiinin', 'glarg', 'glargininsuliini', 'glargininsuliinia']) assert.ok(context.searchMatches(glargine, query), query);
+  for (const query of ['glargiinxyz', 'glargiini8', 'insuliiniglargiinxyz', 'insuliiniglargiini8']) for (const row of [glargine, lispro]) assert.equal(context.searchMatches(row, query), false, query);
+  // Real rows of the 24 Nov 2026 build: similar names of other substances do not find them.
+  const clobex = {NordicArticleNumber:'066578', name:'Clobex', substances:'Clobetasol propionate', substance_fi:'klobetasoli'}, rimapen = {NordicArticleNumber:'490441', name:'Rimapen', substances:'Rifampicin', substance_fi:'rifampisiini'};
+  assert.ok(context.searchMatches(clobex, 'klobetasoli') && context.searchMatches(rimapen, 'rifampisiini'));
+  for (const [row, query] of [[clobex, 'klobetasoni'], [rimapen, 'rifamysiini']]) assert.equal(context.searchMatches(row, query), false, query);
+  for (const query of ['insuliiniglargiini', 'insuliiniglargiinin', 'glargiini']) { assert.ok(context.searchMatches(glargine, query), query); assert.equal(context.searchMatches(lispro, query), false, query); }
+  for (const query of ['insuliini', 'insuliinin']) for (const row of [glargine, lispro]) assert.ok(context.searchMatches(row, query), query);
+  // Mirena: found by its substance in both languages; the class label of its ATC code ("progesteroni") is not an ingredient.
+  const mirena = {NordicArticleNumber:'370212', name:'Mirena', substances:'Levonorgestrel', substance_fi:'levonorgestreeli'};
+  for (const query of ['levonorgestrel', 'levonorgestreeli']) assert.ok(context.searchMatches(mirena, query), query);
+  assert.equal(context.searchMatches(mirena, 'progesteroni'), false);
+  // Real row: Gastrografin has no Finnish name in the index, so the name of another contrast agent does not find it.
+  const gastrografin = {NordicArticleNumber:'027102', name:'Gastrografin', substances:'Sodium amidotrizoate, Meglumine amidotrizoate'};
+  assert.equal(context.searchMatches(gastrografin, 'gadopenteettihappo'), false);
+  // Real rows: a class word is not an ingredient (Movicol and Moxalole have no "elektrolyytit" in their substances).
+  const movicol = {name:'Movicol', substances:'Macrogol 3350, Sodium chloride, Sodium hydrogen carbonate, Potassium chloride'};
+  assert.equal(context.searchMatches(movicol, 'elektrolyytit'), false);
+});
+
 test('freshness uses the successful check date and distinguishes a build-only fallback', () => {
   setLanguage(context, 'en');
   const today = Date.UTC(2026, 10, 21);
