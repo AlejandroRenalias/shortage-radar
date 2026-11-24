@@ -4,7 +4,7 @@ const PAGE_SIZE = 30;
 let rows = [], filters = parseFilters(location.search), visible = PAGE_SIZE, loaded = false, urlTimer;
 // Earlier packages for a search the current list cannot answer: 'idle' until needed, then 'loading', 'ready' or 'error'.
 let past = {state: 'idle', rows: []};
-// The date a saved tile link was counted at, when a newer capture replaced it.
+// The date a saved tile link was counted at, when the loaded capture has another date.
 let savedAsof = '';
 function readControls() {
   filters.q = $('search').value.trim().slice(0, 100);
@@ -45,7 +45,7 @@ function draw() {
   // Nothing is answered before current.json is here: a miss now could be a package that is still loading.
   if (!loaded) return;
   const t = copy[language], now = listNow(filters), grouped = filters.impact === 'no_alternative';
-  // A tile link states the date and scope it was counted at, and says when the loaded data is newer than the link.
+  // A tile link states the date and scope it was counted at, and says when the loaded data has a different date than the link (newer or older).
   $('tile-note').hidden = !filters.asof;
   $('tile-note').textContent = filters.asof ? [savedAsof ? t.tileNoteChanged(dateText(savedAsof), dateText(filters.asof)) : '', t.tileNote(dateText(filters.asof), Number(filters.within) || 0)].filter(Boolean).join(' ') : '';
   const found = sortPackages(filterPackages(rows, filters, now), filters.sort, now);
