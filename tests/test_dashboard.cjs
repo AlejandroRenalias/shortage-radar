@@ -1421,6 +1421,7 @@ test('the EU list search finds a row by its verified Finnish substance word, as 
   assert.equal(hit('desmopressiini'), true); assert.equal(hit('desmopressiinia'), true); assert.equal(hit('desmo'), true);
   assert.equal(hit('parasetamoli'), false);   // no inferred names: a Finnish word without a verified pair finds nothing here
   assert.equal(vm.runInContext(`searchMatches({substances: 'x', substance_fi: ''}, 'desmopressiini')`, context), false);
+});
 
 test('each home tile count equals the number of rows its link shows, on the real 24 Nov capture, even when the browser date is later', () => {
   // Real capture rows (data/snapshots/2026-11-24.txt) plus notices on day 14, day 15 and day 40 after the data date.
