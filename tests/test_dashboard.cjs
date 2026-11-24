@@ -1523,7 +1523,8 @@ test('a saved tile link uses the loaded capture date, explains it, and a generic
   const older = context.parseFilters('?status=soon&within=14&asof=2026-11-26');
   assert.equal(context.reconcileAsof(older, '2026-11-24'), '2026-11-26'); assert.equal(older.asof, '2026-11-24');
   // The note names the date, the scope and the change, in both languages.
-  for (const [lang, saved] of [['en', /saved from a different data date: 24 Nov 2026\. .*data of 26 Nov 2026/], ['fi', /eri päivän tiedoilla: 24 Nov 2026\. .*tiedot 26 Nov 2026/]]) {
+  for (const [lang, saved] of [['en', /saved from a different data date: 24 Nov 2026\. .*data of 26 Nov 2026/], ['fi', /eri päivän tiedoilla: 24\.11\.2026\. .*tiedot 26\.11\.2026/]]) {
+    setLanguage(context, lang);
     const t = vm.runInContext(`copy.${lang}`, context);
     for (const [a, b] of [['2026-11-24', '2026-11-26'], ['2026-11-26', '2026-11-24']]) {
       const note = t.tileNoteChanged(vm.runInContext(`dateText('${a}')`, context), vm.runInContext(`dateText('${b}')`, context));
@@ -1534,6 +1535,7 @@ test('a saved tile link uses the loaded capture date, explains it, and a generic
     assert.match(t.tileNote('X', 14), lang === 'en' ? /within 2 weeks after that date/ : /2 viikon kuluessa/);
     assert.equal(t.tileNote('X', 0), lang === 'en' ? 'Counted as of X.' : 'Laskettu tilanteessa X.');
   }
+  setLanguage(context, 'en');
   const js = read('shortages.js');
   assert.match(js, /savedAsof = reconcileAsof\(filters, d\.snapshot_date\)/);
   // Picking a status by hand clears both hidden tile parameters; search and sort leave them alone.

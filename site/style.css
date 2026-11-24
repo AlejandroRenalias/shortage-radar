@@ -13,9 +13,9 @@ html.i18n-pending body{animation:reveal-fallback 0s 2s both}@keyframes reveal-fa
   --icon-fill:#d3e8de;
   --sub:#067647;--sub-tint:#eef7f2;--sub-line:#bfe3cd;--crit:#8a4b00;--crit-tint:#fdf4e3;--crit-line:#e6cf9f;--crit-bar:#b7791f;--nog:#4a625c;--nog-tint:#f3f6f5;--nog-line:#d3ded9;--nog-bar:#6f877e;
   --font:'Atkinson Hyperlegible Next','Atkinson Fallback',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --nav-h:100px;--header-h:60px;
+  --nav-h:100px;--header-h:60px;--header-stick:var(--header-h);
   font-family:var(--font);color:var(--text);background:var(--surface);font-size:18px;line-height:1.55;
-  scroll-padding-top:calc(var(--header-h) + 12px);scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+  scroll-padding-top:calc(var(--header-stick) + 12px);scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
   -webkit-text-size-adjust:100%;text-size-adjust:100%;
 }
 html{scrollbar-gutter:stable}
@@ -67,7 +67,7 @@ img,svg{max-width:100%}
 .ic-b .k{fill:var(--cut,var(--surface));stroke:none}
 @media (max-width:389px){.nav a{font-size:.68rem}}
 @media (max-width:339px){.nav{left:6px;right:6px;padding:3px;gap:0}.nav a{padding-inline:0;font-size:.65rem}}
-@keyframes dock-in{from{background-color:rgba(0,112,75,0);transform:scale(.9)}to{background-color:var(--green-ink);transform:none}}
+@keyframes dock-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @keyframes lift{from{transform:translateY(3px)}to{transform:translateY(-1px)}}
 .lang{display:inline-flex;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px}
 .lang button{font:inherit;font-size:.9375rem;font-weight:400;min-height:40px;min-width:44px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
@@ -279,7 +279,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .toc a{display:flex;align-items:center;min-height:44px;font-weight:400;overflow-wrap:anywhere}
 @media (max-width:899px){.toc{background:none;padding:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0}.toc ul{columns:2;column-gap:16px}.toc a{font-size:.9375rem;font-weight:400}}
 .prose{max-width:68ch}
-.prose section{padding-block:20px;border-top:1px solid var(--line);scroll-margin-top:calc(var(--header-h) + 8px)}
+.prose section{padding-block:20px;border-top:1px solid var(--line);scroll-margin-top:calc(var(--header-stick) + 8px)}
 .prose section:first-child{border-top:0;padding-top:0}
 .prose h2{margin-bottom:10px}
 .prose h3{margin:16px 0 6px}
@@ -471,7 +471,7 @@ html:not(.js) .needs-js{display:none}
   .rail .pkg{flex:none;grid-template-rows:subgrid;grid-row:span 4;row-gap:0}
   .med-layout{grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:24px}
   .about-layout{grid-template-columns:260px minmax(0,1fr);gap:48px}
-  .toc{position:sticky;top:calc(var(--header-h) + 16px);align-self:start}
+  .toc{position:sticky;top:calc(var(--header-stick) + 16px);align-self:start}
   .pkg-list{grid-template-columns:repeat(3,minmax(0,1fr))}
   .crit-packages{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -491,6 +491,7 @@ html:not(.js) .needs-js{display:none}
 }
 /* Tablet widths: brand and language switch share the top row and the links drop to a row of their own, so nothing runs past the screen in English or Finnish */
 @media (min-width:720px) and (max-width:1099px){
+  :root{--header-stick:106px}
   .site-header .header-bar{grid-template-columns:minmax(0,1fr) auto;gap:0 16px;padding-block:6px}
   .site-header .nav{grid-column:1 / -1;grid-row:2;flex-wrap:wrap;margin-top:2px}
   .site-header .nav a{padding:0 12px}
