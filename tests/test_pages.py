@@ -77,7 +77,8 @@ def test_home_top_keeps_headline_strip_search_and_one_closed_dropdown_for_the_re
     assert top.count('<details') == 1 and '<details class="eu-fold eu-notes home-notes">' in top
     box = top[top.index('<details'):top.index('</details>')]
     assert 'data-i18n="homeNotes">How to read these numbers</summary>' in box
-    for caveat in ('Our reading of Fimea’s register, not a stock check.', 'For 539 of them, the check found another package',
+    assert 'including any that start after 2 weeks' in box
+    for caveat in ('Our reading of Fimea’s register, not a stock check.', 'for 539, the check found another package',
                    'A listing does not tell you whether a medicine is available at your pharmacy.', 'Substitution groups are for human medicines.',
                    '“On the market” is not a pharmacy stock check.', 'Search by medicine, active substance, ATC, company or VNR.', 'href="about.html#impact"'):
         assert caveat in box, caveat

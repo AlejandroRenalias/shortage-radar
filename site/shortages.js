@@ -4,6 +4,8 @@ const PAGE_SIZE = 30;
 let rows = [], filters = parseFilters(location.search), visible = PAGE_SIZE, loaded = false, urlTimer;
 // Earlier packages for a search the current list cannot answer: 'idle' until needed, then 'loading', 'ready' or 'error'.
 let past = {state: 'idle', rows: []};
+// The date a saved tile link was counted at, when a newer capture replaced it.
+let savedAsof = '';
 function readControls() {
   filters.q = $('search').value.trim().slice(0, 100);
   filters.impact = document.querySelector('input[name="impact"]:checked').value;
@@ -43,6 +45,9 @@ function draw() {
   // Nothing is answered before current.json is here: a miss now could be a package that is still loading.
   if (!loaded) return;
   const t = copy[language], now = listNow(filters), grouped = filters.impact === 'no_alternative';
+  // A tile link states the date and scope it was counted at, and says when the loaded data is newer than the link.
+  $('tile-note').hidden = !filters.asof;
+  $('tile-note').textContent = filters.asof ? [savedAsof ? t.tileNoteChanged(dateText(savedAsof), dateText(filters.asof)) : '', t.tileNote(dateText(filters.asof), Number(filters.within) || 0)].filter(Boolean).join(' ') : '';
   const found = sortPackages(filterPackages(rows, filters, now), filters.sort, now);
   const fallback = !found.length && Boolean(filters.q) && !activeFilters();
   if (fallback) loadPast();
@@ -81,7 +86,7 @@ function changed(resetPage = true) { if (past.state === 'error') past = {state: 
 $('finder').addEventListener('submit', e => e.preventDefault());
 $('search').addEventListener('input', () => changed());
 // A hand-picked status leaves the home tile's two-week window; the general 'Starting soon' filter stays available.
-$('finder').addEventListener('change', e => { if (e.target.id !== 'search') { if (e.target.name === 'status') delete filters.within; changed(); } });
+$('finder').addEventListener('change', e => { if (e.target.id !== 'search') { if (e.target.name === 'status') { delete filters.within; delete filters.asof; savedAsof = ''; } changed(); } });
 function clearFilters() { filters = {q: filters.q, impact: '', status: '', group: '', form: '', company: '', sort: ''}; render(); syncUrl(); }
 $('clear').addEventListener('click', clearFilters);
 $('list').addEventListener('click', e => { if (e.target.id === 'clear-inline') clearFilters(); });
@@ -96,4 +101,4 @@ $('copy-link').addEventListener('click', () => {
 // stay in view; the summary shows how many filters are on, and the panel opens on tap.
 $('filters').open = matchMedia('(min-width: 760px)').matches || (!filters.q && (FILTER_KEYS.some(k => filters[k]) || Boolean(filters.sort)));
 start(render);
-loadCurrent().then(d => { rows = relevant(d.events); loaded = true; renderChrome(d); render(); }).catch(showLoadError);
+loadCurrent().then(d => { rows = relevant(d.events); loaded = true; savedAsof = reconcileAsof(filters, d.snapshot_date); if (savedAsof) syncUrl(); renderChrome(d); render(); }).catch(showLoadError);

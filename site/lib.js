@@ -290,6 +290,12 @@ function parseFilters(search) {
 }
 // The date a list is read at: the data date from a home tile link when there is one, else today (Helsinki).
 function listNow(f) { return f.asof && parsedDate(f.asof) ? parsedDate(f.asof).valueOf() : todayUTC(); }
+// A saved tile link names the data date it was counted at. Once a newer capture is loaded the list uses the loaded date, so a package
+// that has started since is never shown as upcoming. Returns the saved date when it was replaced, else ''.
+function reconcileAsof(f, snapshotDate) {
+  if (!f.asof || !parsedDate(snapshotDate) || f.asof === snapshotDate) return '';
+  const saved = f.asof; f.asof = snapshotDate; return saved;
+}
 function filtersToQuery(f) {
   const params = new URLSearchParams();
   for (const key of ['q', ...FILTER_KEYS, 'asof', 'within', 'sort']) if (f[key]) params.set(key, f[key]);

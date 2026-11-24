@@ -74,7 +74,7 @@ test('the built pages carry the same English text as the copy file, so a string 
   assert.doesNotMatch(copy_fi().listIntro + copy_fi().trendsIntro, /puutteelli|listaa/);
   assert.match(copy_fi().impactCaveat1, /kaupan/);
   for (const lang of ['en', 'fi']) assert.doesNotMatch(vm.runInContext(`copy.${lang}`, context).heroAnswer(537), /pharmacy can usually|apteekki voi yleensä|not flagged short/);
-  assert.equal(en.heroAnswer(537), 'For 537 of them, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.');
+  assert.equal(en.heroAnswer(537), 'Of all packages on Fimea’s list, including any that start after 2 weeks: for 537, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.');
   assert.match(pages['index.html'], /hero-answer[^>]*><\/p>|not on the shortage list/);
   assert.doesNotMatch(copy_fi().impactCaveat1, /markkinoilla/);
 });
@@ -333,7 +333,7 @@ test('the home status strip shows the headline counts and the interchangeable co
   assert.match(homeWith('None').match(/<li[^>]*id="strip-sub"/)[0], / hidden/);
   // The hills picture is back below the search, decorative only.
   assert.match(html, /<svg class="eu-hero-art"[^>]*aria-hidden="true"/);
-  assert.ok(html.indexOf('role="search"') < html.indexOf('eu-hero-art') && html.indexOf('eu-hero-art') < html.indexOf('home-notes'));
+  assert.ok(html.indexOf('role="search"') < html.indexOf('home-notes') && html.indexOf('home-notes') < html.indexOf('eu-hero-art'), 'notes come before the picture so the Finnish label stays above the bottom bar');
   // The strip sits between the headline and the search, and makes no claim about stock.
   assert.ok(html.indexOf('id="hero-line"') < html.indexOf('class="strip"') && html.indexOf('class="strip"') < html.indexOf('role="search"'));
   for (const lang of ['en', 'fi']) {
@@ -350,7 +350,7 @@ test('the home status strip shows the headline counts and the interchangeable co
 
 test('the home status strip is filled from the same data as the headline and the triage, in both languages', () => {
   const [env, get] = pageEnv(['home.js']);
-  for (const id of ['hero-line', 'hero-label', 'hero-answer', 'triage-list', 'triage-vet', 'shelf', 'newest', 'facts', 'facts-since', 'facts-title', 'strip-now-num', 'strip-soon-num', 'strip-sub-num', 'strip-sub', 'strip-now-link', 'strip-soon-link', 'strip-sub-link']) get(id);
+  for (const id of ['hero-line', 'hero-label', 'hero-answer', 'triage-list', 'triage-vet', 'shelf', 'newest', 'facts', 'facts-since', 'facts-title', 'strip-now-num', 'strip-soon-num', 'strip-sub-num', 'strip-sub', 'strip-now-link', 'strip-soon-link', 'strip-sub-link', 'strip-asof']) get(id);
   get('triage-vet').parentElement = {hidden: false};
   vm.runInContext("data = {snapshot_date: '2026-11-24', short_now: 714, expected_soon: 42, impact: {substitute: 539, no_alternative: 61, nogroup: 117, vet: 39}, forms: {}, newest: [], longest: [], total: 756, company_count: 10}", env);
   for (const lang of ['en', 'fi']) {
@@ -693,7 +693,7 @@ test('home leads with the triage: words and numbers, each part one tap from the 
   const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'no_alternative':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
   assert.ok(html.indexOf('id="q"') < html.indexOf('id="triage"'), 'the search is on the first screen of a phone, ahead of the triage');
   for (const [level, n] of [['substitute', '531'], ['no_alternative', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
-  assert.match(html, /For 531 of them, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list\./);
+  assert.match(html, /for 531, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list\./);
   assert.match(html, /href="shortages\.html\?impact=vet" id="triage-vet">Also on the list: 39 veterinary medicines/);
   // Each row carries its share of the human packages as a bar; the widths follow the human counts only.
   assert.match(html, /<svg class="tri-bar"[^>]*aria-hidden="true"/);
@@ -1504,4 +1504,42 @@ test('the strip names its unit, keeps a visible focus outline inside the strip, 
     assert.match(t.stripSubNote, lang === 'en' ? /short now or expected to start/ : /nyt tai joiden häiriön odotetaan alkavan/);
     assert.doesNotMatch([t.stripSub, t.stripSubNote].join(' '), /in stock|pharmacy has|varastossa|apteekissa on/i);
   }
+});
+
+test('a saved tile link uses the loaded capture date, explains it, and a generic status drops the tile date', () => {
+  const f = context.parseFilters('?status=soon&within=14&asof=2026-11-24');
+  assert.equal(context.reconcileAsof(f, '2026-11-24'), '');
+  assert.equal(f.asof, '2026-11-24');
+  // A newer capture is loaded: the saved date is replaced and handed back for the note; the two-week scope stays.
+  assert.equal(context.reconcileAsof(f, '2026-11-26'), '2026-11-24');
+  assert.equal(f.asof, '2026-11-26'); assert.equal(f.within, '14');
+  // Three packages that started on the 26th are ongoing at the new date, not upcoming.
+  const rows = [{UnavailableFrom: '2026-11-26'}, {UnavailableFrom: '2026-11-27'}, {UnavailableFrom: '2026-12-10'}, {UnavailableFrom: '2026-12-11'}];
+  const shown = Array.from(context.filterPackages(rows, f, context.listNow(f))).map(e => e.UnavailableFrom);
+  assert.deepEqual(shown, ['2026-11-27', '2026-12-10']);
+  assert.equal(context.reconcileAsof(context.parseFilters('?status=now'), '2026-11-26'), '');
+  // The note names the date, the scope and the change, in both languages.
+  for (const [lang, saved] of [['en', /saved for the data of 24 Nov 2026.*newer data of 26 Nov 2026/], ['fi', /tiedoilla 24\.11\.2026.*uudempia tietoja 26\.11\.2026/]]) {
+    const t = vm.runInContext(`copy.${lang}`, context);
+    assert.match(t.tileNoteChanged(vm.runInContext(`dateText('2026-11-24')`, context), vm.runInContext(`dateText('2026-11-26')`, context)), /./);
+    assert.match(t.tileNote('X', 14), lang === 'en' ? /within 2 weeks after that date/ : /2 viikon kuluessa/);
+    assert.equal(t.tileNote('X', 0), lang === 'en' ? 'Counted as of X.' : 'Laskettu tilanteessa X.');
+  }
+  const js = read('shortages.js');
+  assert.match(js, /savedAsof = reconcileAsof\(filters, d\.snapshot_date\)/);
+  // Picking a status by hand clears both hidden tile parameters; search and sort leave them alone.
+  assert.match(js, /e\.target\.name === 'status'\) \{ delete filters\.within; delete filters\.asof;/);
+  assert.match(vm.runInContext("(n=>copy.en.tileNote(n))", context)('1 Jan 2026'), /Counted as of 1 Jan 2026\./);
+});
+
+test('the third count is named as all listed notices, including starts after two weeks, in both languages', () => {
+  for (const lang of ['en', 'fi']) {
+    const t = vm.runInContext(`copy.${lang}`, context);
+    assert.match(t.heroAnswer(540), lang === 'en' ? /Of all packages on Fimea’s list, including any that start after 2 weeks: for 540,/ : /Fimean listan kaikista pakkauksista, myös niistä, joiden häiriö alkaa yli 2 viikon kuluttua: 540 /);
+    assert.doesNotMatch(t.heroAnswer(540), /of them|Niistä/);
+    assert.match(t.stripSubNote, lang === 'en' ? /including any that start after 2 weeks/ : /yli 2 viikon kuluttua alkavat/);
+    assert.match(t.stripAsOf('X'), lang === 'en' ? /up to 14 days after that date/ : /enintään 14 päivää/);
+  }
+  const html = homeWith("{'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}");
+  assert.match(html, /id="strip-asof" data-asof="2026-11-24">Counts are as of 24 Nov 2026\./);
 });

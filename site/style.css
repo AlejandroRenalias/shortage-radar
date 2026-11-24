@@ -89,6 +89,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .hero-head>*{min-width:0}
 .hero .eu-hero-art{display:block;height:72px}
 .hero .home-notes{margin:0}
+.tile-note{margin:var(--s2) 0 0}
 .hero .home-notes>p{max-width:60ch;margin:var(--s2) 0 0}
 .hero h1#hero-line{font-size:clamp(1.5rem,1.2rem + 1.6vw,2.75rem);max-width:20ch;margin:0}
 .hero-fresh{display:flex;flex-wrap:wrap;gap:0 .35em;color:var(--muted);font-size:.8125rem;line-height:1.4;margin:calc(var(--s1) * -1) 0 0}

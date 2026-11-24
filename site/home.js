@@ -36,12 +36,14 @@ function renderHome() {
   $('hero-label').textContent = t.heroReading;
   const counts = impactCounts();
   // The status strip: the same numbers as the headline and the triage, each linking to its list view.
+  const asof = (data && data.snapshot_date) || $('strip-asof').dataset.asof;
+  if (asof) $('strip-asof').textContent = t.stripAsOf(dateText(asof));
   // The links carry the data date, so each list opens exactly the packages its number counts, whatever the visitor's clock says.
   if (data && data.snapshot_date) {
-    const asof = `&asof=${data.snapshot_date}`;
-    $('strip-now-link').href = `shortages.html?status=now${asof}`;
-    $('strip-soon-link').href = `shortages.html?status=soon&within=${SOON_DAYS}${asof}`;
-    $('strip-sub-link').href = `shortages.html?impact=substitute${asof}`;
+    const q = `&asof=${data.snapshot_date}`;
+    $('strip-now-link').href = `shortages.html?status=now${q}`;
+    $('strip-soon-link').href = `shortages.html?status=soon&within=${SOON_DAYS}${q}`;
+    $('strip-sub-link').href = `shortages.html?impact=substitute${q}`;
   }
   if (Number.isFinite(n)) $('strip-now-num').textContent = numberText(n);
   if (Number.isFinite(n)) $('strip-soon-num').textContent = numberText(soon || 0);
