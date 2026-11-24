@@ -1,5 +1,5 @@
 // Shortages: the full list with search, filters and sort. Everything is kept in the address, so a search can be shared.
-// With the impact filter set to critical, the list shows one row for each medicine, which opens to its packages.
+// With the impact filter set to no_alternative, the list shows one row for each medicine, which opens to its packages.
 const PAGE_SIZE = 30;
 let rows = [], filters = parseFilters(location.search), visible = PAGE_SIZE, loaded = false, urlTimer;
 // Earlier packages for a search the current list cannot answer: 'idle' until needed, then 'loading', 'ready' or 'error'.
@@ -42,7 +42,7 @@ function loadPast() {
 function draw() {
   // Nothing is answered before current.json is here: a miss now could be a package that is still loading.
   if (!loaded) return;
-  const t = copy[language], now = todayUTC(), grouped = filters.impact === 'critical';
+  const t = copy[language], now = todayUTC(), grouped = filters.impact === 'no_alternative';
   const found = sortPackages(filterPackages(rows, filters, now), filters.sort, now);
   const fallback = !found.length && Boolean(filters.q) && !activeFilters();
   if (fallback) loadPast();
@@ -62,7 +62,7 @@ function draw() {
   $('more').hidden = visible >= items.length;
   $('more').parentElement.hidden = items.length <= PAGE_SIZE;
   $('more-count').textContent = items.length > PAGE_SIZE ? t.moreCount(Math.min(visible, items.length), items.length) : '';
-  const critical = rows.filter(e => impactOf(e) === 'critical').length;
+  const critical = rows.filter(e => impactOf(e) === 'no_alternative').length;
   $('crit-callout').hidden = grouped || !critical;
   $('crit-callout-text').textContent = t.critCallout(critical);
   $('crit-intro').hidden = !grouped;
@@ -84,7 +84,7 @@ $('finder').addEventListener('change', e => { if (e.target.id !== 'search') chan
 function clearFilters() { filters = {q: filters.q, impact: '', status: '', group: '', form: '', company: '', sort: ''}; render(); syncUrl(); }
 $('clear').addEventListener('click', clearFilters);
 $('list').addEventListener('click', e => { if (e.target.id === 'clear-inline') clearFilters(); });
-$('crit-show').addEventListener('click', e => { e.preventDefault(); filters.impact = 'critical'; visible = PAGE_SIZE; render(); syncUrl(); });
+$('crit-show').addEventListener('click', e => { e.preventDefault(); filters.impact = 'no_alternative'; visible = PAGE_SIZE; render(); syncUrl(); });
 $('more').addEventListener('click', () => { visible += PAGE_SIZE; draw(); });
 $('copy-link').addEventListener('click', () => {
   syncUrl();

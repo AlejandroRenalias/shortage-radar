@@ -8,7 +8,7 @@ from removed import FIELDS, removed_index
 
 def event(vnr, first, last, removed, name='Elvanse', **extra):
     return dict({'NordicArticleNumber': vnr, 'first_seen': first, 'last_seen': last, 'removed_on': removed, 'name': name, 'Company': 'Takeda', 'gaps': [], 'removed_after_gap': False,
-                 'UnavailableFrom': '2026-01-01', 'EndingDate': '2027-01-01', 'impact': 'critical'}, **extra)
+                 'UnavailableFrom': '2026-01-01', 'EndingDate': '2027-01-01', 'impact': 'no_alternative'}, **extra)
 
 
 def test_only_packages_that_are_not_listed_now_are_in_the_index():

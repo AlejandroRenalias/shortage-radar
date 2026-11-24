@@ -1,32 +1,35 @@
 {
- "note": "Impact triage counts of the latest snapshot, computed with the basic register of the day it was recorded. substitute: other packages in the substitution group are on the market and not short; critical: a group without such packages; nogroup: no substitution group; vet: veterinary medicines.",
+ "note": "Impact triage counts of the latest snapshot, computed with the basic register of the day it was recorded. substitute: other packages in the substitution group are on the market and not short; no_alternative: a group without such packages; nogroup: no substitution group; vet: veterinary medicines. `critical` is the old name of no_alternative, kept with the same value for one release.",
  "counts": [
   {
    "date": "2026-11-22",
    "register_date": "2026-11-22",
    "total": 749,
    "substitute": 531,
-   "critical": 60,
+   "no_alternative": 60,
    "nogroup": 119,
-   "vet": 39
+   "vet": 39,
+   "critical": 60
   },
   {
    "date": "2026-11-23",
    "register_date": "2026-11-23",
    "total": 757,
    "substitute": 537,
-   "critical": 61,
+   "no_alternative": 61,
    "nogroup": 120,
-   "vet": 39
+   "vet": 39,
+   "critical": 61
   },
   {
    "date": "2026-11-24",
    "register_date": "2026-11-24",
    "total": 756,
    "substitute": 539,
-   "critical": 61,
+   "no_alternative": 61,
    "nogroup": 117,
-   "vet": 39
+   "vet": 39,
+   "critical": 61
   }
  ]
 }

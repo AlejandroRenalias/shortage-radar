@@ -8,7 +8,7 @@ import build
 import critical
 import gaps
 import triage
-from build import HEADER, delay_stats, events
+from build import HEADER, events
 from changes import feeds
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,17 +58,6 @@ def test_removal_after_a_long_gap_is_marked_unknown():
     assert (gone['removed_on'], gone['removed_after_gap']) == ('2026-01-30', True)  # 15 days after the last capture that listed it
     es, _ = events([('2026-01-01', [row()]), ('2026-01-15', [row()]), ('2026-01-29', [row('222222')])])
     assert es[0]['removed_after_gap'] is False  # exactly 14 days
-
-
-def test_event_with_a_gap_inside_is_not_used_for_delays():
-    def ev(**extra):
-        return dict(dict(NordicArticleNumber='1', first_seen_after='2026-10-01', first_seen='2026-10-03', last_seen='2026-10-05', removed_on='2026-10-08',
-                         first_estimated_end='2026-10-10', listed_at_first_capture=False, gaps=[]), **extra)
-    gap = [{'from': '2026-10-03', 'to': '2026-10-18', 'days': 15}]
-    stats = delay_stats([ev(), ev(gaps=gap)])
-    assert stats['sample_size'] == 1 and stats['excluded']['gap_in_captures'] == 1
-    active = delay_stats([ev(removed_on=None, last_seen='2026-10-20', gaps=gap)])
-    assert active['active_past_estimate'] == 0
 
 
 def test_package_114636_is_not_shown_as_listed_between_its_captures():

@@ -38,7 +38,7 @@ function impactMarkup(e, groups) {
   const others = list => (list || []).filter(p => p.vnr !== e.NordicArticleNumber && p.vnr !== e.current_vnr);
   const available = others(group.available), short = others(group.short);
   const text = t['impactText_' + level];
-  const reason = level === 'critical' ? `<p>${esc(short.length ? t.impactCriticalShort : t.impactCriticalAlone)}</p>` : '';
+  const reason = level === 'no_alternative' ? `<p>${esc(short.length ? t.impactCriticalShort : t.impactCriticalAlone)}</p>` : '';
   const lists = (level === 'substitute' && available.length ? `<h3>${esc(t.altTitle)}</h3>${altList(available, 6)}` : '') + (short.length && level !== 'vet' ? `<h3>${esc(t.altShort)}</h3>${altList(short, 6)}` : '');
   return `<section class="panel impact-panel" aria-labelledby="impact-title"><h2 id="impact-title">${esc(t.impactQuestion)}</h2>${impactBadge(e)}<p>${esc(text)}</p>${reason}${lists}`
     + `<p class="note">${code && level !== 'vet' ? `${esc(t.groupCode(code))}. ` : ''}${esc(t.altNote)} <a href="about.html#impact">${esc(t.impactLink)}</a></p></section>`;

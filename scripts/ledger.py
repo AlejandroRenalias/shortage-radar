@@ -7,7 +7,8 @@ short; null when there is no group), the `register_date` of the basic register u
 
 A VNR with several notices in the file gets one row: the notice with the latest notification date (then the latest start date, then the company).
 The job can run several times a day. The first run of a day writes its rows; later runs on that day add nothing, so a day is
-never listed twice. A day is never changed afterwards. The ledger describes only what the files said on the day; a gap in the
+never listed twice. A day is never changed afterwards, so rows written before `critical` was renamed `no_alternative`
+keep the old name in `impact`; the two names are one level. The ledger describes only what the files said on the day; a gap in the
 dates means the job did not record those days.
 """
 import hashlib

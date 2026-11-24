@@ -1,4 +1,4 @@
-// Trends: the count over time, this week, groups, companies, the longest shortages and the delay result.
+// Trends: the count over time, this week, groups, the longest shortages and the end dates that changed.
 let data, historyData, weekData, historyFailed = false, chartWidth = 0;
 function bars(id, counts, limit) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, limit), max = entries[0]?.[1] || 1;
@@ -38,17 +38,12 @@ function drawWeek(w, total) {
   $('week-window').textContent = t.weekWindow(from, n(w.days));
   $('week-facts').innerHTML = [[t.weekNew, n(w.new), t.weekNewNote(from)], [t.weekLeft, n(w.left), t.weekLeftNote(from)], [t.weekTotal, n(total), t.weekTotalNote(n(total), n(w.count_from), from)]].map(([label, value, note]) => `<div class="fact"><dt>${esc(label)}</dt><dd class="fact-num">${esc(value)}</dd><dd class="fact-note">${esc(note)}</dd></div>`).join('');
 }
-function drawDelays(d, snapshotDate) {
-  const t=copy[language]; if(!d) { $('delay-headline').textContent=''; $('delay-visual').innerHTML=''; $('delay-note').textContent=t.delayEmpty; $('delay-list').innerHTML=''; $('how-count').hidden=true; return; }
-  const n=numberText, pct=s=>`${Math.round(s*100)}${language === 'fi' ? ' ' : ''}%`;
-  $('delay-headline').textContent=d.meaningful ? t.delayHeadline(n(d.past_estimate),n(d.sample_size),n(d.undetermined),pct(d.share_past_min),pct(d.share_past_max)) : t.delaySample(n(d.sample_size),n(d.max_gap_days))+t.delaySmall(n(d.min_sample));
-  const values=[[t.delayBy,d.not_past_estimate],[t.delayPast,d.past_estimate],[t.delayUncertain,d.undetermined]], max=Math.max(...values.map(([,v])=>v),1);
-  $('delay-visual').innerHTML=(d.meaningful ? `<div class="delay-bars">${values.map(([label,value])=>`<div class="delay-row"><span>${esc(label)}</span><svg viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="1" fill="#e3ece7"/><rect width="${value/max*100}" height="1" fill="#00704b"/></svg><strong>${n(value)}</strong></div>`).join('')}</div>` : '')+`<p>${esc(t.activePast(n(d.active_past_estimate),dateText(snapshotDate),n(d.max_gap_days)))}</p>`;
-  $('delay-note').textContent=t.delayMethod(n(d.sample_size),n(d.max_gap_days))+t.delayBias;
-  const x=d.excluded || {}; $('how-count').hidden=false;
-  const skipped=[['listed_at_first_capture',t.howFirst],['no_estimate',t.howNoEstimate],['wide_start_window',t.howStart],['wide_removal_window',t.howEnd],['vnr_still_listed',t.howChanged],['gap_in_captures',t.howGap]].filter(([k])=>x[k]).map(([k,f])=>f(n(x[k]))).join(', ');
-  $('how-count-text').textContent=t.howText(n(d.sample_size),n(d.removed_total),n(d.max_gap_days),skipped);
-  $('delay-list').innerHTML=d.meaningful && d.examples.length ? `<h3>${esc(t.delayExamples)}</h3><ul class="examples">`+d.examples.map(e=>`<li><strong>${esc(nameWithStrength(e) || e.vnr)}</strong><span>${esc(t.firstEstimate)} ${esc(dateText(e.first_estimated_end))}, ${esc(t.lastListed)} ${esc(dateText(e.last_seen))}, ${esc(t.goneBy)} ${esc(dateText(e.removed_on))}</span></li>`).join('')+'</ul>' : '';
+// One dated fact: how many current notices changed their end date in our captures (build.py end_date_changes).
+function drawEndChanges(c) {
+  const t = copy[language], n = numberText;
+  if (!c) { $('end-changes-text').textContent = ''; $('end-changes-note').textContent = ''; return; }
+  $('end-changes-text').textContent = t.endChangesText(n(c.changed), n(c.current), dateText(c.from), dateText(c.to));
+  $('end-changes-note').textContent = t.endChangesNote(n(c.max_gap_days));
 }
 // Groups that newly have no interchangeable product, and the counts recorded each day with that day's register.
 function drawCritical(h) {
@@ -65,24 +60,23 @@ function drawCritical(h) {
 function drawDates(d) {
   $('data-date').textContent = copy[language].dataDate(dateText(d.snapshot_date));
   renderCitation(d);
-  if (!historyData) { if (historyFailed) { $('history-note').textContent = copy[language].historyError; $('delay-note').textContent = copy[language].historyError; } return; }
+  if (!historyData) { if (historyFailed) { $('history-note').textContent = copy[language].historyError; $('end-changes-note').textContent = copy[language].historyError; } return; }
   const h = historyData, t = copy[language], own = h.history.filter(x => !x.imported).length, imported = h.history.length - own;
   const gaps = h.history.filter(x => x.gap_days > h.max_gap_days).map(x => t.gapBefore(numberText(x.gap_days), dateText(x.date)));
   $('history-note').textContent = t.historySummary(numberText(h.history.length), dateText(d.archive_start), numberText(imported), numberText(own), gaps.join('; '), numberText(h.first_capture_count));
   const rss = (h.rss_counts || []).filter(c => c.items);
   $('rss-note').textContent = rss.length ? t.rssSummary(rss.map(c => t.rssItem(dateText(c.date), numberText(c.items))).join('; ')) : '';
   chartWidth = Math.round($('chart').clientWidth) || 400;
-  drawChart(h.history, h.max_gap_days, Math.max(300, Math.min(chartWidth, 1200))); drawTable(h.history); drawDelays(h.delays, d.snapshot_date); drawCritical(h);
+  drawChart(h.history, h.max_gap_days, Math.max(300, Math.min(chartWidth, 1200))); drawTable(h.history); drawEndChanges(h.end_changes); drawCritical(h);
 }
 function renderData() {
   if (!data) return;
-  const d = data, t = copy[language], companies = {}, atc = {};
-  for (const [name, n] of Object.entries(d.companies)) companies[name || t.unknownCompany] = n;
+  const d = data, t = copy[language], atc = {};
   for (const [prefix, n] of Object.entries(d.atc)) { const group = prefix && groupName(prefix); if (group) atc[group] = (atc[group] || 0) + n; }
   drawDates(d);
   const now = todayUTC(), longest = d.longest.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now).slice(0, 5);
   $('longest-list').innerHTML = longest.map(e => `<li><div><strong><a href="medicine.html?vnr=${esc(e.NordicArticleNumber)}">${esc(nameWithStrength(e) || t.unavailable)}</a></strong><small>${esc(packText(e))}</small><small>${esc(e.Company)}</small><small>${esc(t.since)} ${esc(dateText(e.UnavailableFrom))}</small></div><span class="duration">${esc(t.days(daysBetween(parsedDate(e.UnavailableFrom).valueOf(), now)).replace(/ /g, ' '))}</span></li>`).join('');
-  drawWeek(weekData, d.total); bars('atc', atc, 30); bars('company', companies, 10);
+  drawWeek(weekData, d.total); bars('atc', atc, 30);
 }
 if (typeof document !== 'undefined' && document.documentElement.dataset && document.documentElement.dataset.page === 'trends') {
   start(renderData); wireCitation();

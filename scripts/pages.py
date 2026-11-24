@@ -18,7 +18,7 @@ PAGES = {
     'shortages': {'file': 'shortages.html', 'nav': 'navShortages', 'icon': 'list', 'title': 'Medicine shortages in Finland | Shortage Radar',
                   'description': 'Search and filter every medicine package that Fimea lists as short in Finland, with start dates and the company’s estimated end dates.', 'form_action': "'none'"},
     'trends': {'file': 'trends.html', 'nav': 'navTrends', 'icon': 'chart', 'title': 'Shortage trends in Finland | Shortage Radar',
-               'description': 'How many medicine shortages Finland has had over time, what changed this week, and which groups and companies are most affected.', 'form_action': "'none'"},
+               'description': 'How many medicine shortages Finland has had over time, what changed this week, and which medicine groups are most affected.', 'form_action': "'none'"},
     'critical': {'file': 'critical.html', 'nav': 'navEuList', 'icon': 'shield', 'own': True, 'title': 'Critical medicines in Finland | Shortage Radar',
                  'description': 'Medicines on the EU Union list of critical medicines that Fimea lists as short in Finland.', 'form_action': "'none'"},
     'about': {'file': 'about.html', 'nav': 'navAbout', 'icon': 'info', 'title': 'About the data | Shortage Radar',
@@ -113,8 +113,9 @@ IMPACT_ICONS = {
     'critical': '<path d="M5 4.500h14a1.500 1.500 0 0 1 1.500 1.500v9a1.500 1.500 0 0 1-1.500 1.500h-7.500L7 20v-3.500H5A1.500 1.500 0 0 1 3.500 15V6A1.500 1.500 0 0 1 5 4.500z"/><path d="M8 9h8M8 12.500h5"/>',
     'nogroup': '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.500 12h7"/>',
 }
-IMPACT_NAMES = {'substitute': 'Substitute usually available', 'critical': 'No interchangeable product on the market', 'nogroup': 'No substitution group'}
-IMPACT_NOTES = {'substitute': 'Other packages in the same substitution group are on the market.', 'critical': 'Talk to your pharmacist or doctor early.',
+IMPACT_ICONS['no_alternative'] = IMPACT_ICONS['critical']  # the About page still names its icon 'critical'
+IMPACT_NAMES = {'substitute': 'Substitute usually available', 'no_alternative': 'No interchangeable product on the market', 'nogroup': 'No substitution group'}
+IMPACT_NOTES = {'substitute': 'Other packages in the same substitution group are on the market.', 'no_alternative': 'Talk to your pharmacist or doctor early.',
                 'nogroup': 'Often hospital medicines or medicines from one company. Ask your pharmacist.'}
 
 
@@ -154,7 +155,7 @@ def home(count, impact=None, soon=0):
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
 </div>{hero_art()}</div>
-<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'critical', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
+<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Can the pharmacy give a substitute?</h2>
 <ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
 <p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a></p>
 <details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">Notes: what these numbers mean</summary>
@@ -188,7 +189,7 @@ def shortages():
 <div class="filter-grid">
 <fieldset class="seg seg-impact"><legend data-i18n="impactFilter">Impact</legend>
 <label><input type="radio" name="impact" value="" checked><span data-i18n="impactAll">All</span></label>
-<label><input type="radio" name="impact" value="critical"><span data-i18n="impact_critical">No interchangeable product on the market</span></label>
+<label><input type="radio" name="impact" value="no_alternative"><span data-i18n="impact_no_alternative">No interchangeable product on the market</span></label>
 <label><input type="radio" name="impact" value="substitute"><span data-i18n="impact_substitute">Substitute usually available</span></label>
 <label><input type="radio" name="impact" value="nogroup"><span data-i18n="impact_nogroup">No substitution group</span></label>
 <label><input type="radio" name="impact" value="vet"><span data-i18n="impact_vet">Veterinary medicines</span></label></fieldset>
@@ -205,7 +206,7 @@ def shortages():
 </form>
 </div>
 <div class="wrap results needs-js">
-<p class="crit-callout" id="crit-callout" hidden><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS['critical']}</svg><span id="crit-callout-text"></span> <a href="shortages.html?impact=critical" id="crit-show" data-i18n="critShow">Show them by medicine</a></p>
+<p class="crit-callout" id="crit-callout" hidden><svg class="uicon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{IMPACT_ICONS['no_alternative']}</svg><span id="crit-callout-text"></span> <a href="shortages.html?impact=no_alternative" id="crit-show" data-i18n="critShow">Show them by medicine</a></p>
 <p class="crit-intro" id="crit-intro" data-i18n="critIntro" hidden>One row for each medicine and form. Open a row to see its packages. Talk to your pharmacist or doctor early about these medicines.</p>
 <div class="list-meta"><p id="result-count" aria-live="polite" aria-atomic="true"></p><button type="button" class="btn-quiet" id="copy-link" data-i18n="copyLink">Copy search link</button><span id="copy-status" role="status"></span></div>
 <div id="list" class="pkg-list"><p class="state" id="loading">Loading…</p></div>
@@ -232,9 +233,8 @@ def trends():
 <section class="panel" id="week" aria-labelledby="week-title"><h2 id="week-title" data-i18n="weekTitle">This week</h2><p id="week-window" class="note"></p><dl class="mini-facts" id="week-facts"></dl><p><a id="feed-link" href="feed.xml" data-feed data-i18n="feedLink">Follow changes (feed)</a></p></section>
 <section class="panel" aria-labelledby="longest-title"><h2 id="longest-title" data-i18n="longestTitle">Earliest reported starts</h2><p class="note" data-i18n="longestNote">Current shortages ranked by the start date the company reported. Days since that date are not days observed on the list: the archive has gaps.</p><ol id="longest-list" class="longest"></ol></section>
 <section class="panel" aria-labelledby="group-title"><h2 id="group-title" data-i18n="byGroup">By medicine group</h2><p class="note" data-i18n="byGroupNote">Packages on the list, by medicine group.</p><div id="atc"></div></section>
-<section class="panel" aria-labelledby="company-title"><h2 id="company-title" data-i18n="byCompany">By company</h2><p class="note" data-i18n="byCompanyNote">The ten companies with the most packages on the list.</p><div id="company"></div></section>
 <section class="panel panel-wide" id="new-crit" aria-labelledby="new-crit-title"><h2 id="new-crit-title" data-i18n="newCritTitle">Newly without an interchangeable product</h2><p class="note" data-i18n="newCritIntro">Days when the last available package of a substitution group went short, so no interchangeable product was left on the market.</p><ol id="new-crit-list" class="crit-events"></ol><p id="new-crit-method" class="note"></p><div id="triage-record"></div><p><a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p></section>
-<section class="panel panel-wide" aria-labelledby="delay-title"><h2 id="delay-title" data-i18n="delayTitle">Did shortages leave the list by the estimated date?</h2><p id="delay-headline" class="big-note"></p><div id="delay-visual"></div><p id="delay-note" class="note">Needs more weeks of data.</p><div class="how-count" id="how-count" hidden><h3 data-i18n="howTitle">How we count</h3><p id="how-count-text"></p></div><div id="delay-list"></div></section>
+<section class="panel panel-wide" id="end-changes" aria-labelledby="end-changes-title"><h2 id="end-changes-title" data-i18n="endChangesTitle">End dates that changed</h2><p id="end-changes-text" class="big-note"></p><p id="end-changes-note" class="note"></p></section>
 <section class="panel panel-wide cite" id="cite-box" aria-labelledby="cite-title" hidden><h2 id="cite-title" data-i18n="citeTitle">Cite this site</h2><p class="note" data-i18n="citeIntro">Use the data date and the source when you cite these figures.</p><p id="citation" class="citation"></p><button type="button" class="btn" id="copy-cite" data-i18n="copyCite">Copy citation</button> <span id="copy-status" role="status"></span></section>
 </div>
 <div class="wrap">{load_error()}</div>'''

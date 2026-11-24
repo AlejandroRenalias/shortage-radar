@@ -1,9 +1,10 @@
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from build import HEADER, delay_stats, events, read_snapshot, register
+from build import HEADER, end_date_changes, events, read_snapshot, register
 
 
 def row(end='2026-12-01', vnr='012345'):
@@ -68,23 +69,32 @@ def test_package_still_listed_is_flagged_on_removal():
     assert result[0]['removed_on'] == '2026-11-04' and result[0]['vnr_listed_at_removal']
 
 
-def test_delay_stats_bounds_and_exclusions():
-    def ev(vnr, first_after, first, last, removed, end, **extra):
-        return dict(dict(NordicArticleNumber=vnr, first_seen_after=first_after, first_seen=first, last_seen=last, removed_on=removed, first_estimated_end=end, listed_at_first_capture=False), **extra)
-    all_events = [
-        ev('1', '2026-10-01', '2026-10-03', '2026-10-20', '2026-10-24', '2026-10-10'),   # past the estimate
-        ev('2', '2026-10-01', '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10'),   # gone by it
-        ev('3', '2026-10-01', '2026-10-03', '2026-10-08', '2026-10-12', '2026-10-10'),   # cannot be told
-        ev('4', None, '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10', listed_at_first_capture=True),
-        ev('5', '2024-11-18', '2026-09-15', '2026-10-05', '2026-10-08', '2026-10-10'),   # first seen after a long gap
-        ev('6', '2026-10-01', '2026-10-03', '2026-10-05', '2026-10-08', '2026-10-10', vnr_listed_at_removal=True),
-        ev('7', '2026-10-01', '2026-10-03', '2026-10-05', None, '2026-10-10'),            # still listed
-    ]
-    stats = delay_stats(all_events)
-    assert (stats['sample_size'], stats['past_estimate'], stats['not_past_estimate'], stats['undetermined']) == (3, 1, 1, 1)
-    assert stats['excluded'] == {'listed_at_first_capture': 1, 'no_estimate': 0, 'wide_start_window': 1, 'wide_removal_window': 0, 'vnr_still_listed': 1, 'gap_in_captures': 0}
-    assert (stats['median_overrun_min_days'], stats['median_overrun_max_days']) == (10, 14)
-    assert not stats['meaningful'] and 'share_past_min' not in stats
+def test_end_date_changes_count_current_notices_changed_between_close_captures():
+    def count(shots):
+        es, history = events(shots)
+        return end_date_changes(es, history)
+    shots = [('2026-11-01', [row(vnr='111111'), row(vnr='222222'), row(vnr='333333')]),
+             ('2026-11-05', [row('2026-12-09', vnr='111111'), row(vnr='222222'), row('2026-12-09', vnr='333333')]),
+             ('2026-11-10', [row('2026-12-20', vnr='111111'), row(vnr='222222')])]
+    result = count(shots)
+    # 111111 changed twice and counts once; 222222 did not change; 333333 changed but left the list, so it is not current.
+    assert result == {'current': 2, 'changed': 1, 'from': '2026-11-01', 'to': '2026-11-10', 'max_gap_days': 14}
+
+
+def test_end_date_change_across_a_long_gap_is_not_counted():
+    # Exactly 14 days is still joined; 15 days is a gap and the change is not counted.
+    for days, counted in ((14, 1), (15, 0)):
+        later = (date.fromisoformat('2026-11-01') + timedelta(days=days)).isoformat()
+        es, history = events([('2026-11-01', [row()]), (later, [row('2026-12-09')])])
+        assert end_date_changes(es, history)['changed'] == counted
+    # A change after the gap, between two close captures, is counted.
+    es, history = events([('2026-09-01', [row()]), ('2026-11-01', [row()]), ('2026-11-03', [row('2026-12-09')])])
+    assert end_date_changes(es, history)['changed'] == 1
+
+
+def test_end_date_changes_with_one_capture():
+    es, history = events([('2026-11-01', [row()])])
+    assert end_date_changes(es, history) == {'current': 1, 'changed': 0, 'from': '2026-11-01', 'to': '2026-11-01', 'max_gap_days': 14}
 
 
 def test_imported_dates_yield_to_own_snapshots(tmp_path, monkeypatch):
@@ -97,21 +107,6 @@ def test_imported_dates_yield_to_own_snapshots(tmp_path, monkeypatch):
     snapshots, imported = build.load_snapshots()
     assert [d for d, _ in snapshots] == ['2026-11-17', '2026-11-21']
     assert snapshots[1][1][0]['Company'] == 'own' and imported == {'2026-11-17'}
-
-
-def test_active_past_estimate_requires_known_narrow_first_window():
-    def active(first_after, first, estimate, last='2026-11-21', first_capture=False):
-        return dict(removed_on=None, first_seen_after=first_after, first_seen=first,
-                    first_estimated_end=estimate, last_seen=last, listed_at_first_capture=first_capture)
-    stats = delay_stats([
-        active('2026-10-01', '2026-10-15', '2026-11-20'),
-        active('2026-10-01', '2026-10-16', '2026-11-01'),
-        active(None, '2026-10-01', '2026-11-01', first_capture=True),
-        active('2026-10-01', '2026-10-15', '2026-11-21'),
-        active('2026-10-01', '2026-10-15', ''),
-    ])
-    assert stats['active_past_estimate'] == 1
-    assert stats['sample_size'] == 0
 
 
 def test_old_vnr_keeps_identity_and_maps_current(tmp_path):
@@ -155,11 +150,11 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     monkeypatch.setattr(build, 'register', lambda *args: {'012345': {'name': 'Example', 'substitution_group': '42', 'other_packages_count': 0}})
     build.build()
     records = list(csv.DictReader((tmp_path / 'site/shortages.csv').read_text(encoding='utf-8-sig').splitlines()))
-    assert records[0]['other packages on market'] == '0' and records[0]['substitution group'] == '42' and records[0]['impact'] == 'critical'
+    assert records[0]['other packages on market'] == '0' and records[0]['substitution group'] == '42' and records[0]['impact'] == 'no_alternative'
     current = json.loads((tmp_path / 'site/current.json').read_text(encoding='utf-8'))
     summary = json.loads((tmp_path / 'site/summary.json').read_text(encoding='utf-8'))
-    assert current['events'][0]['impact'] == 'critical'
-    assert summary['impact'] == {'substitute': 0, 'critical': 1, 'nogroup': 0, 'vet': 0}
+    assert current['events'][0]['impact'] == 'no_alternative'
+    assert summary['impact'] == {'substitute': 0, 'no_alternative': 1, 'nogroup': 0, 'vet': 0, 'critical': 1}  # `critical` is the old name, kept for one release
 
 
 @pytest.mark.parametrize('reverse', [False, True])
