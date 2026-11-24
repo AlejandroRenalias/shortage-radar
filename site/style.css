@@ -523,7 +523,7 @@ html:not(.js) .needs-js{display:none}
 .eu-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .eu-table th{color:var(--muted);font-size:.9375rem}
 .eu-table th,.eu-table td{text-align:left;vertical-align:top;padding:var(--s4) var(--s3) var(--s4) 0;border-top:1px solid var(--line)}
-.eu-table td span{display:block}.eu-table .note{margin-top:4px;font-size:.9375rem}
+.eu-table td span{display:block}.eu-table .eu-end-label{display:none}.eu-table .note{margin-top:4px;font-size:.9375rem}
 .eu-fold{margin:var(--s3) 0}.eu-fold>summary{cursor:pointer;color:var(--green-ink);min-height:32px;padding:2px 0}
 .eu-fold>summary:hover{text-decoration:underline}
 .eu-row-more{margin:var(--s2) 0 0}.eu-row-more .eu-facts{margin:var(--s2) 0 0}
@@ -596,7 +596,7 @@ html:not([lang="fi"]) .l-fi-only{display:none}
   .eu-table td>span{min-width:0;overflow-wrap:break-word}
   .eu-table .eu-col-atc{display:none}
   .eu-table td[data-label="Status"] span{display:inline}.eu-table td[data-label="Status"] .note{margin:0 0 0 .3em}
-  .eu-table td[data-label="Estimated end"]::before{content:"Ends ";color:var(--muted)}html[lang="fi"] .eu-table td[data-label="Estimated end"]::before{content:"Päättyy "}.eu-table .eu-end{display:inline}
+  .eu-table .eu-end-label{display:inline;color:var(--muted)}.eu-table .eu-end{display:inline}
   .eu-table td[data-label="Status"],.eu-table td[data-label="Estimated end"]{font-size:.9375rem}
   .eu-table .eu-route-line{display:none}
   .eu-atc-fact{display:block}.eu-table dt.eu-atc-fact{display:block}

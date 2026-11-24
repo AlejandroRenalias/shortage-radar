@@ -78,7 +78,7 @@ ATC_GROUPS_FI = {
     'L': 'Syöpälääkkeet ja immuunivasteen muuntajat', 'M': 'Tuki- ja liikuntaelimistö', 'N': 'Hermosto', 'P': 'Loislääkkeet',
     'R': 'Hengityselimet', 'S': 'Aistielimet', 'V': 'Muut',
 }
-ROUTE_NAMES_FI = {'injection': 'Injektio tai infuusio', 'oral': 'Suun kautta', 'eye': 'Silmään', 'other': 'Muu tai sekalainen antoreitti'}
+ROUTE_NAMES_FI = {'injection': 'Injektio tai infuusio', 'oral': 'Suun kautta tai kielen alle', 'eye': 'Silmään', 'other': 'Muu tai sekalainen antoreitti'}
 TYPE_NAMES_FI = {'exact': 'Täsmällinen osuma', 'route-mismatch': 'Antoreitti ei sovi', 'unmatched': 'Ei rekisterissä', 'ingredient-mismatch': 'Vaikuttavaa ainetta ei vahvistettu',
                  'flag-only': 'Vain Fimean merkitsemä'}
 STATUS_NAMES_FI = {'ongoing': 'Käynnissä', 'upcoming': 'Alkaa myöhemmin'}
@@ -144,8 +144,8 @@ COPY = {
                    '<strong>Alkaa myöhemmin.</strong> {pkg} on ilmoitus, joka ei ole vielä alkanut ({split}). Ne ovat listassa merkittyinä ”Alkaa myöhemmin”, eivätkä ne ole yllä olevissa luvuissa.'),
     'later.none': ('<strong>Starts later.</strong> No notice that starts later is listed. Such a notice would be marked “Starts later” and kept out of the numbers above.',
                    '<strong>Alkaa myöhemmin.</strong> Listalla ei ole ilmoitusta, joka alkaa myöhemmin. Sellainen ilmoitus merkittäisiin ”Alkaa myöhemmin” eikä se olisi yllä olevissa luvuissa.'),
-    'flag': ('<strong>Fimea’s flag differs.</strong> Fimea’s own EU-critical flag differs from this match for {pkg}{more}. The row note says so.',
-             '<strong>Fimean merkintä poikkeaa.</strong> Fimean oma EU-kriittisyysmerkintä poikkeaa tästä täsmäyksestä {pkg} kohdalla{more}. Rivin huomautus kertoo tämän.'),
+    'flag': ('<strong>Fimea’s flag differs.</strong> Fimea’s own EU-critical flag differs from this match (exact match, route does not fit or ingredient not confirmed) for {pkg}{more}. The row note says so.',
+             '<strong>Fimean merkintä poikkeaa.</strong> Fimean oma EU-kriittisyysmerkintä poikkeaa tästä täsmäyksestä (täsmällinen osuma, antoreitti ei sovi tai vaikuttavaa ainetta ei vahvistettu) {pkg} kohdalla{more}. Rivin huomautus kertoo tämän.'),
     'flag.more': (', and Fimea flags {n} more whose ATC code is not on the list', ', ja Fimea merkitsee lisäksi {n} pakkausta, joiden ATC-koodi ei ole luettelossa'),
     'notes.end': ('<strong>Estimated end.</strong> End dates are the company’s estimates. Fimea’s file keeps no history and its dates can change.',
                   '<strong>Arvioitu päättyminen.</strong> Päättymispäivät ovat yrityksen arvioita. Fimean tiedosto ei säilytä historiaa, ja sen päivämäärät voivat muuttua.'),
@@ -175,8 +175,8 @@ COPY = {
     'th.match': ('Match', 'Täsmäys'),
     'th.status': ('Status', 'Tila'),
     'th.end': ('Estimated end', 'Arvioitu päättyminen'),
-    'row.ongoing': ('Ongoing<span class="note">reported start {date}</span>', 'Käynnissä<span class="note">ilmoitettu alkamispäivä {date}</span>'),
-    'row.later': ('Starts later<span class="note">on {date}</span>', 'Alkaa myöhemmin<span class="note">{date}</span>'),
+    'row.ongoing': ('Ongoing <span class="note">reported start {date}</span>', 'Käynnissä <span class="note">ilmoitettu alkamispäivä {date}</span>'),
+    'row.later': ('Starts later <span class="note">on {date}</span>', 'Alkaa myöhemmin <span class="note">{date}</span>'),
     'row.details': ('Details', 'Lisätiedot'),
     'row.company': ('Company', 'Yritys'),
     'row.start': ('Reported start', 'Ilmoitettu alkamispäivä'),

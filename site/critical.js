@@ -61,7 +61,7 @@ if (input) {
   };
   const filter = () => {
     const q = fold(input.value.trim()), type = select.value, when = status.value;
-    matching = rows.filter(tr => (!type || tr.dataset.type === type) && (!when || tr.dataset.status === when) && (!q || fold(tr.dataset.text).includes(q)));
+    matching = rows.filter(tr => (!type || tr.dataset.type === type) && (!when || tr.dataset.status === when) && (!q || fold(tr.dataset.text).includes(q) || searchMatches({substances: tr.dataset.text, substance_fi: tr.dataset.fi || ''}, input.value)));
     if (reset) page = 1;
     reset = true;
     render();

@@ -59,7 +59,7 @@ def visible_text(html, language):
             self.depth -= 1
 
         def handle_data(self, data):
-            if self.skip is None:
+            if self.skip is None and self.get_starttag_text() is not None and not (self.get_starttag_text() or '').startswith('<option'):   # option labels are swapped by critical.js (data-en / data-fi)
                 self.out.append(data)
     reader = Reader()
     reader.feed(html[html.index('<main'):html.index('</main>')])
@@ -83,7 +83,8 @@ def test_eu_pages_explain_critical_in_both_languages_and_show_one_at_a_time():
         en, fi = visible_text(page, 'en'), visible_text(page, 'fi')
         assert 'Not medical advice. A listing does not show pharmacy stock.' in en and 'Ei lääketieteellinen neuvo. Listalla oleminen ei kerro apteekin varastosta.' in fi, name
         assert not re.search(r'Kysy apteekista|saatavuushäiriö|Nämä sivut|lääke', en), name
-        assert not re.search(r'(Not medical advice|A listing does not|Details:|Shortage packages|Ongoing)', fi), name
+        assert not re.search(r'\b(Not medical advice|A listing does not|Shortage packages|Ongoing)\b', fi), name
+        assert 'Details:' not in fi, name
     # The short line and the tiles come before the long text, which sits in closed "Details" folds.
     page = out['critical.html']
     assert page.index('eu-advice-short') < page.index('class="eu-tiles"') < page.index('<details class="eu-fold eu-notes">')

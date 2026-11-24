@@ -97,7 +97,7 @@ def routes_text(r):
     return both(', '.join(en) or plain('row.not_given', 0), ', '.join(ROUTE_FI.get(x, x) for x in en) or plain('row.not_given', 1))
 
 
-def notice_row(r):
+def notice_row(r, words=''):
     atc = f'<a href="{code_file(r["atc"])}">{E(r["atc"])}</a>' if r.get('atc') and r['match_type'] != 'flag-only' else E(r.get('atc') or '—')
     text = ' '.join(str(r.get(k, '')) for k in ('vnr', 'atc', 'name', 'substances', 'company', 'list_description')).casefold()
     route = (f'<dt>{t("row.route")}</dt><dd>{t("row.not_known")}</dd>' if r['match_type'] == 'unmatched'
@@ -105,8 +105,8 @@ def notice_row(r):
     tag = '' if r['match_type'] == 'unmatched' else f'<span class="eu-route-line">{charts.route_label(r.get("product_routes"))}</span>'
     more = (f'<details class="eu-fold eu-row-more"><summary>{t("row.details")}</summary><p class="note">{row_note(r)}</p><dl class="eu-facts"><dt>{t("row.company")}</dt><dd>{E(r.get("company", ""))}</dd>'
             f'<dt class="eu-atc-fact">{t("th.atc")}</dt><dd class="eu-atc-fact">{atc}</dd><dt>{t("row.start")}</dt><dd>{bday(r["start"])}</dd>{route}<dt>{t("row.vnr")}</dt><dd>{E(r["vnr"])}</dd></dl></details>')
-    return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}"><td data-label="Medicine">{name_cell(r)}{tag}{more}</td>'
-            f'<td data-label="ATC code" class="eu-col-atc">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Estimated end"><span class="eu-end">{bday(r.get("end"))}</span></td></tr>')
+    return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}" data-fi="{E(words)}"><td data-label="Medicine">{name_cell(r)}{tag}{more}</td>'
+            f'<td data-label="ATC code" class="eu-col-atc">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Estimated end"><span class="eu-end-label">{t("th.end")}</span> <span class="eu-end">{bday(r.get("end"))}</span></td></tr>')
 
 
 def downloads():
@@ -178,7 +178,8 @@ def critical_page(data):
              f'<p>{t("notes.data", iso=data["snapshot_date"], date=day(data["snapshot_date"]))}</p>'
              f'{source_block(meta, data["snapshot_date"], data["source_metadata"])}'
              f'<p class="note">{t("notes.links", methods=FILE["methods"])}</p></details>')
-    body_rows = ''.join(notice_row(r) for r in rows) or f'<tr><td colspan="5">{t("empty.list")}</td></tr>'
+    words = data.get('substance_fi') or {}
+    body_rows = ''.join(notice_row(r, words.get(r['vnr']) or '') for r in rows) or f'<tr><td colspan="5">{t("empty.list")}</td></tr>'
     codes = ''.join(
         f'<li><a href="{code_file(a)}"><span class="eu-code">{E(a)}</span> {E(row["description"].title())}</a>'
         + (f' <span class="note">{t("codes.archive", n=num(data["history"][a]["count"]))}</span>' if a in data['history'] else '') + '</li>'

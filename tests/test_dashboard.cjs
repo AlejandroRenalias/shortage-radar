@@ -1362,3 +1362,11 @@ test('critical.js swaps the language-dependent attributes and texts of the EU pa
   assert.equal(vm.runInContext("EU_COPY.fi.showing(1, 12, 5, 18)", env), 'Näytetään 1–12 / 5 (18 yhteensä).');
   assert.deepEqual(Object.keys(plain(vm.runInContext('EU_COPY.en', env))).sort(), Object.keys(plain(vm.runInContext('EU_COPY.fi', env))).sort());
 });
+
+test('the EU list search finds a row by its verified Finnish substance word, as the main list does', () => {
+  const row = {substances: 'Desmopressin acetate desmo 0.1 mg', substance_fi: 'desmopressiini'};
+  const hit = q => vm.runInContext(`searchMatches(${JSON.stringify(row)}, ${JSON.stringify(q)})`, context);
+  assert.equal(hit('desmopressiini'), true); assert.equal(hit('desmopressiinia'), true); assert.equal(hit('desmo'), true);
+  assert.equal(hit('parasetamoli'), false);   // no inferred names: a Finnish word without a verified pair finds nothing here
+  assert.equal(vm.runInContext(`searchMatches({substances: 'x', substance_fi: ''}, 'desmopressiini')`, context), false);
+});

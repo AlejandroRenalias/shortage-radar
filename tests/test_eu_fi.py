@@ -91,4 +91,50 @@ def test_options_placeholders_and_aria_labels_carry_both_languages():
 def test_the_language_menu_decides_which_text_shows():
     css = (ROOT / 'site/style.css').read_text(encoding='utf-8')
     assert '.l-en,.l-fi{display:contents!important}' in css and 'html:not([lang="fi"]) .l-fi{display:none!important}' in css
-    assert 'html[lang="fi"] .eu-table td[data-label="Estimated end"]::before{content:"Päättyy "}' in css
+
+
+def _page(name='critical.html'):
+    return W.eu_pages()[name]
+
+
+def test_the_estimated_end_label_is_in_the_row_markup_for_phones():
+    page = _page()
+    assert '<span class="eu-end-label"><span class="l-en" lang="en">Estimated end</span><span class="l-fi" lang="fi">Arvioitu päättyminen</span></span> <span class="eu-end">' in page
+    css = (ROOT / 'site/style.css').read_text(encoding='utf-8')
+    assert '::before{content:"Ends ' not in css and 'Päättyy' not in css      # the label is text in the page, not generated content
+    assert '.eu-table .eu-end-label{display:none}' in css and '.eu-table .eu-end-label{display:inline' in css
+
+
+def test_status_and_reported_start_are_separated_in_the_markup():
+    page = _page()
+    assert 'Ongoing <span class="note">reported start' in page and 'Käynnissä <span class="note">ilmoitettu alkamispäivä' in page
+
+
+def test_the_route_chip_names_the_combined_group_and_the_actual_route_stays_in_details():
+    assert charts.ROUTE_NAMES['oral'] == 'By mouth or under the tongue' and ROUTE_NAMES_FI['oral'] == 'Suun kautta tai kielen alle'
+    assert 'Suun kautta tai kielen alle' in charts.route_label(['under the tongue']) and 'By mouth or under the tongue' in charts.route_label(['under the tongue'])
+
+
+def test_methods_text_on_ingredients_and_example_count():
+    methods = _page('critical-methods.html')
+    assert 'Lisäaineet' not in methods and 'Valmisteessa voi olla myös muita vaikuttavia aineita' in methods
+    assert 'B05BB01 is the ATC code for electrolytes, shared by the EU potassium chloride row' in methods and 'B05BB01 on elektrolyyttien ATC-koodi' in methods
+    assert 'these four cases' not in methods and 'neljässä' not in methods and 'on these cases' in methods
+
+
+def test_the_flag_total_covers_the_match_types_it_names():
+    rows = [dict(status='ongoing', match_type=t, fimea_flag=f) for t, f in (('exact', '0'), ('exact', '1'), ('route-mismatch', '1'), ('ingredient-mismatch', '1'), ('ingredient-mismatch', '0'), ('unmatched', ''))]
+    assert C.counts(rows)['disagree'] == 3      # exact with flag 0, route mismatch with flag 1, ingredient mismatch with flag 1
+    assert 'ingredient not confirmed) for' in COPY['flag'][0] and 'vaikuttavaa ainetta ei vahvistettu) ' in COPY['flag'][1]
+
+
+def test_rows_carry_the_verified_finnish_substance_words_for_the_search():
+    events, products, details = T.fixture()
+    matches = T.matches_of(events, products, details)
+    rows = C.current_rows(events, matches)
+    import critical_pages as P2
+    html = P2.critical_page({'eu': T.EU, 'rows': rows, 'counts': C.counts(rows), 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {},
+                             'substance_fi': {'222222': 'desmopressiini'}})
+    assert 'data-fi="desmopressiini"' in html and html.count('data-fi=""') == len(rows) - 1
+    js = (ROOT / 'site/critical.js').read_text(encoding='utf-8')
+    assert "searchMatches({substances: tr.dataset.text, substance_fi: tr.dataset.fi || ''}, input.value)" in js

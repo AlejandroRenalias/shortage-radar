@@ -20,7 +20,7 @@ ATC_GROUPS = {
 }
 INJECTION = {'into a vein', 'into a muscle', 'under the skin', 'into a joint', 'around a joint', 'into a bursa', 'into the skin', 'epidural'}
 ORAL = {'by mouth', 'under the tongue'}
-ROUTE_NAMES = {'injection': 'Injection or infusion', 'oral': 'By mouth', 'eye': 'Into the eye', 'other': 'Other or mixed route'}
+ROUTE_NAMES = {'injection': 'Injection or infusion', 'oral': 'By mouth or under the tongue', 'eye': 'Into the eye', 'other': 'Other or mixed route'}
 ICON = {
     'injection': '<path d="M15 4l5 5M13.500 6.500l4 4M10 10l5.500-5.500 4 4L14 14M10 10l-6 6v4h4l6-6M7 17l-3 3M9.500 12.500l2 2"/>',
     'oral': '<rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.500 8.500l5 7"/>',
