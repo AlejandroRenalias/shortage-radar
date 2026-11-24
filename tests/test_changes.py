@@ -172,5 +172,6 @@ def test_feed_labels_describe_the_check_not_the_market():
         assert 'early' not in text['critical_advice'] and 'hyvissä ajoin' not in text['critical_advice'], lang
     assert TEXT['en']['critical'] == 'No interchangeable package found in the data'
     assert TEXT['fi']['critical'] == 'Aineistosta ei löydy vaihtokelpoista pakkausta'
-    assert 'listed as on the market and off the shortage list' in TEXT['en']['critical_when']('2026-11-01', None)
+    assert 'meets the check (on the market and not short in the register, and not on the shortage list)' in TEXT['en']['critical_when']('2026-11-01', None)
+    assert 'ei täytä tarkistusta' in TEXT['fi']['critical_when']('2026-11-01', None)
 
