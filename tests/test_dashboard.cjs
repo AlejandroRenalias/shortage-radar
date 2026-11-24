@@ -280,23 +280,23 @@ async function directLink(script, meta) {
 
 test('the stale warning also shows on the EU list page, a code page and the methods page, from the same build’s source.json', async () => {
   const meta = {snapshot_date:'2026-11-23', last_checked:'2026-11-23', generated_at:new Date().toISOString(), source_metadata:{shortages_last_modified:'Fri, 20 Nov 2026 09:00:00 GMT', register_date:'2026-11-19'}};
-  // critical.html loads critical.js; critical-<code>.html and critical-methods.html load common.js.
-  for (const script of ['critical.js', 'common.js']) {
+  // Every EU page (the list, a code page, the methods page) loads critical.js; without a filter on the page it only swaps the language-dependent attributes.
+  for (const script of ['critical.js']) {
     const [get, requested] = await directLink(script, meta);
     assert.deepEqual(requested, ['source.json'], script);
     assert.equal(get('stale').hidden, false, script);
     assert.match(get('stale-text').textContent, /shortage file has not changed since 20 Nov 2026.*register is dated 19 Nov 2026/, script);
   }
   const fresh = JSON.parse(JSON.stringify(meta)); fresh.source_metadata = {shortages_last_modified:new Date().toUTCString(), register_date:new Date().toISOString().slice(0, 10)}; fresh.last_checked = fresh.snapshot_date = new Date().toISOString().slice(0, 10);
-  const [get] = await directLink('common.js', fresh);
+  const [get] = await directLink('critical.js', fresh);
   assert.equal(get('stale').hidden, true);
-  // The built EU pages carry the banner element, and load one of the two scripts.
+  // The built EU pages carry the banner element, and load the one script.
   const out = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');sys.path.insert(0,'tests');import test_critical as t;from critical_pages import render_critical;e,p,d=t.fixture();m=t.matches_of(e,p,d);import critical as C;r=C.current_rows(e,m);print(json.dumps(render_critical({'eu':t.EU,'rows':r,'counts':C.counts(r),'history':C.history(e,m,[]),'archive_start':'2026-09-15','snapshot_date':'2026-11-23','source_metadata':t.SOURCES})))"], {encoding:'utf8', maxBuffer:256*1024*1024}));
   const names = Object.keys(out);
   assert.ok(names.includes('critical.html') && names.includes('critical-methods.html') && names.some(n => /^critical-[A-Z0-9]+\.html$/.test(n)));
   for (const name of names) {
     assert.match(out[name], /id="stale"/, name);
-    assert.match(out[name], name === 'critical.html' ? /src="critical\.js"/ : /src="common\.js"/, name);
+    assert.match(out[name], /src="critical\.js"/, name);
   }
 });
 
@@ -1333,4 +1333,40 @@ test('PR C wording: the new texts are in both languages and the old phrases are 
   assert.match(copy.en.aboutLim5, /Ask a pharmacist or doctor before you take a different package or medicine\.$/);
   assert.match(copy.fi.aboutLim5, /Kysy farmaseutilta tai lääkäriltä, ennen kuin otat toisen pakkauksen tai toisen lääkkeen\.$/);
   assert.doesNotMatch(both, /becomes? unavailable|Fimea file changed|tiedosto muuttui|Later than estimated|Report date|decides what you take|for a while|vähään aikaan|häiriöiseksi|suosittele/);
+});
+
+// The EU pages hold both languages; critical.js swaps option labels, attributes, SVG titles and the document title when the language changes, without a reload.
+test('critical.js swaps the language-dependent attributes and texts of the EU pages', async () => {
+  const mk = (dataset, attrs = {}) => ({dataset, textContent: dataset.en, attrs, getAttribute(n) { return n in this.dataset_attr ? this.dataset_attr[n] : null; }, dataset_attr: attrs, setAttribute(n, v) { this.set = Object.assign(this.set || {}, {[n]: v}); }});
+  const option = mk({en: 'All matches', fi: 'Kaikki täsmäykset'});
+  const input = {dataset: {euAttr: 'placeholder'}, value: '', addEventListener() {}, options: [], set: {}, setAttribute(n, v) { this.set[n] = v; }, getAttribute(n) { return {'data-en-placeholder': 'Name', 'data-fi-placeholder': 'Nimi'}[n] ?? null; }};
+  const head = {dataset: {titleEn: 'English title', titleFi: 'Suomenkielinen otsikko', descEn: 'English description', descFi: 'Suomenkielinen kuvaus'}};
+  const meta = {content: ''};
+  const shown = {textContent: ''}, pager = {hidden: true, replaceChildren() {}, append() {}, addEventListener() {}};
+  const elements = {'eu-q': input, 'eu-shown': shown, 'eu-pager': pager};
+  const get = id => elements[id] ||= {textContent: '', innerHTML: '', hidden: true, href: '', value: '', options: [], dataset: {}, open: false, addEventListener() {}, setAttribute() {}, classList: {toggle() {}, add() {}, remove() {}}, replaceChildren() {}, append() {}};
+  const document = {title: '', getElementById: get, documentElement: {dataset: {page: 'critical'}, classList: {remove() {}}},
+    querySelector: sel => sel === '[data-title-en]' ? head : sel === 'meta[name="description"]' ? meta : null,
+    querySelectorAll: sel => sel === '[data-en][data-fi]' ? [option] : sel === '[data-eu-attr]' ? [input] : [],
+    createElement: () => ({dataset: {}, setAttribute() {}, append() {}}), addEventListener() {}};
+  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia: () => ({matches: false}), document, navigator: {language: 'en'}, localStorage: {getItem: () => null, setItem() {}},
+    fetch: () => Promise.resolve({ok: true, json: () => Promise.resolve({})}), location: {search: '', pathname: '/critical.html', hash: ''}, history: {replaceState() {}}});
+  vm.runInContext(shared + ';' + read('critical.js'), env);
+  assert.equal(document.title, 'English title'); assert.equal(meta.content, 'English description'); assert.equal(option.textContent, 'All matches'); assert.equal(input.set.placeholder, 'Name');
+  vm.runInContext("language = 'fi'; applyEuLanguage()", env);
+  assert.equal(document.title, 'Suomenkielinen otsikko'); assert.equal(meta.content, 'Suomenkielinen kuvaus'); assert.equal(option.textContent, 'Kaikki täsmäykset'); assert.equal(input.set.placeholder, 'Nimi');
+  vm.runInContext("language = 'en'; applyEuLanguage()", env);
+  assert.equal(document.title, 'English title'); assert.equal(option.textContent, 'All matches'); assert.equal(input.set.placeholder, 'Name');
+  // The count line and the page buttons follow the language too.
+  assert.equal(vm.runInContext("EU_COPY.en.showing(1, 12, 18, 18)", env), 'Showing 1–12 of 18.');
+  assert.equal(vm.runInContext("EU_COPY.fi.showing(1, 12, 5, 18)", env), 'Näytetään 1–12 / 5 (18 yhteensä).');
+  assert.deepEqual(Object.keys(plain(vm.runInContext('EU_COPY.en', env))).sort(), Object.keys(plain(vm.runInContext('EU_COPY.fi', env))).sort());
+});
+
+test('the EU list search finds a row by its verified Finnish substance word, as the main list does', () => {
+  const row = {substances: 'Desmopressin acetate desmo 0.1 mg', substance_fi: 'desmopressiini'};
+  const hit = q => vm.runInContext(`searchMatches(${JSON.stringify(row)}, ${JSON.stringify(q)})`, context);
+  assert.equal(hit('desmopressiini'), true); assert.equal(hit('desmopressiinia'), true); assert.equal(hit('desmo'), true);
+  assert.equal(hit('parasetamoli'), false);   // no inferred names: a Finnish word without a verified pair finds nothing here
+  assert.equal(vm.runInContext(`searchMatches({substances: 'x', substance_fi: ''}, 'desmopressiini')`, context), false);
 });

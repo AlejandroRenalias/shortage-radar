@@ -523,7 +523,7 @@ html:not(.js) .needs-js{display:none}
 .eu-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .eu-table th{color:var(--muted);font-size:.9375rem}
 .eu-table th,.eu-table td{text-align:left;vertical-align:top;padding:var(--s4) var(--s3) var(--s4) 0;border-top:1px solid var(--line)}
-.eu-table td span{display:block}.eu-table .note{margin-top:4px;font-size:.9375rem}
+.eu-table td span{display:block}.eu-table .eu-end-label{display:none}.eu-table .note{margin-top:4px;font-size:.9375rem}
 .eu-fold{margin:var(--s3) 0}.eu-fold>summary{cursor:pointer;color:var(--green-ink);min-height:32px;padding:2px 0}
 .eu-fold>summary:hover{text-decoration:underline}
 .eu-row-more{margin:var(--s2) 0 0}.eu-row-more .eu-facts{margin:var(--s2) 0 0}
@@ -561,8 +561,11 @@ html:not(.js) .needs-js{display:none}
 .eu-info[open]{position:static}
 .eu-info[open]>summary{position:absolute;right:2px;top:2px;background:var(--mint)}
 .eu-info-text{margin-top:var(--s1);padding-top:var(--s2);border-top:1px solid var(--line);color:var(--text);font-size:.9375rem;line-height:1.45}
-.eu-fi{margin:var(--s2) 0 var(--s3);padding:var(--s3) var(--s4);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:var(--r);background:var(--mint);color:var(--text);overflow-wrap:anywhere}.eu-fi p{margin:var(--s1) 0}
-.eu-explained{max-width:60ch;margin:var(--s3) 0 0}
+/* The EU pages carry every text in English and Finnish; the one that matches <html lang> shows (site/language.js and the language buttons set it) */
+.l-en,.l-fi{display:contents!important}
+html[lang="fi"] .l-en,html:not([lang="fi"]) .l-fi{display:none!important}
+html:not([lang="fi"]) .l-fi-only{display:none}
+.eu-advice-short{max-width:60ch;margin:var(--s2) 0 0}
 .eu-notes{margin:var(--s3) 0 var(--s5);padding:0 var(--s4);border:1px solid var(--line);border-radius:var(--r);background:var(--white)}
 .eu-notes>summary{min-height:44px;display:flex;align-items:center}
 /* long URLs (the EMA link in the source credit) wrap instead of widening the page */
@@ -581,6 +584,8 @@ html:not(.js) .needs-js{display:none}
 @media (min-width:720px){.eu-pages{order:0;width:auto}.eu-pager{justify-content:center}}
 @media (max-width:719px){
   .eu-hero-art{display:none}
+  .eu-head{padding-block:var(--s3) 0}.eu-head h1{font-size:1.625rem;line-height:1.2;margin-bottom:var(--s2)}.eu-head .lead{font-size:1.0625rem;line-height:1.4}
+  .eu-counts-title{font-size:1rem;margin-top:var(--s4)}.eu-tiles{margin-top:var(--s2);gap:var(--s2)}.eu-tile{padding:var(--s3)}.eu-tile-label{font-size:.9375rem}
   .eu-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .eu-table,.eu-table tbody,.eu-table tr,.eu-table td{display:block}
   .eu-table tbody{display:grid;gap:var(--s3)}
@@ -591,7 +596,7 @@ html:not(.js) .needs-js{display:none}
   .eu-table td>span{min-width:0;overflow-wrap:break-word}
   .eu-table .eu-col-atc{display:none}
   .eu-table td[data-label="Status"] span{display:inline}.eu-table td[data-label="Status"] .note{margin:0 0 0 .3em}
-  .eu-table td[data-label="Estimated end"]::before{content:"Ends ";color:var(--muted)}.eu-table .eu-end{display:inline}
+  .eu-table .eu-end-label{display:inline;color:var(--muted)}.eu-table .eu-end{display:inline}
   .eu-table td[data-label="Status"],.eu-table td[data-label="Estimated end"]{font-size:.9375rem}
   .eu-table .eu-route-line{display:none}
   .eu-atc-fact{display:block}.eu-table dt.eu-atc-fact{display:block}

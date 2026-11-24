@@ -198,7 +198,7 @@ def counts(rows):
     out = {status: dict.fromkeys(TYPES + ('flag-only',), 0) for status in STATUS_NAMES}
     for r in rows:
         out[r['status']][r['match_type']] += 1
-    out['disagree'] = sum(1 for r in rows if r['status'] == 'ongoing' and r['match_type'] in ('exact', 'route-mismatch') and r['fimea_flag'] in ('0', '1')
+    out['disagree'] = sum(1 for r in rows if r['status'] == 'ongoing' and r['match_type'] in ('exact', 'route-mismatch', 'ingredient-mismatch') and r['fimea_flag'] in ('0', '1')
                           and (r['fimea_flag'] == '1') != (r['match_type'] == 'exact'))
     return out
 
