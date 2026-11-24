@@ -172,6 +172,21 @@ def test_feed_labels_describe_the_check_not_the_market():
         assert 'early' not in text['critical_advice'] and 'hyvissä ajoin' not in text['critical_advice'], lang
     assert TEXT['en']['critical'] == 'No interchangeable package found in the data'
     assert TEXT['fi']['critical'] == 'Aineistosta ei löydy vaihtokelpoista pakkausta'
-    assert 'meets the check (on the market and not short in the register, and not on the shortage list)' in TEXT['en']['critical_when']('2026-11-01', None)
-    assert 'ei täytä tarkistusta' in TEXT['fi']['critical_when']('2026-11-01', None)
 
+
+def test_feed_event_before_the_register_run_names_the_capture_rule_not_current_flags():
+    # The register has no earlier flags, so an older event is explained by the market dates and that capture's shortage list.
+    es, snapshots, history = sample()
+    event = {'group': '2018', 'date': '2026-11-17', 'after': '2026-11-13', 'vnrs': ['394651'], 'medicine': 'Lixiana', 'strength': '60 mg',
+             'packages': [{'name': 'Lixiana', 'strength': '60 mg', 'vnr': '394651', 'pack_label': {'en': '98 tablets', 'fi': '98 tablettia'}}]}
+    files = feeds(es, snapshots, history, critical=[event])
+    texts = {}
+    for name, lang in (('feed.xml', 'en'), ('feed-fi.xml', 'fi')):
+        root = ET.fromstring(files[name].encode('utf-8'))
+        found = [e for e in root.findall(ATOM + 'entry') if '/group/2018/' in e.findtext(ATOM + 'id')]
+        assert len(found) == 1, lang
+        texts[lang] = found[0].findtext(ATOM + 'summary')
+    assert 'no other package in this substitution group that was on the market by its market dates and not on that capture’s shortage list' in texts['en']
+    assert 'tarkistus ei löytänyt tämän vaihtokelpoisuusryhmän muuta pakkausta' in texts['fi'] and 'tuon tilannekuvan saatavuushäiriölistalla' in texts['fi']
+    for lang, text in texts.items():
+        assert 'not short in the register' not in text and 'eikä häiriötä' not in text and 'meets the check' not in text, lang

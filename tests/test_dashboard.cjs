@@ -1052,7 +1052,8 @@ test('the safety wording: one label for an interchangeable package, no "usually"
   assert.doesNotMatch(env.whatMarkup({atc:'QN02', NordicArticleNumber:'1'}, 'now'), /call 112/);
   // The Trends event is a change the captures show, not a package that "went short": it also happens when a package leaves the market or the register marks it short.
   for (const lang of ['en', 'fi']) assert.doesNotMatch(copy[lang].newCritIntro, /went short|saatavuudessa alkoi häiriö/, lang);
-  assert.match(copy.en.newCritIntro, /^Days when the captures first show a substitution group with no other package that meets the check\..*market end date passes\.$/);
+  assert.match(copy.en.newCritIntro, /^Days when the captures first show a substitution group with no other package that qualified in those captures\. A package did not qualify when it was on that capture’s shortage list or its market end date had passed\./);
+  assert.doesNotMatch(copy.en.newCritIntro + copy.fi.newCritIntro, /marks it as short|merkitsee sen häiriölliseksi/);
   assert.match(copy.fi.newCritIntro, /^Päivät, jolloin tilannekuvat näyttävät ensimmäisen kerran .* tarkistuksen täyttävää pakkausta\./);
   // The check names the register's shortage flag, in both languages, where the label is explained.
   for (const key of ['impactAbout', 'aboutImpact_substitute', 'aboutImpact_critical']) {
