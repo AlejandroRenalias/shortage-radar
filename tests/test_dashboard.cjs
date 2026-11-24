@@ -1519,10 +1519,18 @@ test('a saved tile link uses the loaded capture date, explains it, and a generic
   const shown = Array.from(context.filterPackages(rows, f, context.listNow(f))).map(e => e.UnavailableFrom);
   assert.deepEqual(shown, ['2026-11-27', '2026-12-10']);
   assert.equal(context.reconcileAsof(context.parseFilters('?status=now'), '2026-11-26'), '');
+  // Older loaded data than the link: the note is still shown, with both dates.
+  const older = context.parseFilters('?status=soon&within=14&asof=2026-11-26');
+  assert.equal(context.reconcileAsof(older, '2026-11-24'), '2026-11-26'); assert.equal(older.asof, '2026-11-24');
   // The note names the date, the scope and the change, in both languages.
-  for (const [lang, saved] of [['en', /saved for the data of 24 Nov 2026.*newer data of 26 Nov 2026/], ['fi', /tiedoilla 24\.11\.2026.*uudempia tietoja 26\.11\.2026/]]) {
+  for (const [lang, saved] of [['en', /saved from a different data date: 24 Nov 2026\. .*data of 26 Nov 2026/], ['fi', /eri päivän tiedoilla: 24 Nov 2026\. .*tiedot 26 Nov 2026/]]) {
     const t = vm.runInContext(`copy.${lang}`, context);
-    assert.match(t.tileNoteChanged(vm.runInContext(`dateText('2026-11-24')`, context), vm.runInContext(`dateText('2026-11-26')`, context)), /./);
+    for (const [a, b] of [['2026-11-24', '2026-11-26'], ['2026-11-26', '2026-11-24']]) {
+      const note = t.tileNoteChanged(vm.runInContext(`dateText('${a}')`, context), vm.runInContext(`dateText('${b}')`, context));
+      // The note claims no direction: the loaded data can be older than the link, so "newer" must not appear.
+      assert.doesNotMatch(note, /newer|uudemp/i);
+    }
+    assert.match(t.tileNoteChanged(vm.runInContext(`dateText('2026-11-24')`, context), vm.runInContext(`dateText('2026-11-26')`, context)), saved);
     assert.match(t.tileNote('X', 14), lang === 'en' ? /within 2 weeks after that date/ : /2 viikon kuluessa/);
     assert.equal(t.tileNote('X', 0), lang === 'en' ? 'Counted as of X.' : 'Laskettu tilanteessa X.');
   }

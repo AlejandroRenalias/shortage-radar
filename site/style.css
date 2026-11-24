@@ -473,6 +473,12 @@ html:not(.js) .needs-js{display:none}
   .nav a[aria-current="page"]{background:var(--mint);box-shadow:none}
   :root{scroll-padding-bottom:16px}
 }
+/* Tablet widths: brand and language switch share the top row and the links drop to a row of their own, so nothing runs past the screen in English or Finnish */
+@media (min-width:720px) and (max-width:1099px){
+  .site-header .header-bar{grid-template-columns:minmax(0,1fr) auto;gap:0 16px;padding-block:6px}
+  .site-header .nav{grid-column:1 / -1;grid-row:2;flex-wrap:wrap;margin-top:2px}
+  .site-header .nav a{padding:0 12px}
+}
 @media (max-width:719px){
   .seg-impact{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s2)}
   .seg-impact label{min-width:0}
