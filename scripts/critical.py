@@ -346,7 +346,7 @@ def alert_item(n, m, meta, sources=None):
     lines = [f"First seen in the capture of {_day_text(n['first_seen'])}." + (' Fimea lists it as not started yet (Voimassa E).' if upcoming else ' Fimea lists it as ongoing (Voimassa K).'),
              f"ATC code: {m['atc']} ({m['list_description']}). Match: exact (EU list version {meta['version']}, row {m['list_row']}).",
              f"Product route: {', '.join(m['product_routes']) or 'not given'}. List route: {m['list_route']}.",
-             f"Reported start: {_day_text(n['UnavailableFrom'])}. Company’s estimated end: {_day_text(n['EndingDate'])}. Notified: {_day_text(n['DateOfTheNotification'])}.",
+             f"Reported start: {_day_text(n['UnavailableFrom'])}. Company’s estimated end: {_day_text(n['EndingDate'])}. Notification date: {_day_text(n['DateOfTheNotification'])}.",
              f"Company: {n['Company']}. VNR: {n['NordicArticleNumber']}."]
     if m['fimea_flag'] == '0':
         lines.append('Fimea does not flag this product as EU-critical.')

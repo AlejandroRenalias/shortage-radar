@@ -74,5 +74,5 @@ def test_about_states_the_alternative_rule_and_the_ema_reuse_notice():
     for text in ('does not flag as short', 'not in the current shortage file', 'Shortage Radar matches Fimea package notices to entries on the EMA Union list'):
         assert text in js and text in about
     assert 'https://www.ema.europa.eu/en/about-us/about-website/legal-notice' in about and 'href="critical-methods.html"' in about
-    assert 'ei merkitse häiriöiseksi' in js and 'ei ole nykyisessä saatavuushäiriötiedostossa' in js
+    assert 'ei ole saatavuushäiriötä' in js and 'ei ole nykyisessä saatavuushäiriötiedostossa' in js
     assert 'Which shortages are on the EU list' not in js and 'saatavuushäiriöt ovat EU:n' not in js

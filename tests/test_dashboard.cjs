@@ -141,7 +141,7 @@ test('cards link to the medicine page, with labelled dates and a structured name
   assert.doesNotMatch(html, / · /);
   setLanguage(context, 'en');
   assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-12-01', atc:'B01'}, NOW), /Starting soon[\s\S]*<dt>Starts<\/dt><dd>1 Dec 2026<small>in 10 days<\/small>/);
-  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-01', atc:'B01'}, NOW), /<small class="late">Later than estimated<\/small>/);
+  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-01', atc:'B01'}, NOW), /<small class="late">Still listed after the company’s estimate<\/small>/);
   assert.match(context.pkgCard({name:'T', atc:'Q02'}, NOW), /<span class="vet">Veterinary<\/span>/);
 });
 
@@ -299,15 +299,15 @@ test('the home page shows when Fimea’s file changed and when Shortage Radar ch
   const meta = {snapshot_date:'2026-11-23', last_checked:'2026-11-23', generated_at:'2026-11-23T05:00:00Z', source_metadata:{shortages_last_modified:'Sun, 22 Nov 2026 23:20:01 GMT', register_date:'2026-11-23', register_last_modified:'Mon, 23 Nov 2026 00:31:00 GMT'}};
   env.renderChrome(meta);
   assert.equal(get('hero-fresh').hidden, false);
-  assert.equal(get('hero-file').textContent, 'Fimea file changed: 23 Nov 2026');
+  assert.equal(get('hero-file').textContent, 'Fimea file last modified: 23 Nov 2026');
   assert.equal(get('hero-checked').textContent, 'Checked by Shortage Radar: 23 Nov 2026');
-  assert.match(get('source-times').textContent, /Fimea file changed: 23 Nov 2026, 01:20 Helsinki time/);
+  assert.match(get('source-times').textContent, /Fimea file last modified: 23 Nov 2026, 01:20 Helsinki time/);
   vm.runInContext("setLanguage('fi', null)", env);
-  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muuttui: 23.11.2026');
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto viimeksi muokattu: 23.11.2026');
   assert.equal(get('hero-checked').textContent, 'Saatavuustutka tarkisti: 23.11.2026');
   // No file time: the line says so instead of showing nothing, and a failed check date is never replaced by the build time.
   env.renderChrome({snapshot_date:'2026-11-23', last_checked:null, generated_at:'2026-11-23T05:00:00Z', source_metadata:{}});
-  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muuttui: ei tiedossa');
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto viimeksi muokattu: ei tiedossa');
   assert.match(get('hero-checked').textContent, /^Saatavuustutka tarkisti: ei tiedossa\. Sivu koostettu: /);
   assert.match(pages['index.html'], /id="hero-fresh"[^>]* hidden/);
   assert.ok(pages['index.html'].indexOf('id="hero-line"') < pages['index.html'].indexOf('id="hero-fresh"') && pages['index.html'].indexOf('id="hero-fresh"') < pages['index.html'].indexOf('id="hero-label"'));
@@ -817,7 +817,7 @@ test('the timeline is one track in time order with evenly spaced markers and the
   const order = html => Array.from(html.matchAll(/class="tl-item tl-(\w+)/g)).map(m => m[1]);
   const late = env.timelineMarkup({UnavailableFrom:day(-40), EndingDate:day(-5)}, false);
   assert.deepEqual(order(late), ['start', 'end', 'today']);
-  assert.match(late, /tl-end seg-done seg-late is-late/); assert.match(late, /tl-today seg-over/); assert.match(late, /Later than estimated/); assert.doesNotMatch(late, /<svg/);
+  assert.match(late, /tl-end seg-done seg-late is-late/); assert.match(late, /tl-today seg-over/); assert.match(late, /Still listed after the company’s estimate/); assert.doesNotMatch(late, /<svg/);
   const ongoing = env.timelineMarkup({UnavailableFrom:day(-10), EndingDate:day(20)}, false);
   assert.deepEqual(order(ongoing), ['start', 'today', 'end']); assert.match(ongoing, /tl-end seg-ahead/);
   const soon = env.timelineMarkup({UnavailableFrom:day(5), EndingDate:day(30)}, false);
@@ -1306,4 +1306,22 @@ test('the About page and the footer feedback link exist in English and Finnish',
   assert.match(copy.en.aboutNot3, /not medical advice/); assert.match(copy.fi.aboutNot3, /ei lääketieteellinen neuvo/);
   for (const html of Object.values(pages)) assert.match(html, /href="(?:\/shortage-radar\/)?about\.html#feedback" data-i18n="footerFeedback"/);
   assert.match(pages['about.html'], /id="feedback"/);
+});
+
+test('PR C wording: the new texts are in both languages and the old phrases are gone', () => {
+  const copy = vm.runInContext('copy', context);
+  const both = JSON.stringify([copy.en, copy.fi, copy.en.fileChanged('D'), copy.fi.fileChanged('D')]);
+  assert.equal(copy.en.starts, 'Shortage expected to start on');
+  assert.equal(copy.en.reported, 'Notification date');
+  assert.equal(copy.en.fileChanged('D'), 'Fimea file last modified: D');
+  assert.equal(copy.fi.fileChanged('D'), 'Fimean tiedosto viimeksi muokattu: D');
+  assert.equal(copy.en.late, 'Still listed after the company’s estimate');
+  assert.equal(copy.fi.late, 'Yhä listalla yrityksen arvion jälkeen');
+  for (const key of ['help', 'aboutIntro']) {
+    assert.match(copy.en[key], /^A reported shortage means a company has told Fimea it cannot supply a package normally for a period\. Your pharmacy may still have some\. Ask your pharmacy what is available\.$/);
+    assert.match(copy.fi[key], /^Ilmoitettu saatavuushäiriö tarkoittaa, että yritys on kertonut Fimealle/);
+  }
+  assert.match(copy.en.aboutLim5, /Ask a pharmacist or doctor before you take a different package or medicine\.$/);
+  assert.match(copy.fi.aboutLim5, /Kysy farmaseutilta tai lääkäriltä, ennen kuin otat toisen pakkauksen tai toisen lääkkeen\.$/);
+  assert.doesNotMatch(both, /becomes? unavailable|Fimea file changed|tiedosto muuttui|Later than estimated|Report date|decides what you take|for a while|vähään aikaan|häiriöiseksi|suosittele/);
 });

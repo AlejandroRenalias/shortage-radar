@@ -17,6 +17,7 @@ MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 
 TEXT = {
     'en': {
         'lang': 'en', 'file': 'feed.xml', 'title': 'Shortage Radar — Finland: changes',
+        'rights': 'Data: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed.',
         'subtitle': 'Medicine shortages that appeared on or left the Fimea list in the last 14 days, and medicines that newly have no interchangeable package found in the data.',
         'new': 'New on the list', 'left': 'Left the list', 'unknown': 'Unnamed package', 'company': 'Company',
         'since': 'Reported start', 'end': 'Estimated end', 'notified': 'Notification date', 'none': 'not given',
@@ -30,6 +31,7 @@ TEXT = {
     },
     'fi': {
         'lang': 'fi', 'file': 'feed-fi.xml', 'title': 'Saatavuustutka — Suomi: muutokset',
+        'rights': 'Aineisto: Lääkealan turvallisuus- ja kehittämiskeskus Fimea, CC BY 4.0. Aineistoa on valittu, yhdistetty ja muokattu.',
         'subtitle': 'Fimean listalle tulleet ja siltä poistuneet lääkkeiden saatavuushäiriöt viimeisen 14 päivän aikana sekä lääkkeet, joille aineistosta ei enää löydy vaihtokelpoista pakkausta.',
         'new': 'Uusi listalla', 'left': 'Poistui listalta', 'unknown': 'Nimetön pakkaus', 'company': 'Yritys',
         'since': 'Ilmoitettu alkamispäivä', 'end': 'Arvioitu päättymispäivä', 'notified': 'Ilmoituspäivä', 'none': 'ei ilmoitettu',
@@ -127,7 +129,7 @@ def feeds(es, snapshots, history, critical=()):
         parts = ['<?xml version="1.0" encoding="utf-8"?>', f'<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="{lang}">',
                  f'<id>{SITE_URL}{t["file"]}</id>', f'<title>{escape(t["title"])}</title>', f'<subtitle>{escape(t["subtitle"])}</subtitle>',
                  f'<updated>{latest}T00:00:00Z</updated>', f'<link rel="self" type="application/atom+xml" href="{SITE_URL}{t["file"]}"/>', f'<link rel="alternate" type="text/html" href="{SITE_URL}"/>',
-                 '<author><name>Shortage Radar</name>' + f'<uri>{SITE_URL}</uri></author>', '<rights>Data: Finnish Medicines Agency Fimea, CC BY 4.0. Selected, joined and transformed.</rights>']
+                 '<author><name>Shortage Radar</name>' + f'<uri>{SITE_URL}</uri></author>', '<rights>' + t['rights'] + '</rights>']
         for day, kind, e in entries:
             if kind == 'critical':
                 title, body = _critical_text(e, lang)

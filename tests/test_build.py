@@ -144,18 +144,18 @@ def test_build_gate_and_csv(tmp_path, monkeypatch):
     raw = (tmp_path / 'site/shortages.csv').read_bytes()
     assert raw.startswith(b'\xef\xbb\xbf')
     records = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
-    assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact', 'source credit']
+    assert list(records[0]) == ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact (Shortage Radar reading)', 'source credit']
     # The credit goes with every copy of the data: Fimea, the licence and the note that the data was changed.
     assert 'CC BY 4.0' in records[0]['source credit'] and 'Fimea' in records[0]['source credit'] and 'changed the data' in records[0]['source credit']
     for name in ('data.json', 'current.json', 'source.json', 'history.json'):
         assert 'CC BY 4.0' in json.loads((tmp_path / 'site' / name).read_text(encoding='utf-8'))['source_metadata']['source_credit'], name
     assert build.week_file(None, {}) is None and 'CC BY 4.0' in build.week_file({'new': 1}, {'source_credit': 'CC BY 4.0'})['source_metadata']['source_credit']
     assert records[0]['current VNR'] == '222222' and records[0]['veterinary'] == 'yes'
-    assert records[0]['other packages on market'] == '' and records[0]['impact'] == 'vet'
+    assert records[0]['other packages on market'] == '' and records[0]['impact (Shortage Radar reading)'] == 'vet'
     monkeypatch.setattr(build, 'register', lambda *args: {'012345': {'name': 'Example', 'substitution_group': '42', 'other_packages_count': 0}})
     build.build()
     records = list(csv.DictReader((tmp_path / 'site/shortages.csv').read_text(encoding='utf-8-sig').splitlines()))
-    assert records[0]['other packages on market'] == '0' and records[0]['substitution group'] == '42' and records[0]['impact'] == 'no_alternative'
+    assert records[0]['other packages on market'] == '0' and records[0]['substitution group'] == '42' and records[0]['impact (Shortage Radar reading)'] == 'no_alternative'
     current = json.loads((tmp_path / 'site/current.json').read_text(encoding='utf-8'))
     summary = json.loads((tmp_path / 'site/summary.json').read_text(encoding='utf-8'))
     assert current['events'][0]['impact'] == 'no_alternative'

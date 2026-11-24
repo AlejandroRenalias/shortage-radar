@@ -281,7 +281,7 @@ def test_pages_cover_every_code_and_the_methods():
                            'snapshot_date': '2026-11-23', 'source_metadata': {}})
     assert len(out) == 299 + 2
     page = out['critical.html']
-    assert 'Critical medicines in Finland' in page and 'version 2.1' in page and page.count('<tr data-type=') == 4 and 'European Medicines Agency' in page
+    assert 'EU critical medicines list: shortages in Finland' in page and 'Critical medicines in Finland' not in page and 'version 2.1' in page and page.count('<tr data-type=') == 4 and 'European Medicines Agency' in page
     assert 'Last seen 12 Nov 2026' in out['critical-A02BC05.html'] and 'Row in the EMA file' in out['critical-A02BC05.html']
     for needle in ('CC BY 4.0', 'legal-notice', '416337', '019235', 'has no history', 'estimates', 'Ingredient not confirmed', '389066', 'Voimassa K', 'days between captures'):
         assert needle in out['critical-methods.html'], needle
