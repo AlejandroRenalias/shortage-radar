@@ -274,31 +274,30 @@ test('the home page shows when Fimea’s file changed and when Shortage Radar ch
   assert.ok(pages['index.html'].indexOf('id="hero-line"') < pages['index.html'].indexOf('id="hero-fresh"') && pages['index.html'].indexOf('id="hero-fresh"') < pages['index.html'].indexOf('id="hero-label"'));
 });
 
-test('history and delay rendering uses translated dates and explains the sample', () => {
+test('history and end-date rendering uses translated dates and states one dated fact', () => {
   const [env, get] = pageEnv();
   const history = [{date:'2024-11-18',count:670,imported:true},{date:'2026-11-21',count:751,imported:false}];
-  const delays = {sample_size:1,active_past_estimate:24,max_gap_days:14,min_sample:30,meaningful:false,excluded:{listed_at_first_capture:0,no_estimate:0,wide_start_window:0,wide_removal_window:0,vnr_still_listed:0},examples:[]};
-  env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
+  const changes = {current:700,changed:37,from:'2026-09-15',to:'2026-11-21',max_gap_days:14};
+  env.drawChart(history,14); env.drawEndChanges(changes);
   assert.match(get('chart').innerHTML, /18 Nov 2024/);
   assert.doesNotMatch(get('chart').innerHTML, /2024-11-18/);
   assert.match(get('chart').innerHTML, /no captures, 733 days/);
-  assert.match(get('delay-headline').textContent, /1 shortage entered/);
-  assert.match(get('delay-note').textContent, /does not prove supply returned/);
-  assert.match(get('delay-visual').innerHTML, /24 shortages were still listed/);
+  assert.equal(get('end-changes-text').textContent, '37 of the 700 notices on the list changed the estimated end date in our captures from 15 Sep 2026 to 21 Nov 2026.');
+  assert.match(get('end-changes-note').textContent, /at most 14 days after the capture before it\. A change across a longer gap is not counted/);
+  assert.doesNotMatch(get('end-changes-text').textContent + get('end-changes-note').textContent, /%|share|past the estimate|delay/i);
   assert.match(get('chart').innerHTML, /font-size="14"[^>]*>650<\/text>/);
   assert.match(get('chart').innerHTML, /font-weight="600"[^>]*>751<\/text>/);
   assert.match(get('chart').innerHTML, /The vertical axis starts at 650\./);
   env.drawTable(history);
   assert.match(get('chart-table').innerHTML, /<td>21 Nov 2026<\/td><td>751<\/td><td>saved by this project<\/td>/);
   vm.runInContext("language='fi'",env);
-  env.drawChart(history,14); env.drawDelays(delays,'2026-11-21');
+  env.drawChart(history,14); env.drawEndChanges(changes);
   assert.match(get('chart').innerHTML, /18\.11\.2024/);
   assert.match(get('chart').innerHTML, /ei tilannekuvia/);
-  assert.match(get('delay-note').textContent, /ei todista saatavuuden palautumista/);
-  delays.meaningful=true; delays.past_estimate=1; delays.not_past_estimate=0; delays.undetermined=0; delays.share_past_min=.1; delays.share_past_max=.6; delays.median_overrun_min_days=1; delays.median_overrun_max_days=2;
-  env.drawDelays(delays,'2026-11-21');
-  assert.match(get('delay-headline').textContent, /10 %–60 %/);
-  assert.match(get('delay-visual').innerHTML, /Listalla arvion jälkeen/);
+  assert.equal(get('end-changes-text').textContent, 'Listalla olevista 700 ilmoituksesta 37 muutti arvioitua päättymispäivää tilannekuvissamme 15.9.2026–21.11.2026.');
+  assert.match(get('end-changes-note').textContent, /enintään 14 päivää aiemmin\. Pidemmän aukon yli tapahtunutta muutosta ei lasketa/);
+  env.drawEndChanges(null);
+  assert.equal(get('end-changes-text').textContent, '');
   env.drawDates({snapshot_date:'2026-11-21',last_checked:'2026-11-20',archive_start:'2024-11-18'});
   assert.equal(get('data-date').textContent, 'Aineisto 21.11.2026');
 });
@@ -400,16 +399,11 @@ test('this week summary and how-we-count note state their window and counts', ()
   assert.equal(get('feed-link').href, 'feed.xml');
   env.drawWeek(null, 758);
   assert.equal(get('week').hidden, true);
-  const delays = {sample_size:156,removed_total:1197,max_gap_days:14,min_sample:30,meaningful:false,active_past_estimate:0,excluded:{listed_at_first_capture:642,no_estimate:0,wide_start_window:332,wide_removal_window:0,vnr_still_listed:67},examples:[]};
-  env.drawDelays(delays, '2026-11-21');
-  assert.equal(get('how-count').hidden, false);
-  assert.equal(get('how-count-text').textContent, 'Counted: 156 of the 1,197 records that have left the list. These were first seen and last seen within 14 days of a neighbouring capture and had an estimated end date. Not counted: 642 already listed at the first capture, 332 first seen after a long gap, 67 whose package stayed listed under a changed record.');
   vm.runInContext("language='fi'", env);
-  env.drawWeek(week, 758); env.drawDelays(delays, '2026-11-21');
+  env.drawWeek(week, 758);
   assert.equal(get('feed-link').href, 'feed-fi.xml');
   assert.match(get('week-facts').innerHTML, /Uudet listalla/);
   assert.match(get('week-facts').innerHTML, /myös ne, jotka ehtivät poistua uudelleen/);
-  assert.match(get('how-count-text').textContent, /^Mukana on 156 listalta poistuneesta 1\s197 ilmoituksesta/);
 });
 
 test('strength is part of the label, with a Finnish decimal comma', () => {
@@ -501,7 +495,7 @@ test('every current card carries one impact label with its reason, in both langu
   const cases = [
     [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Pharmacy can usually give a substitute: 5 other packages on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 5 muuta pakkausta'}],
     [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Pharmacy can usually give a substitute: 1 other package on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 1 muu pakkaus'}],
-    [{substitution_group:'0042', other_packages_count:0}, 'critical', {en:'No interchangeable product on the market. Talk to your pharmacist or doctor early.', fi:'Ei vaihtokelpoista valmistetta kaupan. Kysy apteekista tai lääkäriltä hyvissä ajoin.'}],
+    [{substitution_group:'0042', other_packages_count:0}, 'no_alternative', {en:'No interchangeable product on the market. Talk to your pharmacist or doctor early.', fi:'Ei vaihtokelpoista valmistetta kaupan. Kysy apteekista tai lääkäriltä hyvissä ajoin.'}],
     [{other_packages_count:0}, 'nogroup', {en:'No substitution group. Ask your pharmacist.', fi:'Ei vaihtokelpoisuusryhmää. Kysy apteekista.'}],
     [{atc:'QN02', substitution_group:'0042', other_packages_count:3}, 'vet', {en:'Veterinary medicine. Ask your veterinarian or pharmacy.', fi:'Eläinlääke. Kysy eläinlääkäriltä tai apteekista.'}],
   ];
@@ -514,7 +508,9 @@ test('every current card carries one impact label with its reason, in both langu
       assert.ok(html.includes(`<p class="impact impact-${level}">`) && html.includes(`<span>${text[lang]}</span>`), `${lang} ${level}`);
     }
     // The level built into the data wins; a package that left the list has no label.
-    assert.equal(context.impactOf({...record, impact:'critical', other_packages_count:4, substitution_group:'1'}), 'critical');
+    assert.equal(context.impactOf({...record, impact:'no_alternative', other_packages_count:4, substitution_group:'1'}), 'no_alternative');
+    // A file saved before the rename still reads: the old name is the new level.
+    assert.equal(context.impactOf({...record, impact:'critical', other_packages_count:4, substitution_group:'1'}), 'no_alternative');
     assert.doesNotMatch(context.pkgCard({...record, removed_on:'2026-11-10'}, NOW), /class="impact /);
   }
   setLanguage(context, 'en');
@@ -534,7 +530,7 @@ test('the critical wording never says that no medicine or treatment exists, and 
 
 test('critical rows group by medicine and form, with strengths side by side', () => {
   setLanguage(context, 'en');
-  const p = (vnr, name, strength, medicine, form = 'injektiokuiva-aine ja liuotin, depotsuspensiota varten') => ({NordicArticleNumber:vnr, name, strength, medicine, form, impact:'critical'});
+  const p = (vnr, name, strength, medicine, form = 'injektiokuiva-aine ja liuotin, depotsuspensiota varten') => ({NordicArticleNumber:vnr, name, strength, medicine, form, impact:'no_alternative'});
   const rows = [p('1', 'Octreotide ratiopharm', '20 mg', 'Octreotide'), p('2', 'Octreotide ratiopharm', '10 mg', 'Octreotide'), p('3', 'Octreotide ratiopharm', '30 mg', 'Octreotide'),
     p('4', 'Biquetan', '200 mg', 'Quetiapine', 'depottabletti'), p('5', 'Ketipinor', '400 mg', 'Quetiapine', 'depottabletti'), p('6', 'Seroquel Prolong', '200 mg', 'Quetiapine', 'depottabletti'),
     p('7', 'Moviprep', '', '', 'jauhe oraaliliuosta varten')];
@@ -581,22 +577,23 @@ test('modified-release and similar forms are named exactly in both languages, an
 
 test('the impact filter is kept in the address and narrows the list', () => {
   const f = context.parseFilters('?impact=critical&q=quetiapine');
-  assert.equal(f.impact, 'critical');
-  assert.equal(context.filtersToQuery(f), 'q=quetiapine&impact=critical');
-  for (const level of ['substitute', 'critical', 'nogroup', 'vet']) assert.equal(context.parseFilters('?impact=' + level).impact, level);
-  const rows = [{name:'A', impact:'substitute'}, {name:'B', impact:'critical'}, {name:'C', impact:'nogroup'}, {name:'D', atc:'QA01'}];
+  assert.equal(f.impact, 'no_alternative');  // an old link with ?impact=critical keeps working
+  assert.equal(context.parseFilters('?impact=no_alternative').impact, 'no_alternative');
+  assert.equal(context.filtersToQuery(f), 'q=quetiapine&impact=no_alternative');
+  for (const level of ['substitute', 'no_alternative', 'nogroup', 'vet']) assert.equal(context.parseFilters('?impact=' + level).impact, level);
+  const rows = [{name:'A', impact:'substitute'}, {name:'B', impact:'no_alternative'}, {name:'C', impact:'nogroup'}, {name:'D', atc:'QA01'}];
   const run = impact => Array.from(context.filterPackages(rows, {q:'', impact, status:'', group:'', form:'', company:''}, NOW)).map(e => e.name);
-  assert.deepEqual(run('critical'), ['B']); assert.deepEqual(run('vet'), ['D']); assert.deepEqual(run(''), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(run('no_alternative'), ['B']); assert.deepEqual(run('vet'), ['D']); assert.deepEqual(run(''), ['A', 'B', 'C', 'D']);
   const list = pages['shortages.html'];
-  for (const level of ['', 'critical', 'substitute', 'nogroup', 'vet']) assert.match(list, new RegExp(`name="impact" value="${level}"`));
+  for (const level of ['', 'no_alternative', 'substitute', 'nogroup', 'vet']) assert.match(list, new RegExp(`name="impact" value="${level}"`));
   assert.ok(list.indexOf('name="impact"') < list.indexOf('name="status"'), 'impact is the first filter');
-  assert.match(list, /href="shortages\.html\?impact=critical" id="crit-show"/);
+  assert.match(list, /href="shortages\.html\?impact=no_alternative" id="crit-show"/);
 });
 
 test('home leads with the triage: words and numbers, each part one tap from the filtered list', () => {
-  const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'critical':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
+  const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'no_alternative':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
   assert.ok(html.indexOf('id="q"') < html.indexOf('id="triage"'), 'the search is on the first screen of a phone, ahead of the triage');
-  for (const [level, n] of [['substitute', '531'], ['critical', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
+  for (const [level, n] of [['substitute', '531'], ['no_alternative', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
   assert.match(html, /For 531 of them, the register lists an interchangeable package that is on the market and not flagged short\./);
   assert.match(html, /href="shortages\.html\?impact=vet" id="triage-vet">Also on the list: 39 veterinary medicines/);
   // Each row carries its share of the human packages as a bar; the widths follow the human counts only.
@@ -609,13 +606,13 @@ test('"Ask your pharmacy" is said once: by the impact label for a current packag
   for (const lang of ['en', 'fi']) {
     assert.match(copy[lang].impactCard_nogroup, lang === 'en' ? /Ask your pharmacist\.$/ : /Kysy apteekista\.$/);
     // The explanation under the label does not repeat the label's own advice.
-    for (const level of ['substitute', 'critical', 'nogroup', 'vet']) assert.doesNotMatch(copy[lang]['impactText_' + level], /^(Ask your|Talk to your|Kysy )/);
+    for (const level of ['substitute', 'no_alternative', 'nogroup', 'vet']) assert.doesNotMatch(copy[lang]['impactText_' + level], /^(Ask your|Talk to your|Kysy )/);
   }
   // Without the label the advice opens with the ask; with it, the advice does not repeat it.
   assert.doesNotMatch(copy.en.whatTextRest, /Ask your pharmacy/); assert.doesNotMatch(copy.fi.whatTextRest, /Kysy apteekista/);
   assert.match(copy.en.whatText, /^Ask your pharmacy\./); assert.match(copy.fi.whatText, /^Kysy apteekista\./);
   setLanguage(context, 'en');
-  assert.match(copy.en.delayHeadline('15', '156', '78', '10%', '60%'), /^15 of 156 observed shortages stayed listed past the estimate; for 78 we cannot tell yet\. .*10%–60%/);
+  for (const lang of ['en', 'fi']) for (const key of Object.keys(copy[lang])) assert.doesNotMatch(key, /^(delay|how(Text|First|NoEstimate|Start|End|Changed|Gap)|byCompany)/, `${lang} ${key} was removed with the delay share and the company ranking`);
 });
 
 test('veterinary packages are told to ask the veterinarian or pharmacy, not given human advice', () => {
@@ -651,7 +648,7 @@ test('the medicine page shows the impact label with the other packages of the gr
     {vnr:'147881', name:'Quetiapin Hexal', strength:'200 mg', pack_label:{en:'120 tablets', fi:'120 tablettia'}, company:'Hexal A/S', listed:true},
     {vnr:'386574', name:'Ketipinor', strength:'200 mg', pack_label:{en:'100 tablets', fi:'100 tablettia'}, company:'Orion Corporation', listed:true}]},
     '0381': {available: [{vnr:'567362', name:'Seronil', strength:'20 mg', pack_label:{en:'30 capsules', fi:'30 kapselia'}, company:'Orion Corporation'}, {vnr:'138828', name:'Self', strength:'20 mg', pack_label:{en:'30', fi:'30'}, company:'X'}], short: []}};
-  const critical = env.impactMarkup({NordicArticleNumber:'147881', atc:'N05AH04', substitution_group:'1299', other_packages_count:0, impact:'critical'}, groups);
+  const critical = env.impactMarkup({NordicArticleNumber:'147881', atc:'N05AH04', substitution_group:'1299', other_packages_count:0, impact:'no_alternative'}, groups);
   assert.match(critical, /No interchangeable product on the market\. Talk to your pharmacist or doctor early\./);
   assert.match(critical, /The other packages in its substitution group are short too\./);
   assert.match(critical, /<strong>Ketipinor 200&nbsp;mg|<strong>Ketipinor 200\u00a0mg/); assert.match(critical, /Orion Corporation/); assert.doesNotMatch(critical, /class="alt-flag"/, 'packages under "Short too" need no flag of their own');
@@ -661,7 +658,7 @@ test('the medicine page shows the impact label with the other packages of the gr
   assert.match(substitute, /Pharmacy can usually give a substitute: 1 other package on the market/);
   assert.match(substitute, /<h3>Other packages on the market<\/h3>/); assert.match(substitute, /Seronil 20.mg<\/strong><span>30 capsules<\/span><span>Orion Corporation<\/span>/);
   assert.doesNotMatch(substitute, /<strong>Self/);
-  const alone = env.impactMarkup({NordicArticleNumber:'111111', atc:'N01', substitution_group:'9999', other_packages_count:0, impact:'critical'}, groups);
+  const alone = env.impactMarkup({NordicArticleNumber:'111111', atc:'N01', substitution_group:'9999', other_packages_count:0, impact:'no_alternative'}, groups);
   assert.match(alone, /It is the only package in its substitution group on the market\./);
   const nogroup = env.impactMarkup({NordicArticleNumber:'111111', atc:'L01', impact:'nogroup'}, groups);
   assert.match(nogroup, /No substitution group\. Ask your pharmacist\./); assert.doesNotMatch(nogroup, /Substitution group \d/);
@@ -1013,7 +1010,7 @@ test('the phone chip states only what the register shows, in both languages', ()
   const copy = vm.runInContext('copy', context);
   assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
   assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
-  for (const lang of ['en', 'fi']) for (const level of ['substitute', 'critical', 'nogroup', 'vet']) {
+  for (const lang of ['en', 'fi']) for (const level of ['substitute', 'no_alternative', 'nogroup', 'vet']) {
     assert.doesNotMatch(copy[lang]['impactChip_' + level], /usually|yleensä|available|saatavilla|substitute|can give/i, `${lang} ${level}`);
     setLanguage(context, lang);
     const html = context.pkgCard({name:'T', UnavailableFrom:'2026-11-06', atc: level === 'vet' ? 'QN02' : 'N02', substitution_group: level === 'nogroup' ? '' : '42', other_packages_count: level === 'substitute' ? 2 : 0}, NOW);
@@ -1164,4 +1161,29 @@ test('a search result opens its own package on the medicine page, and falls back
   const html = get('medicines').innerHTML;
   assert.match(html, /is-selected" aria-labelledby="pk-222222"/); assert.doesNotMatch(html, /is-selected" aria-labelledby="pk-111111"/);
   assert.match(html, /<h3 id="pk-222222" class="med-pkg-name">pack 222222 <span class="md-vnr">VNR 222222<\/span><\/h3>/);
+});
+
+test('Home and Trends read the old count key in files saved before the rename, and an explicit new value wins', () => {
+  const [home] = pageEnv(['home.js']);
+  // The real summary.json before the rename: only `critical`.
+  vm.runInContext("data = {impact: {substitute: 539, critical: 61, nogroup: 117, vet: 39}}", home);
+  const legacy = home.impactCounts();
+  assert.equal(legacy.no_alternative, 61); assert.equal(legacy.substitute, 539);
+  assert.match(home.triageMarkup(legacy), /impact=no_alternative"[^>]*>.*?<span class="tri-num">61<\/span>/);
+  // Both keys: the new one is read, even when it is 0.
+  vm.runInContext("data = {impact: {substitute: 5, no_alternative: 0, critical: 61, nogroup: 1, vet: 0}}", home);
+  assert.equal(home.impactCounts().no_alternative, 0);
+  vm.runInContext("data = {impact: {substitute: 5, no_alternative: 7, critical: 7, nogroup: 1, vet: 0}}", home);
+  assert.equal(home.impactCounts().no_alternative, 7);
+  // Raw legacy counts (older HTML with the new script): the number, the share and the bar all use the old key.
+  const raw = home.triageMarkup({substitute: 531, critical: 61, nogroup: 117});
+  assert.match(raw, /impact=no_alternative"[^>]*>.*?<span class="tri-num">61<\/span>/);
+  assert.match(raw, /impact=no_alternative".*?class="part" width="8.60"/);
+  const [trends, get] = pageEnv(['trends.js']);
+  const history = [{date:'2026-11-23', gap_days:1}, {date:'2026-11-24', gap_days:1}];
+  const row = (date, extra) => Object.assign({date, register_date: date, total: 9, substitute: 1, nogroup: 2, vet: 3}, extra);
+  trends.drawCritical({history, max_gap_days: 14, newly_critical: [], triage_counts: [row('2026-11-24', {critical: 61}), row('2026-11-23', {no_alternative: 0, critical: 60})]});
+  const table = get('triage-record').innerHTML;
+  assert.match(table, /<td>24 Nov 2026<\/td><td>1<\/td><td>61<\/td><td>2<\/td><td>3<\/td>/);
+  assert.match(table, /<td>23 Nov 2026<\/td><td>1<\/td><td>0<\/td><td>2<\/td><td>3<\/td>/);
 });

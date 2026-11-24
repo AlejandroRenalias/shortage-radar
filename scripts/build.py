@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 import os
 import unicodedata
-from statistics import median
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -22,8 +21,7 @@ from triage import is_available_alternative, level, medicine_name, newly_critica
 
 ROOT = Path(__file__).resolve().parents[1]
 # MAX_GAP_DAYS (scripts/gaps.py): captures further apart than this are not joined into one continuous series,
-# and removal windows or first sightings wider than this are not used for delays.
-MIN_DELAY_SAMPLE = 30
+# and a change of an end date across a wider gap is not counted (end_date_changes).
 # Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
 PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
@@ -178,51 +176,20 @@ def events(snapshots):
     return all_events, history
 
 
-def delay_stats(all_events):
-    """Compare the first estimated end with the window in which the record left the list.
+def end_date_changes(all_events, history):
+    """How many current notices changed their estimated end date between two captures that are not separated by a gap.
 
-    Only events with a narrow window at both ends are used: first seen within
-    MAX_GAP_DAYS of the previous capture (so the first estimate is close to the
-    original one) and removed within MAX_GAP_DAYS of the last capture listing it.
+    Only notices still on the list in the latest capture are counted (`removed_on` is None). A change is the first
+    capture that shows a new end date; it counts only when the capture before it is at most MAX_GAP_DAYS earlier,
+    because across a longer gap the date may have changed at any time and that is not observed (scripts/gaps.py).
+    A notice counts once, however many times its date changed. The text of the site says "in our captures": a change
+    before the first capture, or one that was undone between two captures, is not seen.
     """
-    sample, active_past, excluded = [], [], {'listed_at_first_capture': 0, 'no_estimate': 0, 'wide_start_window': 0, 'wide_removal_window': 0, 'vnr_still_listed': 0, 'gap_in_captures': 0}
-    for e in all_events:
-        end = e.get('first_estimated_end')
-        if not e['removed_on']:
-            if (end and not e['listed_at_first_capture'] and e['first_seen_after'] and not e.get('gaps')
-                    and not is_gap(e['first_seen_after'], e['first_seen'])
-                    and days_between(end, e['last_seen']) > 0):
-                active_past.append(days_between(end, e['last_seen']))
-            continue
-        if e['listed_at_first_capture']:
-            reason = 'listed_at_first_capture'
-        elif not end:
-            reason = 'no_estimate'
-        elif is_gap(e['first_seen_after'], e['first_seen']):
-            reason = 'wide_start_window'
-        elif is_gap(e['last_seen'], e['removed_on']):
-            reason = 'wide_removal_window'
-        elif e.get('vnr_listed_at_removal'):
-            reason = 'vnr_still_listed'
-        elif e.get('gaps'):
-            reason = 'gap_in_captures'
-        else:
-            reason = None
-        if reason:
-            excluded[reason] += 1
-            continue
-        low, high = days_between(end, e['last_seen']), days_between(end, e['removed_on'])
-        sample.append({'vnr': e['NordicArticleNumber'], 'name': e.get('name', ''), 'strength': e.get('strength', ''), 'first_estimated_end': end, 'last_seen': e['last_seen'], 'removed_on': e['removed_on'], 'overrun_min_days': low, 'overrun_max_days': high})
-    past = [s for s in sample if s['overrun_min_days'] > 0]
-    not_past = [s for s in sample if s['overrun_max_days'] <= 0]
-    result = {'sample_size': len(sample), 'past_estimate': len(past), 'not_past_estimate': len(not_past), 'undetermined': len(sample) - len(past) - len(not_past), 'active_past_estimate': len(active_past), 'excluded': excluded, 'removed_total': len(sample) + sum(excluded.values()), 'min_sample': MIN_DELAY_SAMPLE, 'max_gap_days': MAX_GAP_DAYS, 'meaningful': len(sample) >= MIN_DELAY_SAMPLE, 'examples': sorted(past, key=lambda s: -s['overrun_min_days'])[:10]}
-    if result['meaningful']:
-        result['share_past_min'] = len(past) / len(sample)
-        result['share_past_max'] = (len(sample) - len(not_past)) / len(sample)
-    if past:
-        result['median_overrun_min_days'] = median(s['overrun_min_days'] for s in past)
-        result['median_overrun_max_days'] = median(s['overrun_max_days'] for s in past)
-    return result
+    days = [h['date'] for h in history]
+    before = {day: days[i - 1] for i, day in enumerate(days) if i}
+    current = [e for e in all_events if not e['removed_on']]
+    changed = sum(any(not is_gap(before[c['seen']], c['seen']) for c in e['end_changes'][1:]) for e in current)
+    return {'current': len(current), 'changed': changed, 'from': days[0], 'to': days[-1], 'max_gap_days': MAX_GAP_DAYS}
 
 
 def load_snapshots():
@@ -309,7 +276,7 @@ def build():
     medicine_dir = ROOT / 'site/m'
     # Without a register file (tests that replace `register`) there are no groups and no pages.
     medicine_counts = build_pages(register_path, register_date(register_path), current_vnrs, es, shard_meta, medicine_dir) if register_path.exists() else {}
-    output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'delays': delay_stats(es), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata,
+    output = {'archive_start': history[0]['date'], 'snapshot_date': history[-1]['date'], 'history': history, 'events': es, 'unmatched_vnrs': unmatched, 'end_changes': end_date_changes(es, history), 'rss_counts': read_rss_counts(), 'max_gap_days': MAX_GAP_DAYS, 'source_metadata': metadata,
               'newly_critical': critical, 'triage_counts': read_triage_counts()}
     output['generated_at'] = shard_meta['generated_at']
     output['last_checked'] = shard_meta['last_checked']
@@ -322,7 +289,7 @@ def build():
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current
-    history_data = {k: output[k] for k in ('history', 'delays', 'rss_counts', 'max_gap_days', 'newly_critical', 'triage_counts')}
+    history_data = {k: output[k] for k in ('history', 'end_changes', 'rss_counts', 'max_gap_days', 'newly_critical', 'triage_counts')}
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')

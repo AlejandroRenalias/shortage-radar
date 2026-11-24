@@ -188,7 +188,7 @@ const UI_PATHS = {
   trend: '<path d="M3 17l6-6 4 4 8-9M15 6h6v6"/>',
   pharmacy: '<path d="M12 4v16M4 12h16"/><rect x="3" y="3" width="18" height="18" rx="5"/>',
   substitute: '<path d="M4 8h14l-3.500-3.500M20 16H6l3.500 3.500"/>',
-  critical: '<path d="M5 4.500h14a1.500 1.500 0 0 1 1.500 1.500v9a1.500 1.500 0 0 1-1.500 1.500h-7.500L7 20v-3.500H5A1.500 1.500 0 0 1 3.500 15V6A1.500 1.500 0 0 1 5 4.500z"/><path d="M8 9h8M8 12.500h5"/>',
+  no_alternative: '<path d="M5 4.500h14a1.500 1.500 0 0 1 1.500 1.500v9a1.500 1.500 0 0 1-1.500 1.500h-7.500L7 20v-3.500H5A1.500 1.500 0 0 1 3.500 15V6A1.500 1.500 0 0 1 5 4.500z"/><path d="M8 9h8M8 12.500h5"/>',
   nogroup: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.500 12h7"/>',
   vet: '<circle cx="6.500" cy="10.500" r="1.800"/><circle cx="10" cy="6" r="1.800"/><circle cx="14.500" cy="6" r="1.800"/><circle cx="18" cy="10.500" r="1.800"/><path d="M12 12c-2.500 0-4.500 2.800-4.500 5 0 1.500 1.200 2.500 2.500 2.500.8 0 1.300-.4 2-.4s1.200.4 2 .4c1.300 0 2.500-1 2.500-2.500 0-2.200-2-5-4.500-5z"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>'
@@ -219,10 +219,19 @@ function sortPackages(rows, sort, now = todayUTC(), lang = language) {
 function groupKey(atc) { return atc?.startsWith('S01') ? 'eye' : atc?.startsWith('S02') ? 'ear' : (atc || '')[0] || ''; }
 function isVet(e) { return (e.atc || '').startsWith('Q'); }
 // ---- Impact: can a pharmacy usually give a substitute? The level is set at build time (scripts/triage.py).
-const IMPACT_LEVELS = ['substitute', 'critical', 'nogroup', 'vet'];
+const IMPACT_LEVELS = ['substitute', 'no_alternative', 'nogroup', 'vet'];
+// `critical` is the old name of `no_alternative`: old links (?impact=critical) and files saved earlier still work. Remove after one release.
+const IMPACT_ALIASES = {critical: 'no_alternative'};
+const impactName = level => IMPACT_ALIASES[level] || level;
+// The count of one level from a counts object. A file saved before the rename has only the old key; an explicit new value, even 0, wins.
+function impactCount(counts, level) {
+  const old = Object.keys(IMPACT_ALIASES).find(k => IMPACT_ALIASES[k] === level);
+  return Number.isFinite(counts?.[level]) ? counts[level] : Number.isFinite(counts?.[old]) ? counts[old] : 0;
+}
 function impactOf(e) {
-  if (IMPACT_LEVELS.includes(e.impact)) return e.impact;
-  return isVet(e) ? 'vet' : !e.substitution_group ? 'nogroup' : e.other_packages_count > 0 ? 'substitute' : 'critical';
+  const named = impactName(e.impact);
+  if (IMPACT_LEVELS.includes(named)) return named;
+  return isVet(e) ? 'vet' : !e.substitution_group ? 'nogroup' : e.other_packages_count > 0 ? 'substitute' : 'no_alternative';
 }
 // The plain label with its reason, for a package card and the medicine page.
 function impactLine(e) {
@@ -255,7 +264,7 @@ function groupByMedicine(rows, lang = language) {
 const FILTER_KEYS = ['impact', 'status', 'group', 'form', 'company'];
 function parseFilters(search) {
   const params = new URLSearchParams(search), pick = (key, max = 100) => (params.get(key) || '').trim().slice(0, max);
-  const status = pick('status'), sort = pick('sort'), form = pick('form'), impact = pick('impact');
+  const status = pick('status'), sort = pick('sort'), form = pick('form'), impact = impactName(pick('impact'));
   return {q: pick('q'), impact: IMPACT_LEVELS.includes(impact) ? impact : '', status: ['now', 'soon'].includes(status) ? status : '', group: pick('group', 10), form: KINDS.includes(form) ? form : '', company: pick('company', 120), sort: ['name', 'longest', 'end'].includes(sort) ? sort : ''};
 }
 function filtersToQuery(f) {

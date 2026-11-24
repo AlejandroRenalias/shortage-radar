@@ -3,19 +3,22 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from triage import counts, is_available_alternative, level, medicine_name, newly_critical, on_market
+from triage import counts, with_aliases, is_available_alternative, level, medicine_name, newly_critical, on_market
 
 
 def test_levels_for_group_with_others_with_none_without_group_and_veterinary():
     assert level({'atc': 'N05AH04', 'substitution_group': '1299', 'other_packages_count': 5}) == 'substitute'
-    assert level({'atc': 'N05AH04', 'substitution_group': '1299', 'other_packages_count': 0}) == 'critical'
-    assert level({'atc': 'N05AH04', 'substitution_group': '1299'}) == 'critical'
+    assert level({'atc': 'N05AH04', 'substitution_group': '1299', 'other_packages_count': 0}) == 'no_alternative'
+    assert level({'atc': 'N05AH04', 'substitution_group': '1299'}) == 'no_alternative'
     assert level({'atc': 'L01AA01', 'substitution_group': '', 'other_packages_count': 0}) == 'nogroup'
     assert level({'atc': 'L01AA01'}) == 'nogroup'
     # Veterinary medicines are counted apart, even with a group or other packages.
     assert level({'atc': 'QJ01CA04', 'substitution_group': '', 'other_packages_count': 0}) == 'vet'
     assert level({'atc': 'QJ01CA04', 'substitution_group': '7', 'other_packages_count': 3}) == 'vet'
-    assert counts([{'impact': 'critical'}, {'atc': 'QA'}, {'substitution_group': '1', 'other_packages_count': 2}]) == {'substitute': 1, 'critical': 1, 'nogroup': 0, 'vet': 1}
+    assert counts([{'impact': 'no_alternative'}, {'atc': 'QA'}, {'substitution_group': '1', 'other_packages_count': 2}]) == {'substitute': 1, 'no_alternative': 1, 'nogroup': 0, 'vet': 1}
+    # The old name is read as the new one, and written next to it only by with_aliases.
+    assert counts([{'impact': 'critical'}]) == {'substitute': 0, 'no_alternative': 1, 'nogroup': 0, 'vet': 0}
+    assert with_aliases(counts([{'impact': 'critical'}])) == {'substitute': 0, 'no_alternative': 1, 'nogroup': 0, 'vet': 0, 'critical': 1}
 
 
 def test_medicine_names_drop_salts_but_keep_salts_that_are_the_substance():
@@ -102,11 +105,13 @@ def test_record_keeps_one_entry_per_snapshot_date(tmp_path, monkeypatch):
     monkeypatch.setattr(record_triage, 'register', lambda path, wanted, current: {'000001': {'substitution_group': '4', 'other_packages_count': 0, 'atc': 'N01'}, '000002': {'atc': 'QA01'}})
     monkeypatch.setattr(record_triage, 'register_date', lambda path: '2026-11-22')
     target = tmp_path / 'counts.json'
-    target.write_text(json.dumps({'counts': [{'date': '2026-11-21', 'total': 1}, {'date': '2026-11-22', 'total': 9}]}), encoding='utf-8')
+    target.write_text(json.dumps({'counts': [{'date': '2026-11-21', 'total': 1, 'critical': 5}, {'date': '2026-11-22', 'total': 9}]}), encoding='utf-8')
     record_triage.record(target, tmp_path / 'register.xml')
     data = json.loads(target.read_text(encoding='utf-8'))
     assert [c['date'] for c in data['counts']] == ['2026-11-21', '2026-11-22']
-    assert data['counts'][1] == {'date': '2026-11-22', 'register_date': '2026-11-22', 'total': 2, 'substitute': 0, 'critical': 1, 'nogroup': 0, 'vet': 1}
+    assert data['counts'][1] == {'date': '2026-11-22', 'register_date': '2026-11-22', 'total': 2, 'substitute': 0, 'no_alternative': 1, 'nogroup': 0, 'vet': 1, 'critical': 1}
+    # An entry saved under the old name gets the new key with the same value and keeps the old one.
+    assert data['counts'][0] == {'date': '2026-11-21', 'total': 1, 'no_alternative': 5, 'critical': 5}
     assert data['note']
 
 

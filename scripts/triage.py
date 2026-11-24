@@ -5,7 +5,8 @@ basic register:
 
 - `substitute`: the group has other packages that the register lists as on the market and not short,
   and that are not in the current shortage file. A pharmacy can usually offer one of them.
-- `critical`: the package has a group, but no other package in it is on the market without a shortage.
+- `no_alternative`: the package has a group, but no other package in it is on the market without a shortage.
+  (Named `critical` until the release that introduced `no_alternative`; `critical` is still read and written as an alias, see ALIASES.)
 - `nogroup`: the package has no substitution group, so a pharmacy cannot change it on its own.
 - `vet`: a veterinary medicine (ATC starting with Q). Substitution groups are for human medicines.
 
@@ -14,7 +15,9 @@ captures with today's group membership and the market dates the register gives f
 """
 from gaps import is_gap
 
-LEVELS = ('substitute', 'critical', 'nogroup', 'vet')
+LEVELS = ('substitute', 'no_alternative', 'nogroup', 'vet')
+# The old name of a level, still accepted when reading and still written next to the new key in counts. Remove after one release.
+ALIASES = {'critical': 'no_alternative'}
 MAX_NAMED_SUBSTANCES = 2
 # A group must be without alternatives in this many consecutive captures before it counts as newly critical,
 # and must have had an alternative in as many captures before, so a one-capture glitch does not make an event.
@@ -36,14 +39,20 @@ def level(e):
         return 'vet'
     if not e.get('substitution_group'):
         return 'nogroup'
-    return 'substitute' if e.get('other_packages_count', 0) > 0 else 'critical'
+    return 'substitute' if e.get('other_packages_count', 0) > 0 else 'no_alternative'
 
 
 def counts(current):
     out = dict.fromkeys(LEVELS, 0)
     for e in current:
-        out[e.get('impact') or level(e)] += 1
+        k = e.get('impact') or level(e)
+        out[ALIASES.get(k, k)] += 1
     return out
+
+
+def with_aliases(c):
+    """`counts` plus the old key for each renamed level, for the files that readers of the old name still use (summary.json, triage-counts.json)."""
+    return dict(c, **{old: c[new] for old, new in ALIASES.items()})
 
 
 def medicine_name(substances):

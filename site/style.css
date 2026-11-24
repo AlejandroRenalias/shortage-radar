@@ -228,9 +228,6 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .longest small{display:block;color:var(--muted);font-size:.9375rem}
 .duration{font-weight:400;white-space:nowrap;font-variant-numeric:tabular-nums}
 .big-note{font-size:1.1875rem;font-weight:400}
-.delay-bars{display:grid;gap:10px;margin:14px 0}
-.delay-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px}
-.delay-row svg{grid-column:1/-1;width:100%;height:10px;border-radius:5px}
 .how-count{margin-top:14px;padding:14px 16px;background:var(--mint);border-radius:12px}
 .examples{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .examples span{display:block;color:var(--muted);font-size:.9375rem}
@@ -239,8 +236,8 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 
 /* Space kept for content that arrives after the data loads, so the page does not jump */
 .pkg-list:has(#loading){min-height:1400px}
-#chart{min-height:300px}#rss-note{min-height:215px}#history-note{min-height:175px}#week{min-height:590px}#longest-list{min-height:820px}#atc{min-height:750px}#company{min-height:415px}#delay-headline{min-height:130px}#delay-visual{min-height:340px}#delay-note{min-height:200px}
-@media (min-width:760px){#chart{min-height:280px}#rss-note{min-height:100px}#history-note{min-height:90px}#week{min-height:0}#longest-list{min-height:620px}#atc{min-height:670px}#company{min-height:415px}#delay-headline{min-height:63px}#delay-visual{min-height:0}#delay-note{min-height:0}}
+#chart{min-height:300px}#rss-note{min-height:215px}#history-note{min-height:175px}#week{min-height:590px}#longest-list{min-height:820px}#atc{min-height:750px}#end-changes-text{min-height:170px}#end-changes-note{min-height:280px}
+@media (min-width:760px){#chart{min-height:280px}#rss-note{min-height:100px}#history-note{min-height:90px}#week{min-height:0}#longest-list{min-height:620px}#atc{min-height:670px}#end-changes-text{min-height:0}#end-changes-note{min-height:0}}
 
 /* About */
 .about-layout{display:grid;gap:20px;padding-bottom:32px}
@@ -275,7 +272,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 
 /* Impact: can the pharmacy give a substitute? Calm colours, and always an icon and words with them. */
 .impact-substitute{--lvl:var(--sub);--lvl-tint:var(--sub-tint);--lvl-line:var(--sub-line)}
-.impact-critical{--lvl:var(--crit);--lvl-tint:var(--crit-tint);--lvl-line:var(--crit-line)}
+.impact-critical,.impact-no_alternative{--lvl:var(--crit);--lvl-tint:var(--crit-tint);--lvl-line:var(--crit-line)}
 .impact-nogroup,.impact-vet{--lvl:var(--nog);--lvl-tint:var(--nog-tint);--lvl-line:var(--nog-line)}
 .impact{display:flex;align-items:flex-start;gap:var(--s2);margin:0;padding:var(--s3) var(--s4);background:var(--lvl-tint);border-top:1px solid var(--lvl-line);color:var(--text);font-size:.9375rem;font-weight:400;line-height:1.4}
 .impact .uicon{color:var(--lvl);margin-top:1px}
@@ -300,9 +297,9 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .tri-bar{grid-area:bar;display:block;width:100%;height:6px;border-radius:3px;margin-top:var(--s1)}
 .tri-bar .track{fill:var(--mint)}.tri-bar .part{fill:var(--lvl-bar)}
 .tri-substitute{--lvl:var(--sub);--lvl-bar:var(--sub);--lvl-line:var(--sub-line);--lvl-tint:var(--sub-tint)}
-.tri-critical{--lvl:var(--crit);--lvl-bar:var(--crit-bar);--lvl-line:var(--crit-line);--lvl-tint:var(--crit-tint);background:var(--crit-tint)}
+.tri-critical,.tri-no_alternative{--lvl:var(--crit);--lvl-bar:var(--crit-bar);--lvl-line:var(--crit-line);--lvl-tint:var(--crit-tint);background:var(--crit-tint)}
 .tri-nogroup{--lvl:var(--nog);--lvl-bar:var(--nog-bar);--lvl-line:var(--nog-line);--lvl-tint:var(--nog-tint)}
-.tri-critical .tri-bar .track{fill:#f3e4c2}
+.tri-critical .tri-bar .track,.tri-no_alternative .tri-bar .track{fill:#f3e4c2}
 .tri:hover{background:var(--lvl-tint);border-color:var(--lvl)}
 .tri-text strong{display:block;font-weight:500;font-size:1.0625rem;line-height:1.25}
 .tri-text span{display:block;color:var(--muted);font-size:.9375rem;line-height:1.35}

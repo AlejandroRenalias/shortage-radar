@@ -21,13 +21,13 @@ function factsMarkup() {
 }
 // Counts by impact level: from summary.json once it is loaded, else from the numbers built into the page.
 function impactCounts() {
-  if (data && data.impact) return data.impact;
+  if (data && data.impact) return Object.fromEntries(IMPACT_LEVELS.map(k => [k, impactCount(data.impact, k)]));
   const raw = ($('triage') && $('triage').dataset.impact) || '';
   return Object.fromEntries(raw.split(',').filter(Boolean).map(pair => { const [key, n] = pair.split(':'); return [key, Number(n) || 0]; }));
 }
 function triageMarkup(counts) {
-  const t = copy[language], levels = ['substitute', 'critical', 'nogroup'], total = levels.reduce((sum, k) => sum + (counts[k] || 0), 0) || 1;
-  return levels.map(k => `<li><a class="tri tri-${k}" href="shortages.html?impact=${k}">${uiIcon(k, 24)}<span class="tri-num">${numberText(counts[k] || 0)}</span><span class="tri-text"><strong>${esc(t['impact_' + k])}</strong><span>${esc(t['triageNote_' + k])}</span></span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon tri-go"')}<svg class="tri-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="track" width="100" height="6"/><rect class="part" width="${(100 * (counts[k] || 0) / total).toFixed(2)}" height="6"/></svg></a></li>`).join('');
+  const t = copy[language], levels = ['substitute', 'no_alternative', 'nogroup'], total = levels.reduce((sum, k) => sum + impactCount(counts, k), 0) || 1;
+  return levels.map(k => `<li><a class="tri tri-${k}" href="shortages.html?impact=${k}">${uiIcon(k, 24)}<span class="tri-num">${numberText(impactCount(counts, k))}</span><span class="tri-text"><strong>${esc(t['impact_' + k])}</strong><span>${esc(t['triageNote_' + k])}</span></span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon tri-go"')}<svg class="tri-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="track" width="100" height="6"/><rect class="part" width="${(100 * impactCount(counts, k) / total).toFixed(2)}" height="6"/></svg></a></li>`).join('');
 }
 function renderHome() {
   const t = copy[language], hero = $('hero-line'), now = todayUTC();
