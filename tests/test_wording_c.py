@@ -14,7 +14,7 @@ from pages import render_pages
 
 ROOT = Path(__file__).resolve().parents[1]
 JS = (ROOT / 'site/i18n.js').read_text(encoding='utf-8')
-OLD = ('Expected to become unavailable on', 'Fimea file changed', 'Fimean tiedosto muuttui', 'Later than estimated', 'Report date', 'None today',
+OLD = ('Expected to become unavailable on', 'Fimea file changed', 'Fimean tiedosto muuttui', 'Later than estimated', 'Report date', 'None today', 'No notice on Fimea’s list today',
        'A pharmacist or doctor decides what you take', 'for a while', 'vähään aikaan', 'häiriöiseksi', 'suosittele', 'Notified</dt>')
 
 
@@ -50,11 +50,19 @@ def test_eu_pages_explain_critical_and_have_a_finnish_block():
         assert re.findall(key + r': "([^"]+)"', JS)[1] in FI_EXPLAINED
 
 
-def test_code_page_without_a_notice_does_not_read_as_no_shortage():
+def test_code_page_without_a_notice_names_the_capture_not_today():
     out = eu_pages()
-    empty = next(p for n, p in out.items() if n.startswith('critical-A') and 'No notice on Fimea’s list today' in p)
-    assert 'This does not show stock.' in empty and 'Fimean listalla ei ole tänään ilmoitusta' in empty
-    assert 'None today' not in empty and 'Fimea lists no shortage for this code' not in empty
+    empty = next(p for n, p in out.items() if n.startswith('critical-A') and 'No notice matched in the latest capture' in p)
+    assert 'Capture of 23 Nov 2026. This does not show stock.' in empty and 'No notice was matched to this code in the latest capture (23 Nov 2026).' in empty
+    assert 'Viimeisimmässä tilannekuvassa (23.11.2026) tähän koodiin ei yhdistetty Fimean ilmoitusta. Tämä ei kerro varastosta.' in empty
+    for old in ('None today', 'No notice on Fimea’s list today', 'on Fimea’s list today', 'tänään', 'Fimea lists no shortage', 'Status today', 'notices today'):
+        assert old not in empty, old
+
+
+def test_methods_page_explains_critical_in_english_and_finnish():
+    methods = eu_pages()['critical-methods.html']
+    assert 'The EU list names medicines whose continuous supply the EU treats as a priority. It does not rate how serious a shortage is for you.' in methods
+    assert FI_EXPLAINED in methods
 
 
 def test_date_labels_are_the_same_everywhere():

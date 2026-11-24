@@ -316,6 +316,9 @@ function pastRow(e, level = 3) {
 
 // ---- Package card: the shelf label. Status tab, pictogram, name, strength and pack, form and group, dates.
 const daysBetween = (from, to) => Math.floor((to - from) / DAY);
+// "Still listed after the estimate" needs a capture of the notice after the estimate date; the browser date alone only shows that the date has passed.
+const listedAfterEstimate = e => Boolean(e.EndingDate && e.last_seen && e.last_seen > e.EndingDate);
+const lateText = (e, t) => listedAfterEstimate(e) ? t.late : t.estimatePassed;
 // `medicine` is true for the lists that open a search result: the card then opens the medicine page when there is one.
 function pkgCard(e, now = todayUTC(), level = 3, medicine = false) {
   const t = copy[language], start = parsedDate(e.UnavailableFrom), end = parsedDate(e.EndingDate), status = statusOf(e, now);
@@ -327,7 +330,7 @@ function pkgCard(e, now = todayUTC(), level = 3, medicine = false) {
     + (spec.length ? `<p class="form pkg-spec">${spec.map(x => `<span>${esc(x)}</span>`).join(' ')}</p>` : '')
     + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<dl class="pkg-dates"><div><dt>${esc(status === 'soon' ? t.startsLabel : t.fromLabel)}</dt><dd>${esc(dateText(e.UnavailableFrom))}${startNote ? `<small>${esc(startNote)}</small>` : ''}</dd></div>`
-    + `<div><dt>${esc(t.backLabel)}</dt><dd>${end ? esc(dateText(e.EndingDate)) : esc(t.notKnown)}${late ? `<small class="late">${esc(t.late)}</small>` : ''}</dd></div></dl>`
+    + `<div><dt>${esc(t.backLabel)}</dt><dd>${end ? esc(dateText(e.EndingDate)) : esc(t.notKnown)}${late ? `<small class="late">${esc(lateText(e, t))}</small>` : ''}</dd></div></dl>`
     + (e.removed_on ? '' : impactBadge(e)) + '</article>';
 }
 
@@ -378,7 +381,7 @@ function timelineMarkup(e, archive, opts = {}) {
     // The connector before a marker is solid when that stretch has happened, dashed when it is still ahead.
     const base = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : `seg-done seg-${tone}`;
     const seg = base && base !== 'seg-ahead' && unknownBetween(prev, key) ? 'seg-unknown' : base;
-    return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(t.late)}</small>` : ''}</li>`;
+    return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(lateText(e, t))}</small>` : ''}</li>`;
   }).join('');
   const range = archive || (e.gaps && e.gaps.length) ? `<p class="note">${esc(captureSentences(e, t).join(' '))}</p>` : '';
   const h = opts.level || 3, earlier = model.earlier.length ? `<div class="tl-earlier"><h${h}>${esc(t.tlEarlier)}</h${h}>${opts.bare ? '' : `<p>${esc(t.tlEarlierNote)}</p>`}<ul>${model.earlier.map(x => `<li><span class="tl-date">${esc(dateText(x.date))}</span><small>${esc(t.tlSeen(dateText(x.seen)))}</small></li>`).join('')}${model.hasEnd ? `<li class="is-now"><span class="tl-date">${esc(dateText(e.EndingDate))}</span><small>${esc(t.tlCurrent)}</small></li>` : ''}</ul></div>` : '';

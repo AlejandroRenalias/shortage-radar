@@ -364,7 +364,7 @@ def build():
               'newly_critical': critical, 'triage_counts': read_triage_counts()}
     output['generated_at'] = shard_meta['generated_at']
     output['last_checked'] = shard_meta['last_checked']
-    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact (Shortage Radar reading)', 'source credit']
+    csv_columns = ['VNR', 'current VNR', 'name', 'strength', 'form', 'pack', 'active substances', 'ATC', 'company', 'start date', 'estimated end date', 'notification date', 'veterinary', 'other packages on market', 'substitution group', 'impact', 'source credit']
     with (ROOT / 'site/shortages.csv').open('w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(csv_columns)

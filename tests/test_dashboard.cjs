@@ -141,7 +141,14 @@ test('cards link to the medicine page, with labelled dates and a structured name
   assert.doesNotMatch(html, / · /);
   setLanguage(context, 'en');
   assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-12-01', atc:'B01'}, NOW), /Starting soon[\s\S]*<dt>Starts<\/dt><dd>1 Dec 2026<small>in 10 days<\/small>/);
-  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-01', atc:'B01'}, NOW), /<small class="late">Still listed after the company’s estimate<\/small>/);
+  assert.match(context.pkgCard({name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-01', last_seen:'2026-11-20', atc:'B01'}, NOW), /<small class="late">Still listed after the company’s estimate<\/small>/);
+  // No capture after the estimate: the badge says only that the date has passed, in both languages.
+  const unseen = {name:'Test', UnavailableFrom:'2026-10-01', EndingDate:'2026-11-25', last_seen:'2026-11-24', atc:'B01'}, laterNow = Date.UTC(2026, 10, 29);
+  assert.match(context.pkgCard(unseen, laterNow), /<small class="late">The estimate date has passed<\/small>/); assert.doesNotMatch(context.pkgCard(unseen, laterNow), /Still listed/);
+  assert.match(context.pkgCard({...unseen, last_seen:'2026-11-25'}, laterNow), /The estimate date has passed/);
+  setLanguage(context, 'fi');
+  assert.match(context.pkgCard(unseen, laterNow), /<small class="late">Arviopäivä on ohi<\/small>/); assert.doesNotMatch(context.pkgCard(unseen, laterNow), /Yhä listalla/);
+  setLanguage(context, 'en');
   assert.match(context.pkgCard({name:'T', atc:'Q02'}, NOW), /<span class="vet">Veterinary<\/span>/);
 });
 
@@ -815,9 +822,11 @@ test('the timeline is one track in time order with evenly spaced markers and the
   vm.runInContext("language='en'", env);
   const now = env.todayUTC(), day = n => new Date(now + n * 86400000).toISOString().slice(0, 10);
   const order = html => Array.from(html.matchAll(/class="tl-item tl-(\w+)/g)).map(m => m[1]);
-  const late = env.timelineMarkup({UnavailableFrom:day(-40), EndingDate:day(-5)}, false);
+  const late = env.timelineMarkup({UnavailableFrom:day(-40), EndingDate:day(-5), last_seen:day(-1)}, false);
   assert.deepEqual(order(late), ['start', 'end', 'today']);
   assert.match(late, /tl-end seg-done seg-late is-late/); assert.match(late, /tl-today seg-over/); assert.match(late, /Still listed after the company’s estimate/); assert.doesNotMatch(late, /<svg/);
+  const unseen = env.timelineMarkup({UnavailableFrom:day(-40), EndingDate:day(-5), last_seen:day(-6)}, false);
+  assert.match(unseen, /is-late/); assert.match(unseen, /The estimate date has passed/); assert.doesNotMatch(unseen, /Still listed after/);
   const ongoing = env.timelineMarkup({UnavailableFrom:day(-10), EndingDate:day(20)}, false);
   assert.deepEqual(order(ongoing), ['start', 'today', 'end']); assert.match(ongoing, /tl-end seg-ahead/);
   const soon = env.timelineMarkup({UnavailableFrom:day(5), EndingDate:day(30)}, false);
