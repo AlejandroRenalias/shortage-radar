@@ -34,7 +34,8 @@ def fimea_credit(sources):
     modified = lambda key: f"file modification time {sources[key]} (HTTP Last-Modified)" if sources.get(key) else 'file modification time not recorded'
     return (f"Shortages: Finnish Medicines Agency Fimea, file Shortages.txt (also published as Saatavuushairiot.txt), {modified('shortages_last_modified')}. "
             f"Register: Fimea, file {sources.get('register_file') or 'Perusrekisteri (year not recorded)'}, {modified('register_last_modified')}. "
-            f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; Fimea does not endorse the result.")
+            f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; Fimea does not endorse the result. "
+            "The impact column or field is Shortage Radar's own reading of Fimea's files, not a Fimea field.")
 
 
 def week_file(week, metadata):

@@ -9,11 +9,21 @@ import critical_charts as charts
 from changes import date_text
 from gaps import MAX_GAP_DAYS
 from critical import STATUS_NAMES, TYPE_NAMES, TYPES, credit
-from pages import SITE_URL, document
+from pages import IMPACT_NAMES, SITE_URL, document
 
 E = lambda value: escape(str(value if value is not None else ''), quote=True)
 D = lambda value: date_text(value, 'en') or 'not given'
 FIMEA_LICENCE = 'https://fimea.fi/en/about_us/open-data'
+EU_TITLE = 'EU critical medicines list: shortages in Finland'
+EU_EXPLAINED = ('The EU list names medicines whose continuous supply the EU treats as a priority. It does not rate how serious a shortage is for you. '
+                f'It is not the same as this site’s label ‘{IMPACT_NAMES["substitute"]}’ / ‘{IMPACT_NAMES["no_alternative"]}’.')
+# Finnish block at the top of every EU page (the pages are English only). The two label names are the Finnish impact labels of site/i18n.js.
+FI_NOTE = ('Nämä sivut ovat englanniksi. Tämä ei ole lääketieteellinen neuvo. Listalla oleminen ei kerro, onko lääkettä apteekissasi. '
+           'Kysy apteekista tai lääkäriltä.')
+FI_TITLE = 'EU:n kriittisten lääkkeiden luettelo: saatavuushäiriöt Suomessa'
+FI_EXPLAINED = ('EU:n luettelossa ovat lääkkeet, joiden jatkuvaa saatavuutta EU pitää ensisijaisen tärkeänä. Luettelo ei kerro, kuinka vakava häiriö on sinulle, '
+                'eikä se ole sama asia kuin tämän sivuston merkintä ”Vaihtokelpoinen pakkaus löytyy aineistosta” / ”Aineistosta ei löydy vaihtokelpoista pakkausta”.')
+FI_NO_NOTICE = lambda day: f'Viimeisimmässä tilannekuvassa ({day}) tähän koodiin ei yhdistetty Fimean ilmoitusta. Tämä ei kerro varastosta.'
 EMA_NOTICE = 'https://www.ema.europa.eu/en/about-us/legal-notice'
 EMA_LIST = 'https://www.ema.europa.eu/en/human-regulatory-overview/post-authorisation/medicine-shortages-availability-issues/availability-medicines-during-crises/union-list-critical-medicines'
 TYPE_EXPLAINED = {
@@ -58,9 +68,16 @@ def notice_row(r):
     product = ', '.join(r.get('product_routes') or []) or 'not given'
     route = '<dt>Route</dt><dd>not known</dd>' if r['match_type'] == 'unmatched' else f'<dt>Product route</dt><dd>{E(product)}</dd><dt>List route</dt><dd>{E(r.get("list_route") or "—")}</dd>'
     tag = '' if r['match_type'] == 'unmatched' else f'<span class="eu-route-line">{charts.route_label(r.get("product_routes"))}</span>'
-    more = (f'<details class="eu-fold eu-row-more"><summary>Details</summary><p class="note">{E(r["note"])}</p><dl class="eu-facts"><dt>Company</dt><dd>{E(r.get("company", ""))}</dd><dt class="eu-atc-fact">ATC code</dt><dd class="eu-atc-fact">{atc}</dd><dt>Start</dt><dd>{E(D(r["start"]))}</dd>{route}<dt>VNR</dt><dd>{E(r["vnr"])}</dd></dl></details>')
+    more = (f'<details class="eu-fold eu-row-more"><summary>Details</summary><p class="note">{E(r["note"])}</p><dl class="eu-facts"><dt>Company</dt><dd>{E(r.get("company", ""))}</dd><dt class="eu-atc-fact">ATC code</dt><dd class="eu-atc-fact">{atc}</dd><dt>Reported start</dt><dd>{E(D(r["start"]))}</dd>{route}<dt>VNR</dt><dd>{E(r["vnr"])}</dd></dl></details>')
     return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}"><td data-label="Medicine">{name_cell(r)}{tag}{more}</td>'
             f'<td data-label="ATC code" class="eu-col-atc">{atc}</td><td data-label="Match">{chip(r["match_type"])}</td><td data-label="Status">{status_cell(r)}</td><td data-label="Estimated end"><span class="eu-end">{E(D(r.get("end")))}</span></td></tr>')
+
+
+def fi_block(explained=False, extra=''):
+    """The short Finnish block at the top of an EU page. `explained` adds the Finnish title and the sentence about what the EU list is."""
+    more = f'<p><strong>{FI_TITLE}.</strong> {FI_EXPLAINED}</p>' if explained else ''
+    extra = f'<p>{extra}</p>' if extra else ''
+    return f'<div class="wrap"><div class="eu-fi" lang="fi"><p><strong>{FI_NOTE.split(". ")[0]}.</strong> {FI_NOTE.split(". ", 1)[1]}</p>{more}{extra}</div></div>'
 
 
 def downloads():
@@ -132,8 +149,10 @@ def critical_page(data):
         f'<li><a href="{code_file(a)}"><span class="eu-code">{E(a)}</span> {E(row["description"].title())}</a>'
         + (f' <span class="note">{data["history"][a]["count"]:,} in archive</span>' if a in data['history'] else '') + '</li>'
         for a, row in sorted(data['eu']['rows'].items()))
-    body = f'''<div class="wrap page-head eu-head"><div><h1>Critical medicines in Finland</h1>
-<p class="lead">Medicines on the EU critical list (version {E(meta['version'])}) that Fimea lists as short in Finland.</p></div>{charts.hero_art()}</div>
+    body = f'''<div class="wrap page-head eu-head"><div><h1>{E(EU_TITLE)}</h1>
+<p class="lead">Medicines on the EU critical list (version {E(meta['version'])}) that Fimea lists as short in Finland.</p>
+<p class="note eu-explained">{E(EU_EXPLAINED)}</p></div>{charts.hero_art()}</div>
+{fi_block(True)}
 <section class="wrap" aria-labelledby="eu-counts-title"><h2 id="eu-counts-title" class="eu-counts-title">Ongoing packages by match</h2>
 <ul class="eu-tiles">{tiles}</ul>
 {notes}
@@ -147,7 +166,7 @@ def critical_page(data):
 <nav class="eu-pager needs-js" id="eu-pager" aria-label="Pages of shortage packages" hidden></nav></section>
 <section class="wrap eu-more" aria-labelledby="eu-dl-title"><h2 id="eu-dl-title">Download</h2>{downloads()}
 <details class="eu-fold"><summary>All {len(data['eu']['rows'])} codes on the EU list</summary><ul class="eu-codes">{codes}</ul></details></section>'''
-    return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['critical'], 'Critical medicines in Finland | Shortage Radar',
+    return document('critical', f'<div lang="en">{body}</div>', meta=meta_for(FILE['critical'], EU_TITLE + ' | Shortage Radar',
                     'Medicines on the EU Union list of critical medicines that Fimea lists as short in Finland, matched by ATC code and route.', 'critical.js'))
 
 
@@ -205,19 +224,19 @@ def history_block(code, h, archive_start, snapshot_date):
     return ''.join(lines)
 
 
-def summary_tiles(code, row, notices, h):
+def summary_tiles(code, row, notices, h, snapshot_date):
     ongoing = sum(1 for r in notices if r['status'] == 'ongoing')
     later = len(notices) - ongoing
     if notices:
         status = f'{ongoing:,} ongoing' if ongoing else 'None ongoing'
         sub = f'{later:,} start later' if later else ''
         dates = [r['notified'] for r in notices if r.get('notified')]
-        last_date, last_sub = (max(dates) if dates else None), 'Notified by the company'
+        last_date, last_sub = (max(dates) if dates else None), 'Notification date'
     else:
-        status, sub = 'None today', 'Fimea lists no shortage for this code'
+        status, sub = 'No notice matched in the latest capture', f'Capture of {D(snapshot_date)}. This does not show stock.'
         last_date, last_sub = max((n['last_seen'] for n in (h or {}).get('notices', []) if n.get('last_seen')), default=None), 'Last seen in our archive'
     return ''.join((tile(E(row['description'].title()), 'Substance', f'ATC code {E(code)}', True),
-                    tile(status, 'Status today', sub),
+                    tile(status, 'Status in the latest capture', sub, small=not notices),
                     tile(E(D(last_date)) if last_date else 'None', 'Last notice', last_sub if last_date else 'None in our archive')))
 
 
@@ -229,15 +248,17 @@ def code_page(code, row, data):
         f'<li class="eu-card"><div class="eu-card-head"><div>{name_cell(r)}</div>{chip(r["match_type"])}</div><p class="eu-step-line">{E(STATUS_NAMES[r["status"]])} · {E(r["company"])} · {charts.route_label(r["product_routes"])}</p>'
         f'<details class="eu-fold"><summary>Details</summary><p class="note">{E(r["note"])}</p>'
         f'<dl class="eu-facts"><dt>Reported start</dt><dd>{E(D(r["start"]))}</dd><dt>Estimated end</dt><dd>{E(D(r["end"]))}</dd>'
-        f'<dt>Notified</dt><dd>{E(D(r["notified"]))}</dd><dt>VNR</dt><dd>{E(r["vnr"])}</dd><dt>Product route</dt><dd>{E(", ".join(r["product_routes"]) or "not given")}</dd></dl></details></li>'
+        f'<dt>Notification date</dt><dd>{E(D(r["notified"]))}</dd><dt>VNR</dt><dd>{E(r["vnr"])}</dd><dt>Product route</dt><dd>{E(", ".join(r["product_routes"]) or "not given")}</dd></dl></details></li>'
         for r in notices)
-    current = f'<ul class="eu-cards">{current}</ul>' if current else '<p>Fimea lists no shortage package with this code today.</p>'
+    current = f'<ul class="eu-cards">{current}</ul>' if current else f'<p>No notice was matched to this code in the latest capture ({E(D(data["snapshot_date"]))}). This does not show stock.</p>'
     title = f'{row["description"].title()} ({code})'
-    body = f'''<div class="wrap page-head"><p class="note"><a href="{FILE['critical']}">Critical medicines in Finland</a></p><h1>{E(title)}</h1>
-<p class="lead">ATC code {E(code)} is on the EU critical list, version {E(meta['version'])}.</p></div>
+    body = f'''<div class="wrap page-head"><p class="note"><a href="{FILE['critical']}">{E(EU_TITLE)}</a></p><h1>{E(title)}</h1>
+<p class="lead">ATC code {E(code)} is on the EU critical list, version {E(meta['version'])}.</p>
+<p class="note eu-explained">{E(EU_EXPLAINED)}</p></div>
+{fi_block(True, "" if notices else FI_NO_NOTICE(date_text(data["snapshot_date"], "fi")))}
 <div class="wrap eu-code-page">
-<ul class="eu-tiles">{summary_tiles(code, row, notices, h)}</ul>
-<section aria-labelledby="h-now"><h2 id="h-now">Fimea notices today</h2>{current}</section>
+<ul class="eu-tiles">{summary_tiles(code, row, notices, h, data['snapshot_date'])}</ul>
+<section aria-labelledby="h-now"><h2 id="h-now">Fimea notices in the latest capture</h2>{current}</section>
 <section aria-labelledby="h-history"><h2 id="h-history">History</h2>{history_block(code, h, data['archive_start'], data['snapshot_date'])}</section>
 <section aria-labelledby="h-list"><h2 id="h-list" class="sr-only">EU list row</h2><details class="eu-fold"><summary>EU list row</summary>
 <dl class="eu-facts"><dt>ATC code</dt><dd>{E(code)}</dd><dt>Substance on the list</dt><dd>{E(row['description'])}</dd><dt>Routes on the list</dt><dd>{E(row['route'])}</dd>
@@ -262,8 +283,10 @@ def methods_page(data):
     ]
     type_items = ''.join(f'<li><strong>{E(TYPE_NAMES[t])}.</strong> {E(TYPE_EXPLAINED[t])}</li>' for t in TYPES)
     check_rows = ''.join(f'<tr><td data-label="Package">{E(n)}</td><td data-label="VNR">{v}</td><td data-label="Result">{E(t)}</td><td data-label="Why">{E(w)}</td></tr>' for n, v, t, w in checks)
-    body = f'''<div class="wrap page-head"><p class="note"><a href="{FILE['critical']}">Critical medicines in Finland</a></p><h1>How the critical medicines match works</h1>
-<p class="lead">Which sources we use, how a shortage is matched to the EU list, and what the match cannot tell you.</p></div>
+    body = f'''<div class="wrap page-head"><p class="note"><a href="{FILE['critical']}">{E(EU_TITLE)}</a></p><h1>How the critical medicines match works</h1>
+<p class="lead">Which sources we use, how a shortage is matched to the EU list, and what the match cannot tell you.</p>
+<p class="note eu-explained">{E(EU_EXPLAINED)}</p></div>
+{fi_block(True)}
 <div class="wrap about-layout"><div class="prose">
 <section id="sources"><h2>Sources</h2><ul class="steps">
 <li><strong>EU list.</strong> <a href="{EMA_LIST}">Union list of critical medicines</a>, European Medicines Agency (EMA) and the Heads of Medicines Agencies. We use version {E(meta['version'])} ({E(meta['reference'])}, {E(D(meta['published']))}) and keep it fixed. It has {len(data['eu']['rows'])} rows, one for each ATC level 5 code. The route text of a row can name several routes. The file has no dosage form column. We keep the sheet row of each entry.</li>
