@@ -16,15 +16,23 @@ SUBSTANCES = {'a': {'id': '1', 'name': 'Substance A'}, 'b': {'id': '2', 'name': 
 
 def pkg(vnr, subs='a', strength='20 mg', form=('235', 'tablet'), routes=(('1055', 'Suun kautta'),), group='100', name='Medicine', product=None,
         authorisation=None, eu='', atc='N01AA01', market='1', entry='2020-01-01', exit_='', old=(), vet=False, device=None, import_=False, distribution=False,
-        biological=False, licensed=True, amounts=None):
+        biological=False, licensed=True, amounts=None, container=..., pack='', pack_size=None, pack_unit='ml', pack_factor=''):
     """A register package. `amounts` is {substance key: (amount, unit)}; by default every substance has 10 mg."""
     amounts = amounts or {s: ('10', 'mg') for s in subs}
+    # An injectable or device form gets a vial-like container and a verified unit size unless the test says otherwise.
+    bearing = any(w in form[1] for w in ('inj', 'infuus', 'kynä', 'ruisku'))
+    if container is ...:
+        container = ['4', 'Injektiopullo'] if bearing else None
+    if pack_size is None:
+        pack_size = '3' if bearing else ''
+        pack = pack or ('5 x 3 ml' if bearing else '')
     return {
         'vnr': vnr, 'old': list(old), 'product': product or f'REL{vnr}', 'name': name, 'atc': atc, 'strength': strength, 'form_id': form[0], 'form': form[1],
         'routes': list(routes), 'substitution_group': group, 'vet': vet, 'target_species': [], 'biological': biological, 'plasma': False, 'licensed': licensed,
         'authorisation': authorisation if authorisation is not None else f'AUTH{vnr}', 'eu_authorisation': eu, 'holder': 'Holder',
         'parallel_import': '1' if import_ else '0', 'parallel_distribution': '1' if distribution else '0',
-        'market': market, 'entry': entry, 'exit': exit_, 'shortage_flag': '0', 'pack': '', 'unit': '', 'device': device,
+        'market': market, 'entry': entry, 'exit': exit_, 'shortage_flag': '0', 'pack': pack, 'unit': '', 'device': device,
+        'container': container, 'pack_count': '5', 'pack_size': pack_size, 'pack_unit': pack_unit, 'pack_factor': pack_factor,
         'substances': [SUBSTANCES[s] for s in subs],
         'amounts': [{'id': SUBSTANCES[s]['id'], 'name': SUBSTANCES[s]['name'], 'amount': a, 'unit': u, 'min': '', 'max': '', 'per': '', 'as_id': ''} for s, (a, u) in amounts.items()],
     }
@@ -133,16 +141,19 @@ def test_composition_is_verified_across_pack_sizes_and_units_and_incomplete_data
 
 
 # Review 3: Liprolog KwikPen 517586 and Junior KwikPen 544210 have no device id; the EMA shows other dose steps.
-def test_device_bearing_presentations_of_two_product_records_need_a_device_id():
+def test_device_bearing_presentations_without_a_device_id_stay_package_only():
     pen = ('462', 'injektioneste, liuos, esitäytetty kynä')
     one_pen, other_pen = pkg('1', form=pen, eu='EU/1/01/1/001'), pkg('2', form=pen, eu='EU/1/01/1/002')
     assert 'device_not_verified' in one(one_pen, other_pen, day=DAY)['unsure_reasons']
+    # Also inside one product record: an unknown device variant is not verified by the register.
+    assert one(pkg('1', form=pen, product='R'), pkg('2', form=pen, product='R'), day=DAY)['unsure_reasons'] == ['device_not_verified']
     with_device = [dict(p, device=['5', 'Kynä']) for p in (one_pen, other_pen)]
     assert not one(*with_device, day=DAY)['unsure']
-    # One product record is one presentation.
-    assert not one(pkg('1', form=pen, product='R'), pkg('2', form=pen, product='R'), day=DAY)['unsure']
-    # A plain tablet needs no device id.
+    # A plain tablet needs no device id, and neither does a single-dose eye drop: the word "dose" alone names no device.
     assert not one(pkg('1'), pkg('2'), day=DAY)['unsure']
+    drops = ('9', 'silmätipat, liuos, kerta-annospakkaus')
+    eye = (('7', 'Silmään'),)
+    assert not one(pkg('1', form=drops, routes=eye, product='R'), pkg('2', form=drops, routes=eye, product='R'), day=DAY)['unsure']
 
 
 # Review 4: Rybelsus 130247 and parallel-distributed Wegovy 074190 (and the 4 mg versions) have different EU licences.

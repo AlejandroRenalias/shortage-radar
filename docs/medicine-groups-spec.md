@@ -17,7 +17,7 @@ These rules bind every page built from a group.
 
 ## Data
 
-Fimea's basic register (`Perusrekisteri`), in the form `scripts/build.py` reads. The shortage file only decides which groups are "in the current shortage". The audit day is the register's run date (`Ajopvm`). `data/audit/summary.json` records the names, dates, sizes and SHA-256 of the register and of the shortage file used, and the SHA-256 of `groups.json`. The register file is 225 MB and is not in the repository; `scripts/fetch_register.py` downloads it.
+Fimea's basic register (`Perusrekisteri`), in the form `scripts/build.py` reads. The shortage file only decides which groups are "in the current shortage". The audit day is the register's run date (`Ajopvm`). The pair used is matched: register run date 2026-11-24 and the shortage capture 2026-11-24 (Fimea file time Mon, 23 Nov 2026 23:20:01 GMT). `data/audit/summary.json` records the names, dates, sizes and SHA-256 of the register and of the shortage file used, and the SHA-256 of `groups.json`. The register file is 225 MB and is not in the repository; `scripts/fetch_register.py` downloads it.
 
 ## The rule
 
@@ -32,12 +32,21 @@ Two register packages (packages with a VNR) are in one group when all of these a
 | Route | `Antoreitti` | The whole set of route ids. |
 | ATC code | `ATC-koodi` | The full code. |
 | Device | `Annostelulaite` of the package | The device id, or none. |
+| Presentation (injectable and device-bearing forms only) | `Sailytysastia` (immediate container) and `Pakkauskoko` with its unit | The container id and the size of **one unit**: one vial, ampoule, syringe, pen, cartridge or bag. See below. |
 
-Not inputs: brand name, holder, pack size and text, VNR, and the register's substitution group code.
+Not inputs: brand name, holder, pack count, total pack volume, pack text, VNR, and the register's substitution group code. A box, a blister, a jar or a tube of a form that is not injectable or device-bearing is not a difference of presentation.
 
 **The strength text is text.** The register does not say which part of `8 mg / 2.5 mg` belongs to which substance. For Caninda (110560, 450435) the text lists 8 mg first, but the register's composition gives 8 mg to candesartan cilexetil and 2.5 mg to indapamide, and the audit lists the substances in register id order, with indapamide first. The audit therefore prints the strength text beside the substance list and states that it is not mapped. A page may show strengths per component only after a verified mapping from the register composition on one basis. The first release does not.
 
-**Strength comes from `Vahvuus`, not from the amounts in `Laakeaine`.** Those amounts are totals for the package (2 g of fluconazole in a 100 ml bag), are often empty, and are written in different units. They are used only for the composition check below.
+**Strength comes from `Vahvuus`, not from the amounts in `Laakeaine`.** The basis of `Maara` in `Laakeaine` depends on the source. It is sometimes a total for the package (2 g of fluconazole in a 100 ml bag), sometimes not: Trexan pre-filled syringes of 0.3 ml and of 1.0 ml (562071, 456852) both give 25 mg. The amounts are often empty and are written in different units. They are never read as a per-unit strength, and a per-unit strength is never inferred from them. They are used only for the ratio check below.
+
+### Presentation: container and size of one unit
+
+Equal `Vahvuus` does not mean one presentation. Trexan group m4091940612e4 gave one strength text (25 mg/ml) and one product record to pre-filled syringes of 0.3, 0.4, 0.6, 0.8 and 1.0 ml; 562071 holds 7.5 mg per syringe and 456852 holds 25 mg (Fimea SmPC section 6). Celeston Chronodose 433078 is a 5 ml vial and 473507 is a 5 x 1 ml pack of ampoules.
+
+For injectable forms (injection or infusion) and for device-bearing forms, the immediate container (`Sailytysastia`) and the size of one unit are rule inputs. The size of one unit is verified only when the register's pack text and its `Pakkauskoko` fields say the same: `5 x 1 ml` with size 1 and unit ml is a unit of 1 ml; the count in the text is dropped. A pack text that the fields do not explain (`4 x 5 ml` with size 1 and unit `kpl`, `10 x 6 x 1 ml`, `100 mg + 2 ml`), a pack with an extra pack factor, or a missing container is not verified and gives `presentation_not_verified`: the packages stay on package pages. The pack count and the total volume are never used.
+
+A form is **device-bearing** when its name mentions a pre-filled pen or syringe, a cartridge, an injector, an inhaler or a spray (`esitäyt`, `kynä`, `ruisku`, `injektori`, `sylinteri`, `inhalaat`, `sumut`, `laite`), or when the package has a device id. The word "dose" alone (single-dose eye drops, `annosteltu` powders) names no device. A device-bearing package with no device id is an unknown device variant, and nothing independent in the register says it is the same variant as another. It gives `device_not_verified`, in a group of one product record as well as in a cross-product group. Only a device id in the register lifts it. The first release keeps these on package pages.
 
 ### One product record, or several
 
@@ -46,12 +55,12 @@ A register product record (`Laakevalmiste`) is the unit Fimea describes: a name,
 1. Every product has an authorisation identity: the EU number without its pack suffix (`EU-lupanumero`, for example `EU/1/99/119`), else the national number (`Lupanumero`). Both are read. A blank identity gives `authorisation_identity_missing`.
 2. The current members have one register substitution code and every one of them has it (`register_group_disagrees`, `several_products_no_register_group`). The code is read for current members only: packages on the market on the register day or in the shortage file.
 3. No member is biological or plasma-derived (`biological_several_products`). The audit has no list of biosimilars.
-4. A device-bearing presentation has a device id on every member (`device_not_verified`). A form is device-bearing when its text names a pen, syringe, cartridge, injector, inhaler, spray or dose (`esitäyt`, `kynä`, `ruisku`, `injektori`, `sylinteri`, `inhalaat`, `sumut`, `annos`, `laite`) or when a package has a device. Liprolog KwikPen (517586) and Liprolog Junior KwikPen (544210) have no device id and are different product records, so they are not joined, also under one EU licence.
+4. Every device-bearing member has a device id (`device_not_verified`, see Presentation). Liprolog KwikPen (517586) and Liprolog Junior KwikPen (544210) have no device id and are different product records, so they are not joined, also under one EU licence.
 5. The composition check passes (next section).
 
 ### Composition check
 
-Equal substances and equal strength text can hide other concentrations. Physioneal 35 and 40 Clear-Flex (016129 against 016111 and 016194) have the same glucose per ml and different calcium and lactate. The audit compares the amounts in `Laakeaine` independently of the strength text. Because the amounts are package totals, each amount is divided by the amount of the first substance (by register id); a pack of another size keeps its ratios. Mass units (g, mg, mikrog) are put in mg. Ratios may differ by 2 % (register rounding).
+Equal substances and equal strength text can hide other concentrations. Physioneal 35 and 40 Clear-Flex (016129 against 016111 and 016194) have the same glucose per ml and different calcium and lactate. The audit compares the amounts in `Laakeaine` independently of the strength text. Because the basis of the amounts depends on the source, only the ratios inside one package are compared: each amount is divided by the amount of the first substance (by register id). Mass units (g, mg, mikrog) are put in mg. Ratios may differ by 2 % (register rounding).
 
 Result per group with more than one package and more than one substance: `verified`, `differs`, `incomplete` (an amount is empty or a range, units cannot be compared, an "expressed as" substance is given, or a substance is listed twice) or `not_applicable`.
 
@@ -73,9 +82,10 @@ Each of these gives two groups, even when the register's substitution group puts
 - Strengths written in other units (`500 mikrog` and `0.5 mg`). The audit does not look for these pairs. This is the one place where a group can be smaller than it needs to be.
 - Human and veterinary products.
 - Products from different product records unless the register backs them as above.
+- Injectables in other immediate containers (vial and ampoule) or with another size of one unit, and device-bearing packages without a device id.
 - A parallel import that is not linked by an EU number.
 
-The register's substitution groups are wider. On 23 Nov 2026, 541 of its 1685 group codes contain more than one medicine group: they differ in substance (131 codes), form (146), device (60), strength text (56) and route (38).
+The register's substitution groups are wider. On 23 Nov 2026, 612 of its 1685 group codes contain more than one medicine group: they differ in substance (131 codes), form (146), presentation (153), device (60), strength text (56) and route (38).
 
 ## Unsure: no medicine page
 
@@ -94,22 +104,25 @@ A group can have several reasons. The package pages stay.
 | `several_products_no_register_group` | More than one current product record and no register code. |
 | `biological_several_products` | A biological or plasma-derived product from more than one product record. |
 | `authorisation_identity_missing` | A product in a cross-product group has neither an EU nor a national authorisation number. |
-| `device_not_verified` | A device-bearing presentation from more than one product record lacks a device id. |
+| `device_not_verified` | A device-bearing package has no device id: the device variant is unknown. |
+| `presentation_not_verified` | An injectable or device-bearing package has no container, or the size of one unit cannot be verified from the register's pack fields. |
 | `composition_differs` | The composition check found other ratios between members. Flagged for manual review. |
 | `composition_not_verified` | A cross-product group whose composition is `differs` or `incomplete`. |
 | `parallel_not_linked` | A parallel import or distribution with no EU number shared with an original. |
 
-A single package is a group of one and is not unsure for these reasons. It has no other package to show.
+A single package is a group of one. It cannot be unsure for reasons that compare packages (`register_group_disagrees`, `several_products_no_register_group`), but it can be unsure for its own data: a missing route (`route_not_stated`), a missing strength, a veterinary product, an unverified presentation, a missing device id, or a VNR that is on two records.
 
 ## VNR attribution and counts
 
-- A VNR can be on two register records (a package entered again under a new product). On 23 Nov 2026 there are 54. A group that holds one is unsure, and in the summary the VNR is **ambiguous**: it is not given to either group, and the shortage VNRs 018486 (Topimax), 370212 (Mirena) and 424765 (Haemate) are left out of the confident count (754 of 757).
-- The shortage VNR is joined by its current VNR, else by an old VNR, as the build does. The summary says how many were joined by an old VNR (8).
-- "On the market" in the audit means: the register flag `Kaupan` is 1 and the market entry and exit dates agree. Ten packages are on the market by their dates while the flag is not 1 (006334, 056292, 161756, 188377, 192949, 196986, 414779, 425281, 464436, 540878). They are listed in the summary and not counted.
+- A VNR can be on two register records (a package entered again under a new product). On 23 Nov 2026 there are 54. A group that holds one is unsure, and in the summary the VNR is **ambiguous**: it is not given to either group, and the shortage VNRs 018486 (Topimax), 370212 (Mirena) and 424765 (Haemate) are left out of the confident count (753 of 756).
+- The shortage VNR is joined by its current VNR, else by an old VNR, as the build does. The summary says how many were joined by an old VNR (4).
+- "On the market" in the audit means: the register flag `Kaupan` is 1 and the market entry and exit dates agree. Eight packages are on the market by their dates while the flag is not 1 (006334, 056292, 161756, 196986, 414779, 425281, 464436, 540878). They are listed in the summary and not counted.
 
-## Small first release (proposal)
+## First release
 
-One verified Fimea product presentation per group, with separate package rows. In the audit this is `first_release_candidate`: the group is not unsure and all members come from one product record. Everything else stays on package pages: unverified identity, authorisation links, component strengths and device variants. On 23 Nov 2026: 167 of 562 groups with a current shortage and 2462 of 4910 groups on the market.
+The first release uses only **verified single product presentations**. In the audit this is `first_release_candidate`: the group has no unsure reason and all its members come from one product record, so they share the container and the verified size of one unit, and the device id where a device is named. Each package row keeps its own shortage notices, its own sources and its own history. The group page has no history of its own and states no substitute or stock claim: membership only says that the register fields above are equal.
+
+Everything else stays on package pages: cross-product groups, unverified identity, authorisation links, parallel imports, component strengths, injectables whose unit size is not verified, and device variants without a device id.
 
 ## Checks in the audit
 

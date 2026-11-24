@@ -29,13 +29,17 @@ OUT = ROOT / 'data/audit'
 REASONS = (
     'veterinary', 'no_marketing_authorisation_record', 'no_substance_listed', 'strength_not_stated', 'route_not_stated',
     'product_substances_inconsistent', 'register_group_disagrees', 'several_products_no_register_group', 'biological_several_products',
-    'vnr_listed_twice', 'authorisation_identity_missing', 'device_not_verified', 'composition_differs', 'composition_not_verified', 'parallel_not_linked',
+    'vnr_listed_twice', 'authorisation_identity_missing', 'device_not_verified', 'presentation_not_verified', 'composition_differs', 'composition_not_verified',
+    'parallel_not_linked',
 )
 FLAGS = ('merges_different_substance', 'merges_different_strength', 'merges_different_form', 'merges_different_route')
 _NUMBER = re.compile(r'\d+(?:[.,]\d+)?')
 _EU_BASE = re.compile(r'EU/\d+/\d+/\d+')
-# A form name with one of these parts is a presentation with a device (pen, syringe, cartridge, inhaler, spray).
-DEVICE_WORDS = ('esitäyt', 'kynä', 'ruisku', 'injektori', 'sylinteri', 'inhalaat', 'sumut', 'annos', 'laite')
+# A form name with one of these parts is a presentation with a device (pre-filled pen or syringe, cartridge, injector, inhaler, spray).
+# Single-dose eye drops and "annosteltu" powders are not listed: the word "dose" alone does not name a device.
+DEVICE_WORDS = ('esitäyt', 'kynä', 'ruisku', 'injektori', 'sylinteri', 'inhalaat', 'sumut', 'laite')
+# An injectable form (injection or infusion) is sold in a container the register names (vial, ampoule, pre-filled syringe, bag ...).
+INJECTABLE_WORDS = ('injek', 'infuusio')
 MASS_MG = {'g': Decimal(1000), 'mg': Decimal(1), 'mikrog': Decimal('0.001'), 'µg': Decimal('0.001'), 'ng': Decimal('0.000001')}
 # Two members' amount ratios may differ by this much (rounding in the register) before the composition counts as different.
 RATIO_TOLERANCE = Decimal('0.02')
@@ -48,6 +52,8 @@ COUNTEREXAMPLES = {
     'Rybelsus 1.5 mg and parallel-distributed Wegovy 1.5 mg': ('130247', '074190'),
     'Rybelsus 4 mg and parallel-distributed Wegovy 4 mg': ('083695', '117765'),
     'Caninda (strength text kept apart from component names)': ('110560', '450435'),
+    'Trexan pre-filled syringes of 0.3 ml and 1.0 ml (one product record, no device id)': ('562071', '456852'),
+    'Celeston Chronodose vial and ampoule (other immediate containers)': ('433078', '473507'),
     'VNRs with two register records (Topimax, Mirena, Haemate)': ('018486', '370212', '424765'),
 }
 
@@ -79,6 +85,7 @@ def rule_inputs(p):
         'routes': sorted({(r[0], r[1]) for r in p['routes']}),
         'atc': p['atc'],
         'device': p.get('device') or ['', ''],
+        **({'presentation': presentation(p)} if presentation_matters(p) else {}),
     }
 
 
@@ -111,6 +118,36 @@ def device_bearing(p):
     return bool(p.get('device')) or any(w in (p['form'] or '').casefold() for w in DEVICE_WORDS)
 
 
+def presentation_matters(p):
+    """Injectables and device-bearing forms are told apart by the immediate container and the size of one unit. A box, a blister or a tube of
+    another form is not a difference of presentation."""
+    return device_bearing(p) or any(w in (p['form'] or '').casefold() for w in INJECTABLE_WORDS)
+
+
+def _decimal_text(text):
+    return normalise_strength(text)
+
+
+def unit_size(p):
+    """The size of ONE unit (one vial, ampoule, syringe, pen, cartridge or bag) from `Pakkauskoko` and its unit, or '' when it is not verified.
+
+    It is verified only when the register's pack text says exactly the same as its fields: "5 x 1 ml" or "1 ml" for size 1, unit ml.
+    The pack count and the total volume are never used. A pack with an extra pack factor, or with a text that the fields do not explain, is not verified."""
+    size, unit, text = (p.get('pack_size') or '').strip(), (p.get('pack_unit') or '').strip(), p.get('pack') or ''
+    if not size or not unit or p.get('pack_factor'):
+        return ''
+    one = f'{_decimal_text(size)} {_decimal_text(unit)}'
+    # The text is the unit alone or "<whole number> x <unit>". The count is read from the text, not from `Pakkauskokokerroin`, and is not kept.
+    match = re.fullmatch(r'(?:\d+ x )?(.+)', _decimal_text(text))
+    return one if match and match.group(1) == one else ''
+
+
+def presentation(p):
+    """The register's container (`Sailytysastia`) and the verified size of one unit; the size is '' when it cannot be verified."""
+    container = p.get('container') or ['', '']
+    return {'container': list(container), 'unit_size': unit_size(p)}
+
+
 def _quantity(a):
     """(basis, amount) of one active substance in one package, or None when it is a range, empty or unreadable. Mass units are put in mg."""
     if a.get('min') or a.get('max') or not a.get('amount'):
@@ -129,8 +166,9 @@ def _quantity(a):
 def composition_status(packages):
     """Compare what the packages hold of each active substance, apart from the strength text: 'verified', 'differs', 'incomplete' or 'not_applicable'.
 
-    The amounts in `Laakeaine` are totals for the package, so the amount of each substance is divided by the amount of the first substance
-    (by register id); the same product in another pack size keeps its ratios. Mass units are put in mg. 'incomplete' means the register
+    The basis of the amounts in `Laakeaine` depends on the source: the register gives the same 25 mg for pre-filled syringes of 0.3 ml and of 1.0 ml
+    (Trexan), so it is neither a per-unit strength nor a pack total, and it is never used as a strength. Only the ratios between the substances of one
+    package are compared: the amount of each substance is divided by the amount of the first substance (by register id). Mass units are put in mg. 'incomplete' means the register
     does not give every amount in one basis (empty, a range, another unit, an "expressed as" substance, a substance twice); no verdict is given.
     'differs' needs a person: base or salt conventions, or really other concentrations (Physioneal 35 and 40).
     """
@@ -218,6 +256,11 @@ def group_packages(packages, day=None, listed=()):
             reasons.add('product_substances_inconsistent')
         if gid in unlinked:
             reasons.add('parallel_not_linked')
+        if any(presentation_matters(p) and (not unit_size(p) or not (p.get('container') or [''])[0]) for p in ps):
+            reasons.add('presentation_not_verified')
+        # A device-bearing package with no device id is an unknown device variant; nothing independent in the register says it is the same one.
+        if any(device_bearing(p) and not p.get('device') for p in ps):
+            reasons.add('device_not_verified')
         current = [p for p in ps if day is None or on_market(p, day) or ({p['vnr']} | set(p['old'])) & listed] or ps
         codes = {p['substitution_group'] for p in current}
         products = {p['product'] for p in ps}
@@ -233,8 +276,6 @@ def group_packages(packages, day=None, listed=()):
                 reasons.add('authorisation_identity_missing')
             if any(p['biological'] or p['plasma'] for p in ps):
                 reasons.add('biological_several_products')
-            if any(device_bearing(p) for p in ps) and any(not p.get('device') for p in ps):
-                reasons.add('device_not_verified')
             if composition in ('incomplete', 'differs'):
                 reasons.add('composition_not_verified')
         raw = {
@@ -262,6 +303,7 @@ def read_register(path):
         if el.tag == 'Pakkaus':
             unit = el.find('Pakkauskokoyksikko')
             device = el.find('Annostelulaite')
+            container = el.find('Sailytysastia')
             packs.append({
                 'product': el.get('Laakevalmiste-ref'), 'vnr': el.findtext('VNR-numero') or '',
                 'old': sorted({x.text for x in el.findall('VanhaVNR') if x.text}),
@@ -270,6 +312,9 @@ def read_register(path):
                 'exit': el.findtext('Kaupanolo/Kaupastapoistumispaiva') or '', 'shortage_flag': el.findtext('SaatavuushairioTiedot/Saatavuushairio'),
                 'pack': el.findtext('Pakkauskokoteksti', ''), 'unit': unit.get('value', '') if unit is not None else '',
                 'device': [device.get('id', ''), device.get('value', '')] if device is not None and device.get('id') else None,
+                'container': [container.get('id', ''), container.get('value', '')] if container is not None and container.get('id') else None,
+                'pack_count': el.findtext('Pakkauskokokerroin') or '', 'pack_size': el.findtext('Pakkauskoko') or '', 'pack_unit': unit.get('value', '') if unit is not None else '',
+                'pack_factor': el.findtext('Pakkauskerroin') or '',
             })
             el.clear()
         elif el.tag == 'Laakevalmiste':
@@ -308,7 +353,7 @@ def read_register(path):
             continue
         amounts = [a for r in pk['substance_refs'] for a in substances.get(r, [])]
         names = sorted({(a['id'], a['name']) for a in amounts})
-        out.append(dict(product, **{k: pk[k] for k in ('product', 'vnr', 'old', 'market', 'entry', 'exit', 'shortage_flag', 'pack', 'unit', 'device')},
+        out.append(dict(product, **{k: pk[k] for k in ('product', 'vnr', 'old', 'market', 'entry', 'exit', 'shortage_flag', 'pack', 'unit', 'device', 'container', 'pack_count', 'pack_size', 'pack_unit', 'pack_factor')},
                         substances=[{'id': i, 'name': n} for i, n in names], amounts=amounts))
     return out
 
@@ -434,8 +479,8 @@ def register_group_comparison(groups, packages):
             continue
         split += 1
         gs = [by_id[i]['inputs'] for i in ids]
-        for key in ('substances', 'strength_text', 'form', 'routes', 'device', 'atc'):
-            if len({json.dumps(x[key]) for x in gs}) > 1:
+        for key in ('substances', 'strength_text', 'form', 'routes', 'device', 'atc', 'presentation'):
+            if len({json.dumps(x.get(key)) for x in gs}) > 1:
                 spans[key] += 1
     return {'register_groups': len(by_code), 'register_groups_spanning_several_medicine_groups': split,
             'differences_among_those': dict(sorted(spans.items()))}

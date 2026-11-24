@@ -12,16 +12,16 @@ Chosen by group id from the groups with a package in the current shortage file. 
 
 ## 2. one substance
 
-- `m00b5857ca955`: Paclitaxel (substances in register id order); strength text from the register: "6 mg/ml", not mapped to the substances; form infuusiokonsentraatti, liuosta varten; route Laskimoon; ATC L01CD01; names Pacligen, Paclitaxel Accord, Paclitaxel Fresenius Kabi
-  - VNRs: 070947, 074529, 435601, 482738 (4 packages, 3 product records)
-  - authorisations: FI:22522, FI:24712, FI:25312; composition check: not_applicable
+- `m02cc560a08ea`: Dutasteride (substances in register id order); strength text from the register: "0.5 mg", not mapped to the substances; form kapseli, pehmeä; route Suun kautta; ATC G04CB02; names Avodart, Dutasteride Accord, Dutasteride Krka, Dutasteride Medical Valley, Dutasteride Stada
+  - VNRs: 012209, 012243, 095867, 134078, 161925, 172169, 177492, 377504, 383918, 475372, 528203, 548232 (12 packages, 7 product records)
+  - authorisations: FI:19814, FI:30228, FI:32564, FI:32601, FI:33583, FI:33937, FI:36321; composition check: not_applicable
   - not unsure
 
 ## 3. one substance
 
-- `m01290a0b5201`: Furosemide (substances in register id order); strength text from the register: "10 mg/ml", not mapped to the substances; form injektio-/infuusioneste, liuos; route Lihakseen, Laskimoon; ATC C03CA01; names Furosemid hameln, Furosemide Accord, Furosemide Fresenius Kabi, Furosemide Kalceks, Furosemide Norameda
-  - VNRs: 083846, 096706, 384694, 426897, 475460, 499932, 523379, 567782 (8 packages, 6 product records)
-  - authorisations: FI:22931, FI:32962, FI:34284, FI:34627, FI:35149, FI:37191; composition check: not_applicable
+- `m03e0711e5ddb`: Sunitinib (substances in register id order); strength text from the register: "12.5 mg", not mapped to the substances; form kapseli, kova; route Suun kautta; ATC L01EX01; names Sunitinib Accord, Sunitinib Ratiopharm, Sunitinib Sandoz, Sunitinib Stada
+  - VNRs: 181637, 443621, 541959, 572402 (4 packages, 4 product records)
+  - authorisations: EU:EU/1/20/1511, FI:34420, FI:35749, FI:36261; composition check: not_applicable
   - not unsure
 
 ## 4. combination product
@@ -33,16 +33,16 @@ Chosen by group id from the groups with a package in the current shortage file. 
 
 ## 5. combination product
 
-- `m080f497875a3`: Betamethasone acetate + Betamethasone sodium phosphate (substances in register id order); strength text from the register: "(3+3) mg/ml", not mapped to the substances; form injektioneste, suspensio; route Nivelen sisään, Limapussin sisään, Kudosvaurioon, leesioon, Lihakseen, Niveltä ympäröivään kudokseen; ATC H02AB01; names Celeston Chronodose
-  - VNRs: 433078, 473507 (2 packages, 1 product records)
-  - authorisations: FI:3677; composition check: verified
+- `m1595b0c65c0d`: Timolol maleate + Latanoprost (substances in register id order); strength text from the register: "50 mikrog/ml + 5 mg/ml", not mapped to the substances; form silmätipat, liuos, kerta-annospakkaus; route Silmän pinnalle; ATC S01ED51; names Fixopost
+  - VNRs: 455299, 599946 (2 packages, 1 product records)
+  - authorisations: FI:34648; composition check: verified
   - not unsure
 
 ## 6. combination product
 
-- `m1595b0c65c0d`: Timolol maleate + Latanoprost (substances in register id order); strength text from the register: "50 mikrog/ml + 5 mg/ml", not mapped to the substances; form silmätipat, liuos, kerta-annospakkaus; route Silmän pinnalle; ATC S01ED51; names Fixopost
-  - VNRs: 455299, 599946 (2 packages, 1 product records)
-  - authorisations: FI:34648; composition check: verified
+- `m2d76c64ecc65`: Tamsulosin hydrochloride + Dutasteride (substances in register id order); strength text from the register: "0.5 mg / 0.4 mg", not mapped to the substances; form kapseli, kova; route Suun kautta; ATC G04CA52; names Duodart, Dutasterid/Tamsulosin Krka, Dutasteride/Tamsulosin Orion, Dutasteride/Tamsulosinhydrochlorid Accord, Dutasteride/Tamsulosinhydrochlorid Glenmark
+  - VNRs: 028601, 069956, 080023, 080034, 100138, 139181, 168974, 193373, 422425, 428493, 436500, 471956 ... (18 packages, 9 product records)
+  - authorisations: FI:27116, FI:36021, FI:36058, FI:36059, FI:36081, FI:36259, FI:36567, FI:36570, FI:37749; composition check: verified
   - not unsure
 
 ## 7. parallel import joined by an EU authorisation
@@ -55,10 +55,10 @@ Chosen by group id from the groups with a package in the current shortage file. 
 
 ## 8. parallel import joined by an EU authorisation
 
-- `m0c00ba8ff7aa`: Cabotegravir (substances in register id order); strength text from the register: "600 mg", not mapped to the substances; form injektioneste, depotsuspensio; route Lihakseen; ATC J05AJ04; names Apretude, Vocabria
-  - VNRs: 104241, 553803, 574208, 598566 (4 packages, 4 product records)
-  - authorisations: EU:EU/1/20/1481, EU:EU/1/23/1760; composition check: not_applicable
-  - parallel import VNRs: ; parallel distribution VNRs: 553803, 574208
+- `m1ae1d69e966f`: Cariprazine hydrochloride (substances in register id order); strength text from the register: "4.5 mg", not mapped to the substances; form kapseli, kova; route Suun kautta; ATC N05AX15; names Reagila
+  - VNRs: 132370, 591031 (2 packages, 2 product records)
+  - authorisations: EU:EU/1/17/1209; composition check: not_applicable
+  - parallel import VNRs: ; parallel distribution VNRs: 591031
   - not unsure
 
 ## 9. unsure: parallel import without a source-backed link
@@ -104,13 +104,13 @@ Chosen by group id from the groups with a package in the current shortage file. 
 
 ## 13. different routes kept apart
 
-- `m1e7ba48425cd`: Dexamethasone sodium phosphate (substances in register id order); strength text from the register: "4 mg/ml", not mapped to the substances; form injektio-/infuusioneste, liuos; route Nivelen sisään, Limapussin sisään, Lihakseen, Laskimoon, Infiltraatio; ATC H02AB02; names Dexamethasone phosphate Kabi
+- `m8060ce3edf6c`: Dexamethasone sodium phosphate (substances in register id order); strength text from the register: "4 mg/ml", not mapped to the substances; form injektio-/infuusioneste, liuos; route Nivelen sisään, Limapussin sisään, Lihakseen, Laskimoon, Infiltraatio; ATC H02AB02; names Dexamethasone phosphate Kabi
   - VNRs: 495056 (1 packages, 1 product records)
   - authorisations: FI:38720; composition check: not_applicable
   - not unsure
-- `m877d378ad9c2`: Dexamethasone sodium phosphate (substances in register id order); strength text from the register: "4 mg/ml", not mapped to the substances; form injektio-/infuusioneste, liuos; route Nivelen sisään, Lihakseen, Laskimoon, Infiltraatio; ATC H02AB02; names Dexacur, Dexalcex, Dexavit
-  - VNRs: 103337, 172392, 196646, 517803, 519162, 543127 (6 packages, 3 product records)
-  - authorisations: FI:36213, FI:37708, FI:38641; composition check: not_applicable
+- `mfc43783a99b4`: Dexamethasone sodium phosphate (substances in register id order); strength text from the register: "4 mg/ml", not mapped to the substances; form injektio-/infuusioneste, liuos; route Nivelen sisään, Lihakseen, Laskimoon, Infiltraatio; ATC H02AB02; names Dexacur, Dexavit
+  - VNRs: 103337, 517803 (2 packages, 2 product records)
+  - authorisations: FI:36213, FI:37708; composition check: not_applicable
   - not unsure
 
 ## 14. unsure: register_group_disagrees
@@ -141,14 +141,14 @@ Each case must be unsure, or kept in separate groups. The groups here are the on
 
 ## NovoRapid and Fiasp (two EU authorisations, biological)
 
-- `m428ea3243728`: Insulin aspart (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos; route Laskimoon, Ihon alle; ATC A10AB05; names Fiasp, NovoRapid
+- `m8b76250235b2`: Insulin aspart (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos; route Laskimoon, Ihon alle; ATC A10AB05; names Fiasp, NovoRapid
   - VNRs: 007523, 472559 (2 packages, 2 product records)
   - authorisations: EU:EU/1/16/1160, EU:EU/1/99/119; composition check: not_applicable
   - unsure: biological_several_products, several_products_no_register_group
 
 ## Insulin Lispro Sanofi and Liprolog (two EU authorisations, biological)
 
-- `mc58387642104`: Insulin lispro (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos, sylinteriampulli; route Ihon alle; ATC A10AB04; names Insulin Lispro Sanofi, Liprolog
+- `m1a469a8e5a83`: Insulin lispro (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos, sylinteriampulli; route Ihon alle; ATC A10AB04; names Insulin Lispro Sanofi, Liprolog
   - VNRs: 117084, 165713 (2 packages, 2 product records)
   - authorisations: EU:EU/1/01/195, EU:EU/1/17/1203; composition check: not_applicable
   - unsure: biological_several_products, device_not_verified, several_products_no_register_group
@@ -162,40 +162,54 @@ Each case must be unsure, or kept in separate groups. The groups here are the on
 
 ## Liprolog KwikPen and Junior KwikPen (no device data)
 
-- `m6640557880ca`: Insulin lispro (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos, esitäytetty kynä; route Ihon alle; ATC A10AB04; names Insulin Lispro Sanofi, Liprolog Junior KwikPen, Liprolog KwikPen
+- `m1f4c34347aa3`: Insulin lispro (substances in register id order); strength text from the register: "100 u/ml", not mapped to the substances; form injektioneste, liuos, esitäytetty kynä; route Ihon alle; ATC A10AB04; names Insulin Lispro Sanofi, Liprolog Junior KwikPen, Liprolog KwikPen
   - VNRs: 058290, 517586, 544210 (3 packages, 3 product records)
   - authorisations: EU:EU/1/01/195, EU:EU/1/17/1203; composition check: not_applicable
   - unsure: biological_several_products, device_not_verified, several_products_no_register_group
 
 ## Rybelsus 1.5 mg and parallel-distributed Wegovy 1.5 mg
 
-- `m4f4d6eb5b171`: Semaglutide (substances in register id order); strength text from the register: "1.5 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Wegovy
-  - VNRs: 074190 (1 packages, 1 product records)
-  - authorisations: EU:EU/1/21/1608; composition check: not_applicable
+- `mae7cf9b4fd52`: Semaglutide (substances in register id order); strength text from the register: "1.5 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Rybelsus, Wegovy
+  - VNRs: 074190, 130247, 576384 (3 packages, 3 product records)
+  - authorisations: EU:EU/1/20/1430, EU:EU/1/21/1608; composition check: not_applicable
   - parallel import VNRs: ; parallel distribution VNRs: 074190
-  - unsure: parallel_not_linked
-- `mae7cf9b4fd52`: Semaglutide (substances in register id order); strength text from the register: "1.5 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Rybelsus
-  - VNRs: 130247 (1 packages, 1 product records)
-  - authorisations: EU:EU/1/20/1430; composition check: not_applicable
-  - not unsure
+  - unsure: biological_several_products, several_products_no_register_group
 
 ## Rybelsus 4 mg and parallel-distributed Wegovy 4 mg
 
-- `mbd2a08cbd53d`: Semaglutide (substances in register id order); strength text from the register: "4 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Wegovy
-  - VNRs: 083695 (1 packages, 1 product records)
-  - authorisations: EU:EU/1/21/1608; composition check: not_applicable
+- `mdcd9bef08630`: Semaglutide (substances in register id order); strength text from the register: "4 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Rybelsus, Wegovy
+  - VNRs: 083695, 117765, 408287, 420557 (4 packages, 3 product records)
+  - authorisations: EU:EU/1/20/1430, EU:EU/1/21/1608; composition check: not_applicable
   - parallel import VNRs: ; parallel distribution VNRs: 083695
-  - unsure: parallel_not_linked
-- `mdcd9bef08630`: Semaglutide (substances in register id order); strength text from the register: "4 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC A10BJ06; names Rybelsus
-  - VNRs: 117765, 420557 (2 packages, 1 product records)
-  - authorisations: EU:EU/1/20/1430; composition check: not_applicable
-  - not unsure
+  - unsure: biological_several_products, several_products_no_register_group
 
 ## Caninda (strength text kept apart from component names)
 
 - `mff31cbdeb9ff`: Indapamide + Candesartan cilexetil (substances in register id order); strength text from the register: "8 mg / 2.5 mg", not mapped to the substances; form tabletti; route Suun kautta; ATC C09DA06; names Caninda
   - VNRs: 110560, 450435 (2 packages, 1 product records)
   - authorisations: FI:42779; composition check: verified
+  - not unsure
+
+## Trexan pre-filled syringes of 0.3 ml and 1.0 ml (one product record, no device id)
+
+- `m8c97617559e6`: Methotrexate (substances in register id order); strength text from the register: "25 mg/ml", not mapped to the substances; form injektioneste, liuos, esitäytetty ruisku; route Lihakseen, Ihon alle; ATC L04AX03; names Trexan
+  - VNRs: 456852 (1 packages, 1 product records)
+  - authorisations: FI:32125; composition check: not_applicable
+  - unsure: device_not_verified
+- `mdc0491889cb9`: Methotrexate (substances in register id order); strength text from the register: "25 mg/ml", not mapped to the substances; form injektioneste, liuos, esitäytetty ruisku; route Lihakseen, Ihon alle; ATC L04AX03; names Trexan
+  - VNRs: 562071 (1 packages, 1 product records)
+  - authorisations: FI:32125; composition check: not_applicable
+  - unsure: device_not_verified
+
+## Celeston Chronodose vial and ampoule (other immediate containers)
+
+- `m31d7b25421a1`: Betamethasone acetate + Betamethasone sodium phosphate (substances in register id order); strength text from the register: "(3+3) mg/ml", not mapped to the substances; form injektioneste, suspensio; route Nivelen sisään, Limapussin sisään, Kudosvaurioon, leesioon, Lihakseen, Niveltä ympäröivään kudokseen; ATC H02AB01; names Celeston Chronodose
+  - VNRs: 473507 (1 packages, 1 product records)
+  - authorisations: FI:3677; composition check: not_applicable
+  - not unsure
+- `mb7f19bf958d1`: Betamethasone acetate + Betamethasone sodium phosphate (substances in register id order); strength text from the register: "(3+3) mg/ml", not mapped to the substances; form injektioneste, suspensio; route Nivelen sisään, Limapussin sisään, Kudosvaurioon, leesioon, Lihakseen, Niveltä ympäröivään kudokseen; ATC H02AB01; names Celeston Chronodose
+  - VNRs: 433078 (1 packages, 1 product records)
+  - authorisations: FI:3677; composition check: not_applicable
   - not unsure
 
 ## VNRs with two register records (Topimax, Mirena, Haemate)
@@ -215,18 +229,18 @@ Each case must be unsure, or kept in separate groups. The groups here are the on
   - authorisations: FI:31448; composition check: not_applicable
   - parallel import VNRs: 370212; parallel distribution VNRs: 
   - unsure: parallel_not_linked, route_not_stated, vnr_listed_twice
-- `m6c8ab4fb74fb`: Factor VIII (antihaemophilic factor) + Human von Willebrand factor (substances in register id order); strength text from the register: "1000 iu fviii / 2400 iu vwf", not mapped to the substances; form injektio-/infuusiokuiva-aine ja liuotin, liuosta varten; route Laskimoon; ATC B02BD06; names Haemate
-  - VNRs: 424765 (1 packages, 1 product records)
-  - authorisations: FI:44350; composition check: not_applicable
-  - parallel import VNRs: 424765; parallel distribution VNRs: 
-  - unsure: parallel_not_linked, vnr_listed_twice
 - `m783b5525a78f`: Topiramate (substances in register id order); strength text from the register: "100 mg", not mapped to the substances; form tabletti, kalvopäällysteinen; route (not stated); ATC N03AX11; names Topimax
   - VNRs: 008262, 018486 (2 packages, 1 product records)
   - authorisations: FI:17210; composition check: not_applicable
   - parallel import VNRs: 008262, 018486; parallel distribution VNRs: 
   - unsure: parallel_not_linked, route_not_stated, vnr_listed_twice
-- `md842be4aac92`: Factor VIII (antihaemophilic factor) + Human von Willebrand factor (substances in register id order); strength text from the register: "1000 iu fviii / 2400 iu vwf", not mapped to the substances; form injektio/infuusiokuiva-aine ja liuotin, liuos; route Laskimoon; ATC B02BD06; names Haemate
+- `mc65c2230d03f`: Factor VIII (antihaemophilic factor) + Human von Willebrand factor (substances in register id order); strength text from the register: "1000 iu fviii / 2400 iu vwf", not mapped to the substances; form injektio/infuusiokuiva-aine ja liuotin, liuos; route Laskimoon; ATC B02BD06; names Haemate
   - VNRs: 424765 (1 packages, 1 product records)
   - authorisations: FI:37154; composition check: not_applicable
   - parallel import VNRs: 424765; parallel distribution VNRs: 
-  - unsure: parallel_not_linked, vnr_listed_twice
+  - unsure: parallel_not_linked, presentation_not_verified, vnr_listed_twice
+- `mee367bfdd331`: Factor VIII (antihaemophilic factor) + Human von Willebrand factor (substances in register id order); strength text from the register: "1000 iu fviii / 2400 iu vwf", not mapped to the substances; form injektio-/infuusiokuiva-aine ja liuotin, liuosta varten; route Laskimoon; ATC B02BD06; names Haemate
+  - VNRs: 424765 (1 packages, 1 product records)
+  - authorisations: FI:44350; composition check: not_applicable
+  - parallel import VNRs: 424765; parallel distribution VNRs: 
+  - unsure: parallel_not_linked, presentation_not_verified, vnr_listed_twice
