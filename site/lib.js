@@ -281,7 +281,8 @@ function pastNotes(e) {
   return notes;
 }
 // The page a search result opens: the medicine page when the build made one for the package (scripts/medicine_pages.py), else the package page.
-const resultHref = (e, medicine = true) => medicine && /^m[0-9a-f]{12}$/.test(e.medicine_page || '') ? `medicines.html?id=${e.medicine_page}` : `medicine.html?vnr=${e.NordicArticleNumber || ''}`;
+// It carries the VNR of the result, so the medicine page opens at that package.
+const resultHref = (e, medicine = true) => medicine && /^m[0-9a-f]{12}$/.test(e.medicine_page || '') && /^\d{6}$/.test(e.NordicArticleNumber || '') ? `medicines.html?id=${e.medicine_page}&vnr=${e.NordicArticleNumber}` : `medicine.html?vnr=${e.NordicArticleNumber || ''}`;
 function pastRow(e, level = 3) {
   const t = copy[language], spec = [strengthShown(e), packText(e)].filter(Boolean);
   return `<article class="pkg pkg-past"><p class="pkg-tab">${uiIcon('ended', 18)}<span>${esc(t.pastStatus)}</span></p>`
@@ -336,7 +337,9 @@ function captureSentences(e, t) {
 // One track with markers in time order and the actual dates next to each marker.
 // `opts.bare` gives the track and notes without a panel and title, for a page that draws several timelines; `opts.level` is the heading level of its earlier estimates.
 function timelineMarkup(e, archive, opts = {}) {
-  const t = copy[language], now = archive ? parsedDate(e.last_seen).valueOf() : todayUTC(), model = timelineModel(e, now);
+  // `opts.notice` words the record as one notice, not as the package: a package can have another notice on the list when this one left it.
+  const base = copy[language], t = opts.notice ? {...base, tlLastListed: base.mdLastListed, tlGone: base.mdGone, tlListedFrom: base.mdListedFrom, tlListedAtFirst: base.mdListedAtFirst, tlListedOne: base.mdListedOne} : base;
+  const now = archive ? parsedDate(e.last_seen).valueOf() : todayUTC(), model = timelineModel(e, now);
   const items = {
     start: [t.tlStart, dateText(e.UnavailableFrom), !archive && model.daysSinceStart !== null ? t.tlDuration(model.daysSinceStart) : model.daysUntilStart !== null ? t.tlSoonNote(model.daysUntilStart) : ''],
     today: [archive ? t.tlLastListed : t.tlToday, dateText(new Date(now).toISOString().slice(0, 10)), archive && e.removed_on ? t.tlGone(dateText(e.removed_on)) : ''],

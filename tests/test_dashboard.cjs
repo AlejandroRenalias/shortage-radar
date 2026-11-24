@@ -1071,7 +1071,7 @@ test('an unknown medicine address shows a helpful state, and the copy of both la
   env.render();
   assert.match(get('medicines').innerHTML, /Lääkettä ei löytynyt/); assert.match(get('medicines').innerHTML, /action="shortages\.html"/);
   const en = Object.keys(vm.runInContext('copy.en', context)).filter(k => /^md|_medicines$/.test(k)), fi = Object.keys(vm.runInContext('copy.fi', context)).filter(k => /^md|_medicines$/.test(k));
-  assert.deepEqual(en, fi); assert.equal(en.length, 17);
+  assert.deepEqual(en, fi); assert.equal(en.length, 26);
 });
 
 test('search results open the medicine page when the build made one, else the package page; past shortages keep working', () => {
@@ -1079,12 +1079,74 @@ test('search results open the medicine page when the build made one, else the pa
   vm.runInContext("language='en'", env);
   const paged = mdEvent('111111', {medicine_page: 'm0123456789ab'}), plain = mdEvent('333333');
   const now = Date.UTC(2026, 10, 24);
-  assert.match(env.pkgCard(paged, now, 2, true), /href="medicines\.html\?id=m0123456789ab"/);
+  assert.match(env.pkgCard(paged, now, 2, true), /href="medicines\.html\?id=m0123456789ab&amp;vnr=111111"/);
   assert.match(env.pkgCard(plain, now, 2, true), /href="medicine\.html\?vnr=333333"/);
   // Cards outside the search lists, and a bad id, keep the package page.
   assert.match(env.pkgCard(paged, now, 2), /href="medicine\.html\?vnr=111111"/);
   assert.match(env.pkgCard(mdEvent('111111', {medicine_page: '"><script>'}), now, 2, true), /href="medicine\.html\?vnr=111111"/);
   const gone = mdEvent('111111', {removed_on: '2026-11-10', last_seen: '2026-11-09', medicine_page: 'm0123456789ab'});
-  assert.match(env.pastRow(gone), /href="medicines\.html\?id=m0123456789ab"/); assert.match(env.pastRow(mdEvent('333333', {removed_on: '2026-11-10'})), /href="medicine\.html\?vnr=333333"/);
+  assert.match(env.pastRow(gone), /href="medicines\.html\?id=m0123456789ab&amp;vnr=111111"/); assert.match(env.pastRow(mdEvent('333333', {removed_on: '2026-11-10'})), /href="medicine\.html\?vnr=333333"/);
   assert.equal(env.pastMatches([gone], 'burana').length, 1);
+});
+
+const dateText = (lang, iso) => { const [y, m, d] = iso.split('-').map(Number); return lang === 'fi' ? `${d}.${m}.${y}` : `${d} Nov ${y}`; };
+test('a notice that left the list is not the package leaving it: the wording says notice, in English and Finnish', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  // The package is still listed under an updated notice (vnr_listed_at_removal), the older notice is gone.
+  const pkg = {vnr: '168299', events: [mdEvent('168299', {first_seen: '2026-11-24', UnavailableFrom: '2026-11-20'}), mdEvent('168299', {removed_on: '2026-11-24', last_seen: '2026-11-23', first_seen: '2026-11-03', vnr_listed_at_removal: true})]};
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'; page = ${JSON.stringify({...mdPage, packages: [pkg]})}`, env);
+    env.render();
+    const html = get('medicines').innerHTML, t = vm.runInContext(`copy.${lang}`, env);
+    const older = html.slice(html.indexOf('<details class="md-more">'));
+    assert.ok(older.includes(t.mdLeftText(dateText(lang, '2026-11-23'))), 'status line speaks of the notice');
+    assert.ok(older.includes(t.mdLastListed) && older.includes(t.mdGone(dateText(lang, '2026-11-24'))), 'timeline speaks of the notice');
+    assert.match(older, lang === 'en' ? /This notice was on the list in our captures from 3 Nov 2026 to 23 Nov 2026\./ : /Ilmoitus oli listalla tilannekuvissamme 3\.11\.2026–23\.11\.2026\./);
+    assert.doesNotMatch(older, /This package was last listed|Pakkaus oli viimeksi listalla|No longer on the list|Ei enää listalla/);
+  }
+  // The package-level tab names the notice too, and the package page's own wording is not changed.
+  vm.runInContext("language='en'", env);
+  assert.match(env.timelineMarkup(pkg.events[1], true), /Last listed/); assert.doesNotMatch(env.timelineMarkup(pkg.events[1], true), /Notice last listed/);
+  // A gap in the captures keeps its wording and the removal time stays unknown.
+  const gap = mdEvent('171603', {removed_on: '2026-09-15', last_seen: '2024-11-18', first_seen: '2024-11-03', removed_after_gap: true, gaps: []});
+  vm.runInContext(`page = ${JSON.stringify({...mdPage, packages: [{vnr: '171603', events: [gap]}]})}`, env);
+  env.render();
+  const html = get('medicines').innerHTML;
+  assert.match(html, /Not observed between 18 Nov 2024 and 15 Sep 2026\./);
+  assert.match(html, /last seen in the capture of 18 Nov 2024, not on the list in the next capture, 15 Sep 2026, and no captures between\. When it left the list is not known/);
+  assert.doesNotMatch(html, /absent on 15 Sep 2026/);
+});
+
+test('each notice names its own source and captures, and the page-level line is only the latest file date', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  vm.runInContext("language='en'", env);
+  const ended = mdEvent('222222', {removed_on: '2026-11-10', last_seen: '2026-11-09'});
+  vm.runInContext(`page = ${JSON.stringify(mdPage)}`, env);
+  assert.match(env.noticeSource(ended, '2026-11-24'), /last seen in the capture of 9 Nov 2026, absent on 10 Nov 2026/);
+  assert.doesNotMatch(env.noticeSource(ended, '2026-11-24'), /24 Nov/);
+  assert.match(env.noticeSource(mdEvent('111111'), '2026-11-24'), /data of 24 Nov 2026/);
+  vm.runInContext("language='fi'", env);
+  assert.match(env.noticeSource({...ended, removed_after_gap: true}, '2026-11-24'), /ei listalla seuraavassa tilannekuvassa 10\.11\.2026.*ei ole tiedossa/);
+  vm.runInContext("language='en'", env); env.render();
+  const html = get('medicines').innerHTML;
+  assert.match(html, /The latest file we hold is of 24 Nov 2026; each notice names its own captures/);
+  assert.equal((html.match(/class="note md-notice-source"/g) || []).length, 3, 'one source line for each of the three notices');
+});
+
+test('a search result opens its own package on the medicine page, and falls back to the package page', () => {
+  const [env, get] = pageEnv(['medicines.js']);
+  vm.runInContext("language='en'", env);
+  assert.equal(env.vnrFromSearch('?id=m0123456789ab&vnr=222222'), '222222'); assert.equal(env.vnrFromSearch('?id=m0123456789ab'), '');
+  assert.equal(env.packageUrlWhenAbsent(mdPage, '222222'), ''); assert.equal(env.packageUrlWhenAbsent(mdPage, ''), '');
+  assert.equal(env.packageUrlWhenAbsent(mdPage, '999999'), 'medicine.html?vnr=999999');
+  assert.equal(env.packageUrlWhenAbsent({missing: true}, '222222'), 'medicine.html?vnr=222222');
+  assert.equal(env.packageUrlWhenAbsent({missing: true}, ''), '', 'no VNR: the not-found state');
+  const scrolled = [];
+  get('pk-222222').scrollIntoView = () => scrolled.push('pk-222222');
+  vm.runInContext(`selectedVnr='222222'; page = ${JSON.stringify(mdPage)}`, env);
+  env.render(); env.render();
+  assert.deepEqual(scrolled, ['pk-222222'], 'scrolls once');
+  const html = get('medicines').innerHTML;
+  assert.match(html, /is-selected" aria-labelledby="pk-222222"/); assert.doesNotMatch(html, /is-selected" aria-labelledby="pk-111111"/);
+  assert.match(html, /<h3 id="pk-222222" class="med-pkg-name">pack 222222 <span class="md-vnr">VNR 222222<\/span><\/h3>/);
 });

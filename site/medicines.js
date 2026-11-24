@@ -3,8 +3,11 @@
 // the packages share register fields, and that is all. Each package keeps its own notices, source and history; nothing here
 // says that one package can replace another, or that any package is in stock.
 function idFromSearch(search) { try { return (new URLSearchParams(search).get('id') || '').trim().slice(0, 20); } catch (_) { return ''; } }
+// The VNR of the package a search result was about, from medicines.html?id=...&vnr=...
+function vnrFromSearch(search) { try { return (new URLSearchParams(search).get('vnr') || '').trim().slice(0, 12); } catch (_) { return ''; } }
+function validVnr(v) { return /^\d{6}$/.test(v); }
 function validId(v) { return /^m[0-9a-f]{12}$/.test(v); }
-let medicineId = '', page = null;
+let medicineId = '', selectedVnr = '', page = null, scrolled = false;
 const noticeStatus = e => e.removed_on ? 'left' : statusOf(e);
 // What Fimea's register gives for the packages on this page. The route, the form and the container are Fimea's own words, in Finnish.
 function registerMarkup(m) {
@@ -14,10 +17,15 @@ function registerMarkup(m) {
     + `<p class="note md-ours">${esc(t.mdReading)}</p></section>`;
 }
 // Our reading of one notice: its status line and its timeline, with the stretches that were not observed.
+// A notice that left the list is not the package leaving: the package can have another notice on the list. Each notice names its own captures.
+function noticeSource(e, snapshotDate) {
+  const t = copy[language];
+  return !e.removed_on ? t.sourceNote(dateText(snapshotDate)) : e.removed_after_gap ? t.mdSourceGap(dateText(e.last_seen), dateText(e.removed_on)) : t.sourceNoteEnded(dateText(e.last_seen), dateText(e.removed_on));
+}
 function readingMarkup(e) {
   const t = copy[language], status = noticeStatus(e);
-  const line = {now: t.medNow, soon: t.medSoon, unknown: t.medUnknown, left: t.medLeftText(dateText(e.last_seen))}[status];
-  return `<p class="status-line">${esc(line)}</p>${timelineMarkup(e, status === 'left', {bare: true, level: 5})}`;
+  const line = {now: t.medNow, soon: t.medSoon, unknown: t.medUnknown, left: t.mdLeftText(dateText(e.last_seen))}[status];
+  return `<p class="status-line">${esc(line)}</p>${timelineMarkup(e, status === 'left', {bare: true, level: 5, notice: true})}<p class="note md-notice-source">${esc(noticeSource(e, page ? page.snapshot_date : ''))}</p>`;
 }
 function factsMarkup(e, vnr, withPack) {
   const t = copy[language];
@@ -27,10 +35,10 @@ function factsMarkup(e, vnr, withPack) {
 // One package: the newest notice in full, earlier or other notices of the same package folded under it.
 function packageMarkup(pkg) {
   const t = copy[language], [first, ...rest] = pkg.events, status = noticeStatus(first), id = `pk-${pkg.vnr}`;
-  const tab = status === 'left' ? [t.medLeft, 'ended'] : [statusLabel(status), status === 'soon' ? 'soon' : status === 'unknown' ? 'unknown' : 'now'];
+  const tab = status === 'left' ? [t.mdLeft, 'ended'] : [statusLabel(status), status === 'soon' ? 'soon' : status === 'unknown' ? 'unknown' : 'now'];
   const more = rest.length ? `<details class="md-more"><summary>${esc(t.mdOtherNotices(rest.length))}</summary>${rest.map(e => `<div class="md-notice"><p class="md-notice-head"><strong>${esc(t.reported)}: ${esc(e.DateOfTheNotification ? dateText(e.DateOfTheNotification) : '—')}</strong>${e.Company ? `<span>${esc(e.Company)}</span>` : ''}</p>${readingMarkup(e)}</div>`).join('')}</details>` : '';
-  return `<article class="panel med-pkg is-${status}" aria-labelledby="${id}"><p class="pkg-tab md-tab pkg-${status === 'left' ? 'ended' : status}">${uiIcon(tab[1], 18)}<span>${esc(tab[0])}</span></p>`
-    + `<h3 id="${id}" class="med-pkg-name">${esc(packText(first) || `${t.vnr} ${pkg.vnr}`)}</h3><p class="md-link"><a href="medicine.html?vnr=${esc(pkg.vnr)}">${esc(t.mdPackagePage)}</a></p>`
+  return `<article class="panel med-pkg is-${status}${pkg.vnr === selectedVnr ? ' is-selected' : ''}" aria-labelledby="${id}"><p class="pkg-tab md-tab pkg-${status === 'left' ? 'ended' : status}">${uiIcon(tab[1], 18)}<span>${esc(tab[0])}</span></p>`
+    + `<h3 id="${id}" class="med-pkg-name">${packText(first) ? `${esc(packText(first))} <span class="md-vnr">${esc(t.mdVnr(pkg.vnr))}</span>` : esc(t.mdVnr(pkg.vnr))}</h3><p class="md-link"><a href="medicine.html?vnr=${esc(pkg.vnr)}">${esc(t.mdPackagePage)}</a></p>`
     + `<section class="md-src md-src-fimea" aria-label="${esc(t.mdFimea)}"><h4>${esc(t.mdFimea)}</h4>${factsMarkup(first, pkg.vnr, true)}</section>`
     + `<section class="md-src md-src-ours" aria-label="${esc(t.mdOurs)}"><h4>${esc(t.mdOurs)}</h4>${readingMarkup(first)}${more}</section></article>`;
 }
@@ -52,12 +60,20 @@ function render() {
     + registerMarkup(m)
     + `<section aria-labelledby="md-pk"><h2 id="md-pk">${esc(t.mdPackagesTitle)}</h2><p class="note">${esc(t.mdPackagesNote)}</p><div class="med-pkgs">${page.packages.map(packageMarkup).join('')}</div></section>`
     + `<p class="source-note">${esc(t.mdSourceNote(dateText(page.snapshot_date)))} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceLink)}</a></p></div>`;
+  // A search result opens at its own package, once.
+  const heading = !scrolled && selectedVnr && $('pk-' + selectedVnr), target = heading && (heading.closest ? heading.closest('article') || heading : heading);
+  if (target && target.scrollIntoView) { scrolled = true; target.scrollIntoView(); const again = () => target.scrollIntoView(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(again); if (typeof setTimeout === 'function') setTimeout(again, 400); }  // again when the fonts have changed the layout
+}
+// A package that this page does not list (an old link, a later build) opens on its own package page.
+function packageUrlWhenAbsent(data, vnr) {
+  return validVnr(vnr) && (!data || data.missing || !(data.packages || []).some(p => p.vnr === vnr)) ? `medicine.html?vnr=${vnr}` : '';
 }
 // A missing file is an unknown address, not a load error.
 const loadPage = id => fetch(`m/${id}.json`).then(r => r.status === 404 ? null : r.ok ? r.json() : Promise.reject(Error(id)));
 if (typeof document !== 'undefined' && document.documentElement.dataset && document.documentElement.dataset.page === 'medicines') {
   medicineId = idFromSearch(location.search);
+  selectedVnr = vnrFromSearch(location.search);
   start(render);
   (validId(medicineId) ? loadPage(medicineId) : Promise.resolve(null)).then(d => d || fetchJson('summary.json').then(s => ({missing: true, snapshot_date: s.snapshot_date, source_metadata: s.source_metadata, generated_at: s.generated_at, last_checked: s.last_checked})))
-    .then(d => { page = d; renderChrome(d); render(); }).catch(showLoadError);
+    .then(d => { const away = packageUrlWhenAbsent(d, selectedVnr); if (away) return location.replace(away); page = d; renderChrome(d); render(); }).catch(showLoadError);
 }
