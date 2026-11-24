@@ -61,8 +61,19 @@ function render() {
     + `<section aria-labelledby="md-pk"><h2 id="md-pk">${esc(t.mdPackagesTitle)}</h2><p class="note">${esc(t.mdPackagesNote)}</p><div class="med-pkgs">${page.packages.map(packageMarkup).join('')}</div></section>`
     + `<p class="source-note">${esc(t.mdSourceNote(dateText(page.snapshot_date)))} <a href="https://fimea.fi/en/about_us/open-data">${esc(t.sourceLink)}</a></p></div>`;
   // A search result opens at its own package, once.
-  const heading = !scrolled && selectedVnr && $('pk-' + selectedVnr), target = heading && (heading.closest ? heading.closest('article') || heading : heading);
-  if (target && target.scrollIntoView) { scrolled = true; target.scrollIntoView(); const again = () => target.scrollIntoView(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(again); if (typeof setTimeout === 'function') setTimeout(again, 400); }  // again when the fonts have changed the layout
+  const heading = !scrolled && selectedVnr && $('pk-' + selectedVnr);
+  if (heading) { scrolled = true; scrollWhenReady(heading.closest ? heading.closest('article') || heading : heading); }
+}
+// ONE scroll to the selected package, when the fonts have settled the layout. Any input from the reader (wheel, touch, key, pointer) cancels it for good.
+const READER_INPUT = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+function scrollWhenReady(target) {
+  if (!target.scrollIntoView) return;
+  let cancelled = false;
+  const cancel = () => { cancelled = true; READER_INPUT.forEach(name => window.removeEventListener(name, cancel)); };
+  READER_INPUT.forEach(name => window.addEventListener(name, cancel, {passive: true}));
+  const go = () => { if (!cancelled) { cancel(); target.scrollIntoView(); } };
+  const ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  ready.then(() => typeof requestAnimationFrame === 'function' ? requestAnimationFrame(go) : go());
 }
 // A package that this page does not list (an old link, a later build) opens on its own package page.
 function packageUrlWhenAbsent(data, vnr) {

@@ -1133,7 +1133,7 @@ test('each notice names its own source and captures, and the page-level line is 
   assert.equal((html.match(/class="note md-notice-source"/g) || []).length, 3, 'one source line for each of the three notices');
 });
 
-test('a search result opens its own package on the medicine page, and falls back to the package page', () => {
+test('a search result opens its own package on the medicine page, and falls back to the package page', async () => {
   const [env, get] = pageEnv(['medicines.js']);
   vm.runInContext("language='en'", env);
   assert.equal(env.vnrFromSearch('?id=m0123456789ab&vnr=222222'), '222222'); assert.equal(env.vnrFromSearch('?id=m0123456789ab'), '');
@@ -1141,11 +1141,26 @@ test('a search result opens its own package on the medicine page, and falls back
   assert.equal(env.packageUrlWhenAbsent(mdPage, '999999'), 'medicine.html?vnr=999999');
   assert.equal(env.packageUrlWhenAbsent({missing: true}, '222222'), 'medicine.html?vnr=222222');
   assert.equal(env.packageUrlWhenAbsent({missing: true}, ''), '', 'no VNR: the not-found state');
-  const scrolled = [];
-  get('pk-222222').scrollIntoView = () => scrolled.push('pk-222222');
-  vm.runInContext(`selectedVnr='222222'; page = ${JSON.stringify(mdPage)}`, env);
-  env.render(); env.render();
-  assert.deepEqual(scrolled, ['pk-222222'], 'scrolls once');
+  // The scroll is deferred: it waits for the fonts and a frame, runs once, and any reader input cancels it for good.
+  const run = async (input) => {
+    const scrolled = [], listeners = {}, frames = [];
+    let fontsReady; const fonts = {ready: new Promise(resolve => { fontsReady = resolve; })};
+    vm.runInContext('scrolled = false', env);
+    env.window = {addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); }, removeEventListener: (name, fn) => { listeners[name] = (listeners[name] || []).filter(x => x !== fn); }};
+    env.document.fonts = fonts; env.requestAnimationFrame = fn => frames.push(fn);
+    get('pk-222222').scrollIntoView = () => scrolled.push('pk-222222');
+    vm.runInContext(`selectedVnr='222222'; page = ${JSON.stringify(mdPage)}`, env);
+    env.render(); env.render();
+    assert.deepEqual(scrolled, [], 'nothing scrolls before the layout is ready');
+    if (input) for (const fn of listeners[input] || []) fn();
+    fontsReady(); await fonts.ready; await Promise.resolve();
+    frames.splice(0).forEach(fn => fn());
+    await new Promise(resolve => setTimeout(resolve, 600));   // no later timer scrolls again
+    frames.splice(0).forEach(fn => fn());
+    return {scrolled, left: Object.values(listeners).flat().length};
+  };
+  assert.deepEqual(await run(null), {scrolled: ['pk-222222'], left: 0}, 'one scroll, and its input listeners are removed');
+  for (const input of ['wheel', 'touchstart', 'keydown', 'pointerdown']) assert.deepEqual((await run(input)).scrolled, [], `${input} from the reader cancels the scroll`);
   const html = get('medicines').innerHTML;
   assert.match(html, /is-selected" aria-labelledby="pk-222222"/); assert.doesNotMatch(html, /is-selected" aria-labelledby="pk-111111"/);
   assert.match(html, /<h3 id="pk-222222" class="med-pkg-name">pack 222222 <span class="md-vnr">VNR 222222<\/span><\/h3>/);
