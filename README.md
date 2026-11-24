@@ -1,6 +1,6 @@
 # Shortage Radar
 
-[Open the live site](https://alejandrorenalias.github.io/shortage-radar/) · Saatavuustutka in Finnish
+[Open the live site](https://alejandrorenalias.github.io/shortage-radar/) 
 
 Shortage Radar is a searchable view and archive of reported medicine shortages in Finland. Fimea's open file describes current shortages and those expected within two weeks, but Fimea does not provide a public history of that file. This project saves captures to make changes over time visible. Daily archive since 21 Nov 2026, with earlier captures from the Internet Archive.
 
