@@ -7,6 +7,8 @@ Facts only: the charts show counts and dates and suggest no treatment.
 from datetime import date
 from html import escape
 
+from critical_copy import ATC_GROUPS_FI, ROUTE_NAMES_FI, bi, plain, swap, swap_attr, t
+
 E = lambda value: escape(str(value if value is not None else ''), quote=True)
 
 # ATC level 1 groups (first letter of the code), named as the WHO names them.
@@ -48,7 +50,7 @@ def route_icon(kind, size=18):
 def route_label(routes):
     """Icon and plain label for the route of a package; the full route text stays in the details."""
     kind = route_kind(routes)
-    return f'<span class="eu-route-tag">{route_icon(kind, 16)}{E(ROUTE_NAMES[kind])}</span>'
+    return f'<span class="eu-route-tag">{route_icon(kind, 16)}{bi(E(ROUTE_NAMES[kind]), E(ROUTE_NAMES_FI[kind]))}</span>'
 
 
 def route_counts(rows, status='ongoing'):
@@ -61,8 +63,8 @@ def route_counts(rows, status='ongoing'):
 
 def route_row(rows):
     counts = route_counts(rows)
-    items = ''.join(f'<li>{route_icon(k, 22)}<span><strong>{n:,}</strong> {E(ROUTE_NAMES[k]).lower()}</span></li>' for k, n in counts.items())
-    return f'<ul class="eu-routes" aria-label="Ongoing exact matches by route of the product">{items}</ul>'
+    items = ''.join(f'<li>{route_icon(k, 22)}<span><strong>{n:,}</strong> {bi(E(ROUTE_NAMES[k]).lower(), E(ROUTE_NAMES_FI[k]).lower())}</span></li>' for k, n in counts.items())
+    return f'<ul class="eu-routes"{swap_attr("aria-label", "chart.routes.label")}>{items}</ul>'
 
 
 HATCH = ('<defs><pattern id="eu-hatch-later" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--white)"/>'
@@ -105,13 +107,14 @@ def group_bars(rows):
     bars, table = [], []
     for letter in sorted(groups):
         g = groups[letter]
-        bars.append(f'<li class="eu-bar-row"><span class="eu-bar-name"><b>{letter}</b> {E(ATC_GROUPS[letter])}</span>'
+        name = bi(E(ATC_GROUPS[letter]), E(ATC_GROUPS_FI[letter]))
+        bars.append(f'<li class="eu-bar-row"><span class="eu-bar-name"><b>{letter}</b> {name}</span>'
                     f'<span class="eu-bar-track">{bar_svg([("eu-bar-ongoing", g["ongoing"]), ("eu-bar-later", g["upcoming"])], top)}</span>'
                     f'<span class="eu-bar-value">{g["ongoing"] + g["upcoming"]:,}</span></li>')
-        table.append(f'<tr><th scope="row">{letter} {E(ATC_GROUPS[letter])}</th><td>{g["ongoing"]:,}</td><td>{g["upcoming"]:,}</td></tr>')
-    legend = f'<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-ongoing"/></svg>Ongoing</span><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-later"/></svg>Starts later</span></p>'
-    return (f'<figure class="eu-chart"><figcaption>Exact matches by ATC group (first letter of the code)</figcaption>{legend}<ul class="eu-bars" aria-hidden="true">{"".join(bars)}</ul>'
-            '<div class="sr-only"><table><caption>Exact matches by ATC group</caption><thead><tr><th scope="col">ATC group</th><th scope="col">Ongoing</th><th scope="col">Starts later</th></tr></thead>'
+        table.append(f'<tr><th scope="row">{letter} {name}</th><td>{g["ongoing"]:,}</td><td>{g["upcoming"]:,}</td></tr>')
+    legend = f'<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-ongoing"/></svg>{t("chart.ongoing")}</span><span><svg class="eu-key-svg" viewBox="0 0 24 12" width="24" height="12" aria-hidden="true"><rect width="24" height="12" rx="3" class="eu-bar-later"/></svg>{t("chart.later")}</span></p>'
+    return (f'<figure class="eu-chart"><figcaption>{t("chart.groups.caption")}</figcaption>{legend}<ul class="eu-bars" aria-hidden="true">{"".join(bars)}</ul>'
+            f'<div class="sr-only"><table><caption>{t("chart.groups.table")}</caption><thead><tr><th scope="col">{t("chart.group")}</th><th scope="col">{t("chart.ongoing")}</th><th scope="col">{t("chart.later")}</th></tr></thead>'
             f'<tbody>{"".join(table)}</tbody></table></div></figure>')
 
 
@@ -132,7 +135,6 @@ def timeline_strip(notices, archive_start, snapshot_date):
     for year in range(t0.year + (t0.month > 1 or t0.day > 1), t1.year + 1):
         xs = x(f'{year}-01-01')
         parts.append(f'<path d="M{xs:.1f} 14V{height}" class="eu-ax"/><text x="{xs + 3:.1f}" y="11" class="eu-ax-text">{year}</text>')
-    rows_text = []
     for i, n in enumerate(notices):
         y = top + i * row
         end = snapshot_date if n['removed_on'] is None else n['last_seen']
@@ -140,20 +142,22 @@ def timeline_strip(notices, archive_start, snapshot_date):
         unknown = n['listed_at_first_capture'] or n['start_unknown']
         cls = 'eu-tl-bar eu-tl-unknown' if unknown else 'eu-tl-bar'
         name = ' '.join(p for p in (n['name'], n['strength']) if p)
-        label = f'{name}: first seen {n["first_seen"]}, ' + ('still listed' if n['removed_on'] is None else f'last seen {n["last_seen"]}') + (', start unknown' if unknown else '') + ''.join(f', not observed between {g["from"]} and {g["to"]}' for g in n['gaps'])
-        parts.append(f'<rect x="{x0:.1f}" y="{y}" width="{x1 - x0:.1f}" height="12" rx="3" class="{cls}"><title>{E(label)}</title></rect>')
+        state = ('chart.strip.still', {}) if n['removed_on'] is None else ('chart.strip.last', {'date': n['last_seen']})
+        label = {i: plain('chart.strip.label', i, name=name, first=n['first_seen'], state=plain(state[0], i, **state[1]),
+                          unknown=plain('chart.strip.unknownstart', i) if unknown else '',
+                          gaps=''.join(plain('chart.strip.gap', i, a=g['from'], b=g['to']) for g in n['gaps'])) for i in (0, 1)}
+        parts.append(f'<rect x="{x0:.1f}" y="{y}" width="{x1 - x0:.1f}" height="12" rx="3" class="{cls}"><title data-en="{E(label[0])}" data-fi="{E(label[1])}">{E(label[0])}</title></rect>')
         for g in n['gaps']:
             gx0, gx1 = x(g['from']), x(g['to'])
-            parts.append(f'<rect x="{gx0:.1f}" y="{y}" width="{max(gx1 - gx0, 2):.1f}" height="12" class="eu-tl-gap"><title>Not observed between {E(g["from"])} and {E(g["to"])}</title></rect>')
+            parts.append(f'<rect x="{gx0:.1f}" y="{y}" width="{max(gx1 - gx0, 2):.1f}" height="12" class="eu-tl-gap"><title{swap("chart.strip.gaptitle", a=g["from"], b=g["to"])}>{E(plain("chart.strip.gaptitle", 0, a=g["from"], b=g["to"]))}</title></rect>')
         for u in n['unseen']:
             ux0, ux1 = x(u['from']), x(u['to'])
-            parts.append(f'<rect x="{ux0:.1f}" y="{y}" width="{max(ux1 - ux0, 2):.1f}" height="12" class="eu-tl-gap"><title>Not listed in the captures {E(u["from"])} to {E(u["to"])}: unknown</title></rect>')
-        rows_text.append(label)
-    key = ('<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect width="24" height="10" rx="3" class="eu-tl-bar"/></svg>Listed</span>'
-           '<span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect x="1" y="1" width="22" height="8" rx="3" class="eu-tl-bar eu-tl-unknown"/></svg>Start unknown</span>'
-           '<span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect width="24" height="12" class="eu-tl-gap"/></svg>No capture (unknown)</span></p>')
-    return (f'<figure class="eu-chart eu-strip"><figcaption>Timeline of shortages, newest first</figcaption>{key}'
-            f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="Timeline strip: one bar for each of {len(notices)} shortages. The list below has the same facts." class="eu-strip-svg" preserveAspectRatio="xMinYMin meet">{"".join(parts)}</svg></figure>')
+            parts.append(f'<rect x="{ux0:.1f}" y="{y}" width="{max(ux1 - ux0, 2):.1f}" height="12" class="eu-tl-gap"><title{swap("chart.strip.unseentitle", a=u["from"], b=u["to"])}>{E(plain("chart.strip.unseentitle", 0, a=u["from"], b=u["to"]))}</title></rect>')
+    key = (f'<p class="eu-legend"><span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect width="24" height="10" rx="3" class="eu-tl-bar"/></svg>{t("chart.strip.listed")}</span>'
+           f'<span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect x="1" y="1" width="22" height="8" rx="3" class="eu-tl-bar eu-tl-unknown"/></svg>{t("chart.strip.unknown")}</span>'
+           f'<span><svg class="eu-key-svg" viewBox="0 0 24 10" width="24" height="10" aria-hidden="true"><rect width="24" height="12" class="eu-tl-gap"/></svg>{t("chart.strip.nocapture")}</span></p>')
+    return (f'<figure class="eu-chart eu-strip"><figcaption>{t("chart.strip.caption")}</figcaption>{key}'
+            f'<svg viewBox="0 0 {width} {height}" role="img"{swap_attr("aria-label", "chart.strip.aria", n=len(notices))} class="eu-strip-svg" preserveAspectRatio="xMinYMin meet">{"".join(parts)}</svg></figure>')
 
 
 def hero_art():

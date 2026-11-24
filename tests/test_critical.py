@@ -387,7 +387,7 @@ def test_every_download_and_feed_carries_the_ema_and_fimea_credit(tmp_path):
     assert 'file modification time not recorded' in C.credit(EU['meta'])
 
 
-def test_english_content_is_marked_lang_en_whatever_language_the_menu_has():
+def test_every_text_is_in_both_languages_and_follows_the_menu_language():
     events, products, details = fixture()
     matches = matches_of(events, products, details)
     out = render_critical({'eu': EU, 'rows': C.current_rows(events, matches), 'counts': C.counts(C.current_rows(events, matches)), 'history': C.history(events, matches, []),
@@ -395,12 +395,13 @@ def test_english_content_is_marked_lang_en_whatever_language_the_menu_has():
     for name in ('critical.html', 'critical-methods.html', 'critical-A02BC05.html'):
         html = out[name]
         main = html[html.index('<main'):html.index('</main>')]
-        assert '<div lang="en">' in main and main.index('<div lang="en">') < main.index('<h1'), name
+        assert '<div lang="en">' not in main and 'class="l-en" lang="en"' in main and 'class="l-fi" lang="fi"' in main, name   # both languages are in the page; the style sheet shows one
         credit_ok(html) if name != 'critical-methods.html' else None
     script = (Path(__file__).resolve().parents[1] / 'site/critical.js').read_text(encoding='utf-8')
-    assert 'documentElement.lang' not in script       # the page language stays what the visitor chose; only the content is English
+    assert 'documentElement.lang' not in script       # the page language is the one the visitor chose (lib.js sets it); the script only reads it
     css = (Path(__file__).resolve().parents[1] / 'site/style.css').read_text(encoding='utf-8')
     assert '.eu-table td>span{min-width:0;overflow-wrap:break-word}' in css
+    assert 'html[lang="fi"] .l-en,html:not([lang="fi"]) .l-fi{display:none!important}' in css
 
 
 def test_mitomycin_start_after_a_666_day_gap_is_unknown():
@@ -444,9 +445,9 @@ def test_headline_tile_and_atc_chart_count_exact_matches_only():
     checked, exact = sum(counts['ongoing'][t] for t in C.TYPES), counts['ongoing']['exact']
     assert checked > exact > 0
     page = render_critical(_two_row_page_data(rows))['critical.html']
-    assert f'<span class="eu-num">{exact:,}</span><span class="eu-tile-label">Exact match</span>' in page      # a box keeps the number and a short label
+    assert f'<span class="eu-num">{exact:,}</span><span class="eu-tile-label"><span class="l-en" lang="en">Exact match</span>' in page      # a box keeps the number and a short label
     assert f'Of {checked:,} ongoing packages checked' in page and 'class="eu-info"' in page                 # the longer text sits behind the "i"
-    groups = page[page.index('<caption>Exact matches by ATC group'):]
+    groups = page[page.index('<caption><span class="l-en" lang="en">Exact matches by ATC group'):]
     groups = groups[:groups.index('</table>')]
     assert sum(int(m) for m in re.findall(r'<td>(\d+)</td>', groups)) == exact     # ongoing and starts-later columns add up to the exact matches
 
@@ -467,10 +468,10 @@ def test_timeline_strip_hatches_a_notice_that_vanished_for_a_capture():
     n = {'name': 'Esomep', 'strength': '', 'first_seen': '2026-09-15', 'last_seen': '2026-11-20', 'removed_on': None, 'listed_at_first_capture': False, 'start_unknown': False,
          'gaps': [], 'unseen': [{'from': '2026-10-01', 'to': '2026-10-10'}]}
     svg = charts.timeline_strip([n], '2026-09-15', '2026-11-23')
-    assert svg.count('class="eu-tl-gap"><title>') == 1     # the legend swatch has the class too, but no title
+    assert svg.count('class="eu-tl-gap"><title') == 1     # the legend swatch has the class too, but no title
     assert 'Not listed in the captures 2026-10-01 to 2026-10-10: unknown' in svg
     steady = dict(n, unseen=[])
-    assert 'class="eu-tl-gap"><title>' not in charts.timeline_strip([steady], '2026-09-15', '2026-11-23')
+    assert 'class="eu-tl-gap"><title' not in charts.timeline_strip([steady], '2026-09-15', '2026-11-23')
 
 
 def test_long_urls_wrap_in_the_notes_and_other_credit_text():
