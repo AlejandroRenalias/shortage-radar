@@ -67,8 +67,9 @@ test('the built pages carry the same English text as the copy file, so a string 
   }
   assert.ok(checked > 80);
   assert.match(pages['index.html'], new RegExp(en.heroLine(749, 0).replace('.', '\\.')));
-  assert.equal(en.heroLine(714, 43), 'Fimea: 714 short now, 43 more expected within 2 weeks.');
-  assert.equal(copy_fi().heroLine(714, 43), 'Fimea: 714 saatavuushäiriötä nyt, 43 lisää odotettavissa 2 viikon sisällä.');
+  assert.equal(en.heroLine(714, 43), 'Fimea’s list: 714 packages in shortage now, 43 more expected to start within 2 weeks.');
+  assert.equal(en.heroLine(1, 0), 'Fimea’s list: 1 package in shortage now.');
+  assert.equal(copy_fi().heroLine(714, 43), 'Fimean listalla: 714 pakkauksella saatavuushäiriö nyt, 43 lisää alkamassa 2 viikon kuluessa.');
   assert.equal(en.sourceNoteEnded('1 Nov 2026', '2 Nov 2026'), 'Source: Fimea shortage file. From our captures: last seen in the capture of 1 Nov 2026, absent on 2 Nov 2026. From the company: the start and end dates.');
   assert.doesNotMatch(copy_fi().listIntro + copy_fi().trendsIntro, /puutteelli|listaa/);
   assert.match(copy_fi().impactCaveat1, /kaupan/);
@@ -454,8 +455,9 @@ test('strength is not repeated, never breaks between number and unit, and transl
 
 test('the empty result does not read as "no problem", and the placeholder finds results', () => {
   const copy = vm.runInContext('copy', context);
-  assert.equal(copy.en.empty, 'Not on the list. That does not guarantee your pharmacy has it. Try the active substance (for example paracetamol) or ask your pharmacy.');
-  assert.match(copy.fi.empty, /parasetamoli/);
+  assert.equal(copy.en.empty, 'No match on the current list for this search. This does not mean there is no shortage, or that your pharmacy has it. Try the name on your box, or the substance name in English (for example galantamine). You can also ask your pharmacy.');
+  assert.match(copy.fi.empty, /^Haulla ei löytynyt mitään nykyiseltä listalta\. Se ei tarkoita, ettei saatavuushäiriötä ole/);
+  for (const lang of ['en', 'fi']) assert.match(copy[lang].empty, /galantamine/);
   assert.match(copy.en.placeholder, /Burana or ibuprofen/);
   assert.match(copy.fi.placeholder, /Burana tai ibuprofeeni/);
   assert.ok(context.searchMatches({name:'Buranagel', substances:'Ibuprofen'}, 'burana'));
@@ -493,9 +495,9 @@ test('the pages keep the head tags, the one search, the report link and the cita
 test('every current card carries one impact label with its reason, in both languages', () => {
   const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'N02'};
   const cases = [
-    [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Pharmacy can usually give a substitute: 5 other packages on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 5 muuta pakkausta'}],
-    [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Pharmacy can usually give a substitute: 1 other package on the market', fi:'Apteekki voi yleensä vaihtaa valmisteen: kaupan on 1 muu pakkaus'}],
-    [{substitution_group:'0042', other_packages_count:0}, 'no_alternative', {en:'No interchangeable product on the market. Talk to your pharmacist or doctor early.', fi:'Ei vaihtokelpoista valmistetta kaupan. Kysy apteekista tai lääkäriltä hyvissä ajoin.'}],
+    [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Other packages in its substitution group are on the market (5). Ask your pharmacy if one is in stock.', fi:'Vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia (5). Kysy apteekista, onko jotakin varastossa.'}],
+    [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Other packages in its substitution group are on the market (1). Ask your pharmacy if one is in stock.', fi:'Vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia (1). Kysy apteekista, onko jotakin varastossa.'}],
+    [{substitution_group:'0042', other_packages_count:0}, 'no_alternative', {en:'No interchangeable product on the market. This does not mean there is no treatment. Talk to your pharmacist or doctor before your medicine runs out.', fi:'Ei vaihtokelpoista valmistetta kaupan. Tämä ei tarkoita, ettei hoitoa olisi. Kysy apteekista tai lääkäriltä, ennen kuin lääkkeesi loppuu.'}],
     [{other_packages_count:0}, 'nogroup', {en:'No substitution group. Ask your pharmacist.', fi:'Ei vaihtokelpoisuusryhmää. Kysy apteekista.'}],
     [{atc:'QN02', substitution_group:'0042', other_packages_count:3}, 'vet', {en:'Veterinary medicine. Ask your veterinarian or pharmacy.', fi:'Eläinlääke. Kysy eläinlääkäriltä tai apteekista.'}],
   ];
@@ -649,13 +651,15 @@ test('the medicine page shows the impact label with the other packages of the gr
     {vnr:'386574', name:'Ketipinor', strength:'200 mg', pack_label:{en:'100 tablets', fi:'100 tablettia'}, company:'Orion Corporation', listed:true}]},
     '0381': {available: [{vnr:'567362', name:'Seronil', strength:'20 mg', pack_label:{en:'30 capsules', fi:'30 kapselia'}, company:'Orion Corporation'}, {vnr:'138828', name:'Self', strength:'20 mg', pack_label:{en:'30', fi:'30'}, company:'X'}], short: []}};
   const critical = env.impactMarkup({NordicArticleNumber:'147881', atc:'N05AH04', substitution_group:'1299', other_packages_count:0, impact:'no_alternative'}, groups);
-  assert.match(critical, /No interchangeable product on the market\. Talk to your pharmacist or doctor early\./);
+  assert.match(critical, /No interchangeable product on the market\. This does not mean there is no treatment\. Talk to your pharmacist or doctor before your medicine runs out\./);
   assert.match(critical, /The other packages in its substitution group are short too\./);
   assert.match(critical, /<strong>Ketipinor 200&nbsp;mg|<strong>Ketipinor 200\u00a0mg/); assert.match(critical, /Orion Corporation/); assert.doesNotMatch(critical, /class="alt-flag"/, 'packages under "Short too" need no flag of their own');
   assert.doesNotMatch(critical, /Quetiapin Hexal/, 'the package itself is not its own alternative');
   assert.match(critical, /Substitution group 1299\./); assert.match(critical, /href="about\.html#impact"/);
   const substitute = env.impactMarkup({NordicArticleNumber:'138828', atc:'N06AB03', substitution_group:'0381', other_packages_count:1, impact:'substitute'}, groups);
-  assert.match(substitute, /Pharmacy can usually give a substitute: 1 other package on the market/);
+  assert.match(substitute, /Other packages in its substitution group are on the market \(1\)\. Ask your pharmacy if one is in stock\./);
+  assert.match(substitute, /Packages in one group can differ in device, pack size or other ingredients\. The pharmacist checks which one fits you\./);
+  assert.match(substitute, /Our reading of Fimea’s basic register, not Fimea’s statement\./);
   assert.match(substitute, /<h3>Other packages on the market<\/h3>/); assert.match(substitute, /Seronil 20.mg<\/strong><span>30 capsules<\/span><span>Orion Corporation<\/span>/);
   assert.doesNotMatch(substitute, /<strong>Self/);
   const alone = env.impactMarkup({NordicArticleNumber:'111111', atc:'N01', substitution_group:'9999', other_packages_count:0, impact:'no_alternative'}, groups);
@@ -939,11 +943,12 @@ test('Finnish names fall back to earlier packages in Finnish', async () => {
 
 test('the empty state keeps "not on the list" apart from "not available" and survives a failed load', async () => {
   const none = await listPage('?q=zzzz');
-  assert.match(none.list, /Not on the list\. That does not guarantee your pharmacy has it\./);
+  assert.match(none.list, /No match on the current list for this search\. This does not mean there is no shortage, or that your pharmacy has it\./);
+  assert.doesNotMatch(none.list, /Not on the list/);
   assert.equal(none.count, '0 packages');
   assert.doesNotMatch(none.list, /Earlier on the list/);
   const failed = await listPage('?q=elvanse', {failRemoved:true});
-  assert.match(failed.list, /Not on the list\./);
+  assert.match(failed.list, /No match on the current list for this search\./);
   assert.match(failed.list, /Earlier captures could not be loaded/);
   assert.equal(failed.requested.filter(x => x === 'removed.json').length, 1);
 });
@@ -973,7 +978,7 @@ test('nothing is answered, and the archive is not read, while current.json is st
   const gate = new Promise(resolve => { release = resolve; });
   const early = await listPage('', {gate, after: async get => { get('search').value = 'ibuprofeeni'; get('search').handlers.input(); }});
   assert.deepEqual(early.requested, ['current.json']);
-  assert.doesNotMatch(early.list, /Not on the list|Ibutabs|Earlier on the list|Buranagel/);
+  assert.doesNotMatch(early.list, /Not on the list|No match on the current list|Ibutabs|Earlier on the list|Buranagel/);
   assert.equal(early.count, '');
   release();
   await early.settle();
@@ -987,14 +992,14 @@ test('a search that a filter limits says so, keeps the query and offers to clear
   const page = await listPage('?q=burana&status=soon');
   assert.match(page.list, /No package on the current list matches this search with these filters\./);
   assert.match(page.list, /id="clear-inline">Clear filters</);
-  assert.doesNotMatch(page.list, /Not on the list\./);
+  assert.doesNotMatch(page.list, /No match on the current list for this search\./);
   assert.deepEqual(page.requested, ['current.json']);
   assert.equal(page.get('search').value, 'burana');
   const fi = await listPage('?q=burana&status=soon', {lang:'fi'});
   assert.match(fi.list, /Nykyisellä listalla ei ole tähän hakuun sopivaa pakkausta näillä suodattimilla\./);
   assert.match(fi.list, /Tyhjennä suodattimet/);
   // Without a filter the old messages stay.
-  assert.match((await listPage('?q=zzzz')).list, /Not on the list\./);
+  assert.match((await listPage('?q=zzzz')).list, /No match on the current list for this search\./);
   assert.match((await listPage('?status=soon')).list, /Nothing matches these filters/);
 });
 
@@ -1004,6 +1009,47 @@ test('the filter panel starts closed on a phone while a search is on, and open w
   assert.match(withSearch.get('filters-count').textContent, /\(1\)/);
   assert.equal((await listPage('?status=now')).get('filters').open, true);
   assert.equal((await listPage('?q=burana')).get('filters').open, false);
+});
+
+test('the safety wording: one label for an interchangeable package, no "usually", no vague "early", and the new advice lines', () => {
+  const copy = vm.runInContext('copy', context);
+  for (const lang of ['en', 'fi']) {
+    for (const [key, value] of Object.entries(copy[lang])) {
+      if (key.startsWith('whatText')) continue;
+      const rendered = typeof value === 'function' ? value(2, 'x', '3') : value;
+      assert.doesNotMatch(rendered, /Substitute usually|Pharmacy can usually|usually offer|usually change|pharmacist or doctor early|early about these|yleensä saatavilla|apteekki voi yleensä|hyvissä ajoin|Not on the list\. That does not guarantee|Ei listalla\. Se ei takaa/, `${lang} ${key}`);
+    }
+    // One label for the level, in the home triage, the filter, the list chip and the About page.
+    const label = copy[lang].impactChip_substitute;
+    assert.equal(copy[lang].impact_substitute, label, lang);
+    assert.ok(copy[lang].aboutImpact_substitute.startsWith(label + ':'), lang);
+  }
+  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
+  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
+  const home = pages['index.html'], about = pages['about.html'], list = pages['shortages.html'];
+  for (const html of [home, about, list]) assert.doesNotMatch(html, /Substitute usually|usually offer|usually change|pharmacist or doctor early|short now\./);
+  assert.match(home, /data-i18n="impact_substitute">Interchangeable package on the market</);
+  assert.match(list, /data-i18n="impact_substitute">Interchangeable package on the market</);
+  assert.match(about, /Interchangeable package on the market: other packages/);
+  assert.match(about, /Talk to your pharmacist or doctor before your medicine runs out\./);
+  assert.match(about, /GitHub receives the usual technical data of each page request, such as your IP address\./);
+  assert.match(copy.fi.privacyText, /GitHub saa jokaisesta sivupyynnöstä tavanomaiset tekniset tiedot, kuten IP-osoitteesi\./);
+  assert.doesNotMatch(copy.en.privacyText + copy.fi.privacyText, /Nothing is sent to anyone|Mitään ei lähetetä kenellekään/);
+  // The advice on a medicine page: do not stop, change or start another product; the urgency line.
+  for (const key of ['whatText', 'whatTextRest']) {
+    assert.match(copy.en[key], /Do not stop or change your medicine, or start a different product you have at home, without asking a pharmacist or doctor first\./);
+    assert.match(copy.fi[key], /Älä lopeta tai vaihda lääkettäsi äläkä ota käyttöön kotona olevaa toista valmistetta kysymättä ensin farmaseutilta tai lääkäriltä\./);
+    assert.doesNotMatch(copy.en[key], /Do not stop taking a medicine/);
+  }
+  assert.equal(copy.en.whatUrgent, 'If you are about to run out of a medicine you need, contact your pharmacy or doctor now. In an emergency, call 112.');
+  assert.match(copy.fi.whatUrgent, /ota heti yhteys apteekkiin tai lääkäriin\. Hätätilanteessa soita numeroon 112\.$/);
+  assert.equal(copy.en.desc_index, 'Is your medicine on Fimea’s shortage list? See the reported start and the company’s estimated end.');
+  assert.match(copy.fi.desc_index, /^Onko lääkkeelläsi saatavuushäiriö\?/);
+  assert.match(home, /name="description" content="Is your medicine on Fimea’s shortage list\?/);
+  const [env] = pageEnv(['medicine.js']);
+  vm.runInContext("language='en'", env);
+  assert.match(env.whatMarkup({atc:'N02', NordicArticleNumber:'1'}, 'now'), /In an emergency, call 112\./);
+  assert.doesNotMatch(env.whatMarkup({atc:'QN02', NordicArticleNumber:'1'}, 'now'), /call 112/);
 });
 
 test('the phone chip states only what the register shows, in both languages', () => {
