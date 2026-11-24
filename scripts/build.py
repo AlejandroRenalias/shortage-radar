@@ -36,6 +36,11 @@ def fimea_credit(sources):
             f"Fimea data is licensed under CC BY 4.0 ({CC_BY}). Shortage Radar selected, joined and changed the data; Fimea does not endorse the result.")
 
 
+def week_file(week, metadata):
+    """week.json carries the source credit too. The summary is null when there are too few captures, and stays null."""
+    return None if week is None else dict(week, source_metadata=metadata)
+
+
 HEADER = ['NordicArticleNumber', 'Valid', 'UnavailableFrom', 'EndingDate', 'DateOfTheNotification', 'Updated', 'Company']
 
 
@@ -303,6 +308,7 @@ def build():
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
     current_data['events'] = current
     history_data = {k: output[k] for k in ('history', 'end_changes', 'rss_counts', 'max_gap_days', 'newly_critical', 'triage_counts')}
+    history_data['source_metadata'] = metadata
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
@@ -316,7 +322,7 @@ def build():
     (ROOT / 'site/removed.json').write_text(json.dumps(dict(meta, events=removed_index(es)), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     home = summary(current, meta)
     (ROOT / 'site/summary.json').write_text(json.dumps(home, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    (ROOT / 'site/week.json').write_text(json.dumps(week_summary(es, snapshots, history), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (ROOT / 'site/week.json').write_text(json.dumps(week_file(week_summary(es, snapshots, history), metadata), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     for name, text in feeds(es, snapshots, history, critical).items():
         (ROOT / 'site' / name).write_text(text, encoding='utf-8', newline='\n')
     eu = eu_list.load_eu_list()

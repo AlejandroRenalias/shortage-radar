@@ -481,10 +481,10 @@ test('the pages keep the head tags, the one search, the report link and the cita
   assert.match(home, /og:image:alt/);
   assert.equal((list.match(/id="search"/g) || []).length, 1);
   assert.match(list, /id="result-count" aria-live="polite" aria-atomic="true"/);
-  assert.match(about, /issues\/new\?template=error-report\.yml/);
+  assert.match(about, /issues\/new\?template=data-problem\.yml/);
   assert.match(about, /id="citation"/); assert.match(trends, /id="cite-box"/);
   assert.match(trends, /id="chart-table"/);
-  assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/error-report.yml'));
+  assert.ok(fs.existsSync('.github/ISSUE_TEMPLATE/data-problem.yml'));
   assert.ok(fs.existsSync('site/sitemap.xml'));
   assert.match(about, /id="what-to-do"/); assert.match(about, /id="privacy"/); assert.match(about, /id="licence"/);
   assert.doesNotMatch(Object.values(pages).join(''), /https?:\/\/(?!alejandrorenalias|fimea|(?:www\.)?ema\.europa|creativecommons|web\.archive|github)/);
