@@ -122,6 +122,8 @@ A single package is a group of one. It cannot be unsure for reasons that compare
 
 The first release uses only **verified single product presentations**. In the audit this is `first_release_candidate`: the group has no unsure reason and all its members come from one product record, so they share the container and the verified size of one unit, and the device id where a device is named. Each package row keeps its own shortage notices, its own sources and its own history. The group page has no history of its own and states no substitute or stock claim: membership only says that the register fields above are equal.
 
+**Container guard.** A group of several packages is eligible only when all members have the same known immediate container id (`Sailytysastia`; `container_verified` in the audit). One product record can hold a tube and a pump bottle with equal fields and no device id (Zovirax cream 081243 and 081252, container ids 14 and 11); a blank container is not known. When the guard fails, every member keeps its package page. The guard is an eligibility check only: it adds no unsure reason and does not change which packages are in one group. A group of one package has nothing to compare.
+
 Everything else stays on package pages: cross-product groups, unverified identity, authorisation links, parallel imports, component strengths, injectables whose unit size is not verified, and device variants without a device id.
 
 ## Checks in the audit

@@ -195,6 +195,17 @@ def composition_status(packages):
     return 'verified'
 
 
+def container_verified(packages):
+    """Eligibility guard for the first release: a group of several packages needs ALL members to have the same KNOWN immediate container id
+    (`Sailytysastia`). One product record can hold a tube and a pump bottle (Zovirax cream 081243 and 081252) with no device id and equal fields.
+    A blank container is not known. A group of one package has nothing to compare. This is an eligibility check only: it adds no unsure reason
+    and does not change which packages are in one group."""
+    if len(packages) < 2:
+        return True
+    containers = {(p.get('container') or [''])[0] for p in packages}
+    return len(containers) == 1 and '' not in containers
+
+
 def group_packages(packages, day=None, listed=()):
     """Group register packages (dicts, see `read_register`) into medicines. Returns a list of group dicts sorted by id.
 
@@ -291,7 +302,8 @@ def group_packages(packages, day=None, listed=()):
             products=len(products), authorisations=sorted({licence_identity(p) for p in ps} - {''}),
             parallel_import=sorted(p['vnr'] for p in ps if parallel_kind(p) == 'import'),
             parallel_distribution=sorted(p['vnr'] for p in ps if parallel_kind(p) == 'distribution'),
-            first_release_candidate=not reasons and len(products) == 1,
+            container_verified=container_verified(ps),
+            first_release_candidate=not reasons and len(products) == 1 and container_verified(ps),
         ))
     return out
 
@@ -451,6 +463,7 @@ def summarise(groups, packages, listed, day):
         out['scopes'][name] = {
             'groups': len(gs), 'unsure_groups': sum(g['unsure'] for g in gs), 'unsure_reasons': dict(sorted(reasons.items())),
             'first_release_candidates': sum(g['first_release_candidate'] for g in gs),
+            'container_guard_only': sum(not g['unsure'] and g['products'] == 1 and not g['container_verified'] for g in gs),
             'single_package_groups': sum(len(g['vnrs']) == 1 for g in gs),
             'groups_with_several_active_substances': sum(len(g['inputs']['substances']) > 1 for g in gs),
             'groups_with_parallel_import': sum(bool(g['parallel_import']) for g in gs),
@@ -592,7 +605,8 @@ def summary_text(s):
         lines += [f"## {name.replace('_', ' ')}: {scope['groups']} groups", '',
                   f"- unsure: {scope['unsure_groups']}",
                   *[f'  - {r}: {n}' for r, n in scope['unsure_reasons'].items()],
-                  f"- first-release candidates (not unsure, one product record): {scope['first_release_candidates']}",
+                  f"- first-release candidates (not unsure, one product record, one known container): {scope['first_release_candidates']}",
+                  f"- groups kept out of the first release only by the container guard: {scope['container_guard_only']}",
                   f"- single-package groups: {scope['single_package_groups']}",
                   f"- groups with several active substances: {scope['groups_with_several_active_substances']}",
                   f"- groups with a parallel import: {scope['groups_with_parallel_import']}; with a parallel distribution: {scope['groups_with_parallel_distribution']}",

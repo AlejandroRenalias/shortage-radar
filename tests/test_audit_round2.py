@@ -60,6 +60,23 @@ def test_a_single_package_can_be_unsure_for_its_own_data():
 
 
 def test_first_release_candidates_are_unsure_free_single_product_presentations():
-    assert one(pkg('1', product='R'), pkg('2', product='R'), day=DAY)['first_release_candidate']
+    assert one(pkg('1', product='R', container=['9', 'Läpipainopakkaus']), pkg('2', product='R', container=['9', 'Läpipainopakkaus']), day=DAY)['first_release_candidate']
     assert not one(pkg('1'), pkg('2'), day=DAY)['first_release_candidate']  # two product records
     assert not one(pkg('1', routes=()), day=DAY)['first_release_candidate']
+
+
+# Round 3, Zovirax cream 081243 (tube, container 14) and 081252 (pump bottle, container 11): one product record, blank device ids, equal fields.
+def test_one_product_with_other_or_unknown_containers_is_not_a_first_release_candidate():
+    cream = ('17', 'emulsiovoide')
+    tube = pkg('081243', form=cream, strength='50 mg/g', product='REL1777', container=['14', 'Tuubi'], pack='10 g')
+    pump = pkg('081252', form=cream, strength='50 mg/g', product='REL1777', container=['11', 'Pumppupullo'], pack='25 g')
+    g = one(tube, pump, day=DAY)
+    # The equivalence rule is unchanged: one group, not unsure. Only eligibility is withheld.
+    assert g['vnrs'] == ['081243', '081252'] and not g['unsure'] and not g['container_verified'] and not g['first_release_candidate']
+    # A blank container is not a known container, also when every member is blank.
+    blank = one(dict(tube, container=None), dict(pump, container=None), day=DAY)
+    assert not blank['unsure'] and not blank['first_release_candidate']
+    assert not one(tube, dict(pump, container=None), day=DAY)['first_release_candidate']
+    # The same known container on every member, and a single package, stay eligible.
+    assert one(tube, dict(tube, vnr='2'), day=DAY)['first_release_candidate']
+    assert one(dict(tube, container=None), day=DAY)['first_release_candidate']

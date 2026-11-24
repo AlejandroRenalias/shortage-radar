@@ -14,7 +14,7 @@
 - register_last_modified: Tue, 24 Nov 2026 00:30:58 GMT
 - shortages_last_modified: Mon, 23 Nov 2026 23:20:01 GMT
 - snapshot_date: 2026-11-24
-- groups_json_sha256: be691d6dc54603654504a53734a8ab4e3d1d5b0ab1165c1a900526b9ae41a5d4
+- groups_json_sha256: 2082f01fe6b103e9f1b135ef8d0266d0e5deed4adbc685185cf2b81c9aa1f27d
 
 18445 register packages with a VNR in 9453 groups. 756 VNRs in the current shortage file: 753 joined to one register package, 3 ambiguous (on two register records: 018486, 370212, 424765), 0 not found. 4 joined by an old VNR.
 
@@ -38,7 +38,8 @@ Register VNRs on two records: 54. On the market means: register flag Kaupan is 1
   - strength_not_stated: 937
   - veterinary: 940
   - vnr_listed_twice: 79
-- first-release candidates (not unsure, one product record): 2382
+- first-release candidates (not unsure, one product record, one known container): 2343
+- groups kept out of the first release only by the container guard: 39
 - single-package groups: 6053
 - groups with several active substances: 1622
 - groups with a parallel import: 865; with a parallel distribution: 399
@@ -64,7 +65,8 @@ Register VNRs on two records: 54. On the market means: register flag Kaupan is 1
   - strength_not_stated: 369
   - veterinary: 734
   - vnr_listed_twice: 6
-- first-release candidates (not unsure, one product record): 1980
+- first-release candidates (not unsure, one product record, one known container): 1945
+- groups kept out of the first release only by the container guard: 35
 - single-package groups: 3178
 - groups with several active substances: 880
 - groups with a parallel import: 301; with a parallel distribution: 342
@@ -88,7 +90,8 @@ Register VNRs on two records: 54. On the market means: register flag Kaupan is 1
   - strength_not_stated: 24
   - veterinary: 37
   - vnr_listed_twice: 5
-- first-release candidates (not unsure, one product record): 135
+- first-release candidates (not unsure, one product record, one known container): 135
+- groups kept out of the first release only by the container guard: 0
 - single-package groups: 213
 - groups with several active substances: 77
 - groups with a parallel import: 54; with a parallel distribution: 64

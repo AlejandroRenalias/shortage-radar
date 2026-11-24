@@ -104,7 +104,8 @@
     "veterinary": 940,
     "vnr_listed_twice": 79
    },
-   "first_release_candidates": 2382,
+   "first_release_candidates": 2343,
+   "container_guard_only": 39,
    "single_package_groups": 6053,
    "groups_with_several_active_substances": 1622,
    "groups_with_parallel_import": 865,
@@ -133,7 +134,8 @@
     "veterinary": 734,
     "vnr_listed_twice": 6
    },
-   "first_release_candidates": 1980,
+   "first_release_candidates": 1945,
+   "container_guard_only": 35,
    "single_package_groups": 3178,
    "groups_with_several_active_substances": 880,
    "groups_with_parallel_import": 301,
@@ -161,6 +163,7 @@
     "vnr_listed_twice": 5
    },
    "first_release_candidates": 135,
+   "container_guard_only": 0,
    "single_package_groups": 213,
    "groups_with_several_active_substances": 77,
    "groups_with_parallel_import": 54,
@@ -185,7 +188,7 @@
   "register_last_modified": "Tue, 24 Nov 2026 00:30:58 GMT",
   "shortages_last_modified": "Mon, 23 Nov 2026 23:20:01 GMT",
   "snapshot_date": "2026-11-24",
-  "groups_json_sha256": "be691d6dc54603654504a53734a8ab4e3d1d5b0ab1165c1a900526b9ae41a5d4"
+  "groups_json_sha256": "2082f01fe6b103e9f1b135ef8d0266d0e5deed4adbc685185cf2b81c9aa1f27d"
  },
  "register_groups": {
   "register_groups": 1685,
