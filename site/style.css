@@ -267,6 +267,12 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .foot-title{font-size:1rem;margin-bottom:6px}
 .foot ul{list-style:none;margin:0;padding:0}
 .foot li a{display:inline-flex;align-items:center;min-height:44px}
+.foot a,.foot p{overflow-wrap:anywhere}
+.foot .foot-feedback a{display:inline-flex;align-items:center;min-height:44px;font-weight:500}
+.fold{border-top:1px solid var(--line)}
+.fold>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:500;color:var(--green-ink)}
+.fold>div{padding-bottom:8px}
+.prose .fold:last-child{border-bottom:1px solid var(--line)}
 
 
 

@@ -1,21 +1,18 @@
-name: Report a data problem
-description: Something on the site looks wrong or does not match the Fimea source.
-title: "Data problem: "
+name: Report an error on the site
+description: Something on Shortage Radar looks wrong or does not match its source.
+title: "Error: "
 body:
-  - type: input
-    id: medicine
+  - type: markdown
     attributes:
-      label: Medicine
-      description: Name and strength, as shown on the site.
-    validations:
-      required: false
+      value: |
+        Reports are public. Do not write personal or health details.
   - type: input
-    id: vnr
+    id: page
     attributes:
-      label: VNR
-      description: The six-digit package number, if you know it.
+      label: Page link
+      description: The address of the page with the error. Copy it from the address bar.
     validations:
-      required: false
+      required: true
   - type: textarea
     id: problem
     attributes:
@@ -26,7 +23,7 @@ body:
   - type: input
     id: source
     attributes:
-      label: Source link
-      description: A link to Fimea or another source that shows the right information.
+      label: Source
+      description: A link to Fimea, EMA or another source that shows the right information.
     validations:
       required: false
