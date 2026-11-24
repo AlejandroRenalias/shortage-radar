@@ -643,7 +643,7 @@ const copy = {
     askPharmacy: "Kysy apteekista",
     navLabel: "Päävalikko",
     navHome: "Etusivu",
-    navShortages: "Saatavuushäiriöt",
+    navShortages: "Saatavuus\u00adhäiriöt",
     navTrends: "Tilastot",
     navEuList: "EU-lista",
     navAbout: "Tietoa",

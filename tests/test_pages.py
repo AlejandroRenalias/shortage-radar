@@ -159,3 +159,31 @@ def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
     assert any(r == 'U+0030-0039' for r in ranges)
     html = render_pages(749)['index.html']
     assert 'fonts/atkinson-latin.woff2' in html and 'fonts/public-sans-digits.woff2' in html
+
+
+def test_tab_bar_markup_has_five_solid_icon_tabs_and_one_current_page():
+    out = render_pages(749)
+    nav = between(out['shortages.html'], '<nav class="nav"', '</nav>')
+    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
+    assert [t[0] for t in tabs] == ['index.html', 'shortages.html', 'trends.html', 'critical.html', 'about.html']
+    assert [t[3] for t in tabs] == ['navHome', 'navShortages', 'navTrends', 'navEuList', 'navAbout']
+    assert [t[1] for t in tabs] == ['', ' aria-current="page"', '', '', '']
+    for _, _, svg, _, _ in tabs:
+        assert 'class="uicon ic-b"' in svg and 'aria-hidden="true"' in svg and 'focusable="false"' in svg
+    assert 'aria-label="Main menu"' in nav
+
+
+def test_finnish_shortages_tab_can_wrap_at_a_soft_hyphen():
+    i18n = (ROOT / 'site' / 'i18n.js').read_text(encoding='utf-8')
+    assert 'navShortages: "Saatavuus' + chr(92) + 'u00adhäiriöt"' in i18n
+    assert i18n.count('navShortages:') == 2
+
+
+def test_tab_bar_floats_clears_content_and_respects_motion_and_safe_area():
+    css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
+    nav = re.search(r'\n\.nav\{([^}]*)\}', css).group(1)
+    assert 'position:fixed' in nav and 'bottom:calc(12px + env(safe-area-inset-bottom))' in nav
+    assert re.search(r'--nav-h:100px', css) and re.search(r'body\{[^}]*padding-bottom:calc\(var\(--nav-h\) \+ env\(safe-area-inset-bottom\)\)', css)
+    assert re.search(r'\.nav a\{[^}]*min-height:56px', css)
+    assert '.nav a:focus-visible{' in css
+    assert re.search(r'prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important', css)

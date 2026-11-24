@@ -31,17 +31,18 @@ PAGES = {
 }
 NAV_LABELS = {'navHome': 'Home', 'navShortages': 'Shortages', 'navEuList': 'EU list', 'navTrends': 'Trends', 'navAbout': 'About'}
 NAV_ICONS = {
-    'home': '<path d="M3.500 11 12 4l8.500 7M6 9.500V20h12V9.500"/>',
-    'list': '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
-    'chart': '<path d="M4 20V4M4 20h16M8 15l3-4 3 2 5-7"/>',
-    'shield': '<path d="M12 3.500 5 6.500v5c0 4.500 3 7.500 7 9 4-1.500 7-4.500 7-9v-5z"/><path d="M12 9v6M9 12h6"/>',
-    'info': '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.500h.01"/>',
+    'home': '<path d="M12 3.500 3 11.200h2.200V19.500a1 1 0 0 0 1 1H10v-5.500h4v5.500h3.800a1 1 0 0 0 1-1v-8.300H21z"/>',
+    'list': '<rect x="3.500" y="4.500" width="3.500" height="3.500" rx="1.200"/><rect x="9" y="5" width="11.500" height="2.600" rx="1.300"/><rect x="3.500" y="10.200" width="3.500" height="3.500" rx="1.200"/><rect x="9" y="10.700" width="11.500" height="2.600" rx="1.300"/><rect x="3.500" y="15.900" width="3.500" height="3.500" rx="1.200"/><rect x="9" y="16.400" width="11.500" height="2.600" rx="1.300"/>',
+    'chart': '<rect x="4" y="12" width="4" height="8" rx="1.500"/><rect x="10" y="7" width="4" height="13" rx="1.500"/><rect x="16" y="3" width="4" height="17" rx="1.500"/>',
+    'shield': '<path d="M12 3 5 6v5.500c0 4.200 3 7.400 7 9.500 4-2.100 7-5.300 7-9.500V6z"/><path class="c" d="M12 8.500v6M9 11.500h6"/>',
+    'info': '<circle cx="12" cy="12" r="9.500"/><path class="c" d="M12 11v5.500"/><circle class="k" cx="12" cy="7.700" r="1.400"/>',
 }
 MARK = '<svg class="mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="#00875a"/><path d="M16 8v16M8 16h16" stroke="#fff" stroke-width="3.500" stroke-linecap="round"/></svg>'
 
 
 def icon(name):
-    return f'<svg class="uicon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">{NAV_ICONS[name]}</svg>'
+    # Solid tab icons: filled with the text colour; the .c and .k parts are cut-outs drawn in the tab's own background (see --cut in style.css).
+    return f'<svg class="uicon ic-b" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">{NAV_ICONS[name]}</svg>'
 
 
 def head(page, prefix, meta):
