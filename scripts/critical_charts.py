@@ -53,6 +53,11 @@ def route_label(routes):
     return f'<span class="eu-route-tag">{route_icon(kind, 16)}{bi(E(ROUTE_NAMES[kind]), E(ROUTE_NAMES_FI[kind]))}</span>'
 
 
+def route_tag(routes, text):
+    """Icon and the package's own route(s) (`text` is the bilingual markup); the broad group name belongs to the chart only."""
+    return f'<span class="eu-route-tag">{route_icon(route_kind(routes), 16)}{text}</span>'
+
+
 def route_counts(rows, status='ongoing'):
     out = dict.fromkeys(ROUTE_NAMES, 0)
     for r in rows:

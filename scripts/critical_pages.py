@@ -102,7 +102,7 @@ def notice_row(r, words=''):
     text = ' '.join(str(r.get(k, '')) for k in ('vnr', 'atc', 'name', 'substances', 'company', 'list_description')).casefold()
     route = (f'<dt>{t("row.route")}</dt><dd>{t("row.not_known")}</dd>' if r['match_type'] == 'unmatched'
              else f'<dt>{t("row.product_route")}</dt><dd>{routes_text(r)}</dd><dt>{t("row.list_route")}</dt><dd>{E(r.get("list_route") or "—")}</dd>')
-    tag = '' if r['match_type'] == 'unmatched' else f'<span class="eu-route-line">{charts.route_label(r.get("product_routes"))}</span>'
+    tag = '' if r['match_type'] == 'unmatched' else f'<span class="eu-route-line">{charts.route_tag(r.get("product_routes"), routes_text(r))}</span>'
     more = (f'<details class="eu-fold eu-row-more"><summary>{t("row.details")}</summary><p class="note">{row_note(r)}</p><dl class="eu-facts"><dt>{t("row.company")}</dt><dd>{E(r.get("company", ""))}</dd>'
             f'<dt class="eu-atc-fact">{t("th.atc")}</dt><dd class="eu-atc-fact">{atc}</dd><dt>{t("row.start")}</dt><dd>{bday(r["start"])}</dd>{route}<dt>{t("row.vnr")}</dt><dd>{E(r["vnr"])}</dd></dl></details>')
     return (f'<tr data-type="{E(r["match_type"])}" data-status="{r["status"]}" data-text="{E(text)}" data-fi="{E(words)}"><td data-label="Medicine">{name_cell(r)}{tag}{more}</td>'
@@ -271,7 +271,7 @@ def code_page(code, row, data):
     notices = [r for r in data['rows'] if r.get('atc') == code]
     h = data['history'].get(code)
     current = ''.join(
-        f'<li class="eu-card"><div class="eu-card-head"><div>{name_cell(r)}</div>{chip(r["match_type"])}</div><p class="eu-step-line">{bi(E(STATUS_NAMES[r["status"]]), E(STATUS_NAMES_FI[r["status"]]))} · {E(r["company"])} · {charts.route_label(r["product_routes"])}</p>'
+        f'<li class="eu-card"><div class="eu-card-head"><div>{name_cell(r)}</div>{chip(r["match_type"])}</div><p class="eu-step-line">{bi(E(STATUS_NAMES[r["status"]]), E(STATUS_NAMES_FI[r["status"]]))} · {E(r["company"])} · {charts.route_tag(r["product_routes"], routes_text(r))}</p>'
         f'<details class="eu-fold"><summary>{t("row.details")}</summary><p class="note">{row_note(r)}</p>'
         f'<dl class="eu-facts"><dt>{t("row.start")}</dt><dd>{bday(r["start"])}</dd><dt>{t("dl.end")}</dt><dd>{bday(r["end"])}</dd>'
         f'<dt>{t("dl.notified")}</dt><dd>{bday(r["notified"])}</dd><dt>{t("row.vnr")}</dt><dd>{E(r["vnr"])}</dd><dt>{t("row.product_route")}</dt><dd>{routes_text(r)}</dd></dl></details></li>'

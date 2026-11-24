@@ -138,3 +138,27 @@ def test_rows_carry_the_verified_finnish_substance_words_for_the_search():
     assert 'data-fi="desmopressiini"' in html and html.count('data-fi=""') == len(rows) - 1
     js = (ROOT / 'site/critical.js').read_text(encoding='utf-8')
     assert "searchMatches({substances: tr.dataset.text, substance_fi: tr.dataset.fi || ''}, input.value)" in js
+
+
+def test_a_package_row_and_card_show_only_its_own_route_not_the_combined_group():
+    """VNR 416337 (Desmopressin Sandoz) is under the tongue (1070): the row, the card and Details say so; 'by mouth or under the tongue' is the chart's group name."""
+    events, products, details = T.fixture()
+    products['416337'] = T.product('H01BA02', 'Desmopressin Sandoz', 'Desmopressin acetate')
+    details['416337'] = T.detail(['1070'], '0', substances=['Desmopressin acetate'])
+    events.append(T.event('416337', '2026-11-20', '2026-11-23'))
+    matches = T.matches_of(events, products, details)
+    rows = C.current_rows(events, matches)
+    data = {'eu': T.EU, 'rows': rows, 'counts': C.counts(rows), 'history': {}, 'archive_start': '2026-09-15', 'snapshot_date': '2026-11-23', 'source_metadata': {}}
+    out = P.render_critical(data)
+    row = next(r for r in rows if r['vnr'] == '416337')
+    assert row['product_routes'] == ['under the tongue']
+    tr = out['critical.html']
+    tr = tr[tr.index('data-text="416337'):] if 'data-text="416337' in tr else tr[tr.index('Desmopressin Sandoz'):]
+    tr = tr[:tr.index('</tr>')]
+    card = out['critical-H01BA02.html']
+    card = card[card.index('Desmopressin Sandoz'):]
+    card = card[:card.index('</li>')]
+    for html in (tr, card):
+        assert 'under the tongue' in html and 'kielen alle' in html          # the specific route, in both languages
+        assert 'By mouth or under the tongue' not in html and 'Suun kautta tai kielen alle' not in html and 'By mouth' not in html and 'Suun kautta' not in html
+    assert 'by mouth or under the tongue' in out['critical.html'] and 'suun kautta tai kielen alle' in out['critical.html']      # the grouped chart keeps the combined name
