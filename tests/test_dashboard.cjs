@@ -1472,3 +1472,36 @@ print(json.dumps({'rows': current, 'summary': {k: s[k] for k in ('total', 'short
   // The window and the data date survive in the shared address.
   assert.equal(later.filtersToQuery(later.parseFilters('?status=soon&within=14&asof=2026-11-24')), 'status=soon&asof=2026-11-24&within=14');
 });
+
+test('the third strip tile stays hidden when impact data is missing, also when summary.json fails to load', () => {
+  const html = homeWith('None');
+  assert.match(html, /id="triage"[^>]*data-impact=""/);
+  assert.match(html.match(/<li[^>]*id="strip-sub"/)[0], / hidden/);
+  const [env, get] = pageEnv(['home.js']);
+  for (const id of ['hero-line', 'hero-label', 'hero-answer', 'triage-list', 'triage-vet', 'shelf', 'newest', 'facts', 'facts-since', 'facts-title', 'strip-now-num', 'strip-soon-num', 'strip-sub-num', 'strip-sub', 'strip-now-link', 'strip-soon-link', 'strip-sub-link', 'triage']) get(id);
+  get('triage-vet').parentElement = {hidden: false};
+  get('triage').dataset.impact = '';   // the built page had no impact data; data stays null because the file did not load
+  get('hero-line').dataset.count = '714'; get('hero-line').dataset.soon = '42';
+  env.renderHome();
+  assert.equal(get('strip-sub').hidden, true);
+  assert.equal(get('strip-now-num').textContent, '714');
+  // A measured zero is shown: the built page carries 0 for the level.
+  get('triage').dataset.impact = 'substitute:0,no_alternative:3,nogroup:1,vet:0';
+  env.renderHome();
+  assert.equal(get('strip-sub').hidden, false);
+  assert.equal(get('strip-sub-num').textContent, '0');
+});
+
+test('the strip names its unit, keeps a visible focus outline inside the strip, and the notes summary has a chevron', () => {
+  const css = fs.readFileSync('site/style.css', 'utf8');
+  assert.match(css, /\.strip-tile:focus-visible\{outline:[^}]*outline-offset:-\d+px/);
+  assert.match(css, /\.hero \.home-notes>summary::after\{content:""/);
+  assert.match(css, /\.hero \.home-notes\[open\]>summary::after\{transform:/);
+  for (const lang of ['en', 'fi']) {
+    const t = vm.runInContext(`copy.${lang}`, context);
+    assert.doesNotMatch(t.stripLabel, /Fimea|Fimean/);
+    assert.match(t.stripSubNote, lang === 'en' ? /not the alternatives/ : /ei vaihtoehtoja/);
+    assert.match(t.stripSubNote, lang === 'en' ? /short now or expected to start/ : /nyt tai joiden häiriön odotetaan alkavan/);
+    assert.doesNotMatch([t.stripSub, t.stripSubNote].join(' '), /in stock|pharmacy has|varastossa|apteekissa on/i);
+  }
+});

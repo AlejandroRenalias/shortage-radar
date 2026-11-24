@@ -160,11 +160,11 @@ def home(count, impact=None, soon=0, as_of=''):
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
     strip = ''.join([strip_tile('now', strip_href('status=now', as_of), count, 'stripNow', 'Short now'),
                      strip_tile('soon', strip_href('status=soon&within=14', as_of), soon, 'stripSoon', 'Starting within 2 weeks'),
-                     strip_tile('sub', strip_href('impact=substitute', as_of), sub, 'stripSub', 'Interchangeable package found in the data', hidden=not impact)])
+                     strip_tile('sub', strip_href('impact=substitute', as_of), sub, 'stripSub', 'Listed packages with an interchangeable package found in the data', hidden=not impact)])
     return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head">
 <h1 id="hero-line" data-count="{count}" data-soon="{soon}">{line}</h1>
 <p class="hero-fresh" id="hero-fresh" hidden><span id="hero-file"></span><span id="hero-checked"></span></p>
-<ul class="strip" id="strip" aria-label="Counts from Fimea’s list" data-i18n-attr="aria-label=stripLabel">{strip}</ul>
+<ul class="strip" id="strip" aria-label="Package counts" data-i18n-attr="aria-label=stripLabel">{strip}</ul>
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
@@ -174,11 +174,12 @@ def home(count, impact=None, soon=0, as_of=''):
 <p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
 {answer}
 <p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
+<p data-i18n="stripSubNote">The third count is listed packages, short now or expected to start, for which Shortage Radar’s check found an interchangeable package in the data. It counts the listed packages, not the alternatives.</p>
 <p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
 <p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
 <p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p></details>
 </div>
-<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data</h2>
+<section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')) if impact else '', quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data</h2>
 <ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
 <p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a></p>
 </section></div></section>
