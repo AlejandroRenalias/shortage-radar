@@ -162,3 +162,55 @@ def test_feed_title_translates_strength_words_for_english_only_and_skips_a_stren
             assert titles == ['New on the list: Patch 20 microg / 24 hours, 24 patches', 'New on the list: Patch, 10 mg + 2 ml']
         else:
             assert titles == ['Uusi listalla: Patch 20 mikrog / 24 tuntia, 24 laastaria', 'Uusi listalla: Patch, 10 mg + 2 ml']
+
+
+def test_feed_labels_describe_the_check_not_the_market():
+    from changes import TEXT
+    for lang, text in TEXT.items():
+        joined = ' '.join(str(v) for v in text.values() if isinstance(v, str))
+        assert 'interchangeable product on the market' not in joined and 'vaihtokelpoista valmistetta kaupan' not in joined, lang
+        assert 'early' not in text['critical_advice'] and 'hyvissä ajoin' not in text['critical_advice'], lang
+    assert TEXT['en']['critical'] == 'No interchangeable package found in the data'
+    assert TEXT['fi']['critical'] == 'Aineistosta ei löydy vaihtokelpoista pakkausta'
+
+
+def test_feed_event_before_the_register_run_names_the_capture_rule_not_current_flags():
+    # The register has no earlier flags, so an older event is explained by the market dates and that capture's shortage list.
+    es, snapshots, history = sample()
+    event = {'group': '2018', 'date': '2026-11-17', 'after': '2026-11-13', 'vnrs': ['394651'], 'medicine': 'Lixiana', 'strength': '60 mg',
+             'packages': [{'name': 'Lixiana', 'strength': '60 mg', 'vnr': '394651', 'pack_label': {'en': '98 tablets', 'fi': '98 tablettia'}}]}
+    files = feeds(es, snapshots, history, critical=[event])
+    texts = {}
+    for name, lang in (('feed.xml', 'en'), ('feed-fi.xml', 'fi')):
+        root = ET.fromstring(files[name].encode('utf-8'))
+        found = [e for e in root.findall(ATOM + 'entry') if '/group/2018/' in e.findtext(ATOM + 'id')]
+        assert len(found) == 1, lang
+        texts[lang] = found[0].findtext(ATOM + 'summary')
+    assert 'the check found no other qualifying package in this substitution group' in texts['en'] and 'on the market by its market dates and not on that capture’s shortage list' in texts['en']
+    assert 'tarkistus ei löytänyt tämän vaihtokelpoisuusryhmän muuta tarkistuksen täyttävää pakkausta' in texts['fi'] and 'tuon tilannekuvan saatavuushäiriölistalla' in texts['fi']
+    for lang, text in texts.items():
+        assert 'not short in the register' not in text and 'eikä häiriötä' not in text and 'meets the check' not in text, lang
+
+
+def test_feed_event_on_the_register_day_is_not_described_as_a_market_date_finding():
+    # Three captures, the register dated on the middle one. The other package is on the market by its dates and absent from that day's
+    # shortage list, but the register's own shortage flag disqualifies it on that day, and it is listed in the next capture.
+    from triage import newly_critical
+    days = ['2026-11-16', '2026-11-17', '2026-11-18']
+    members = {'2018': [{'vnr': '000001', 'old': set(), 'market': '1', 'entry': '2020-01-01', 'exit': None},
+                        {'vnr': '000002', 'old': set(), 'market': '1', 'entry': '2020-01-01', 'exit': None, 'shortage_flag': '1'}]}
+    listed = [['000001'], ['000001'], ['000001', '000002']]
+    captures = [(d, [{'NordicArticleNumber': v} for v in vs]) for d, vs in zip(days, listed)]
+    assert newly_critical(captures, members) == []  # without the register day, market dates alone find an alternative
+    (event,) = newly_critical(captures, members, register_date='2026-11-17')
+    assert event['date'] == '2026-11-17' and event['after'] == '2026-11-16'
+    event.update({'medicine': 'Test', 'strength': '', 'packages': [{'name': 'Test', 'strength': '', 'vnr': '000001', 'pack_label': {'en': '30 tablets', 'fi': '30 tablettia'}}]})
+    es, snapshots, history = sample()
+    files = feeds(es, snapshots, history, critical=[event])
+    for name, lang, found, method in (('feed.xml', 'en', 'the check found no other qualifying package in this substitution group', 'the register’s own flags count only on the register’s own date'),
+                                      ('feed-fi.xml', 'fi', 'tarkistus ei löytänyt tämän vaihtokelpoisuusryhmän muuta tarkistuksen täyttävää pakkausta', 'rekisterin omat merkinnät otetaan huomioon vain rekisterin omana päivänä')):
+        root = ET.fromstring(files[name].encode('utf-8'))
+        (entry,) = [e for e in root.findall(ATOM + 'entry') if '/group/2018/' in e.findtext(ATOM + 'id')]
+        text = entry.findtext(ATOM + 'summary')
+        assert found in text and method in text, lang
+

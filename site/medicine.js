@@ -47,7 +47,7 @@ function impactMarkup(e, groups) {
 function whatMarkup(e, status) {
   const t = copy[language], asked = status !== 'left';
   const advice = isVet(e) ? t.whatTextVet : asked ? t.whatTextRest : t.whatText;
-  return `<section class="panel what" aria-labelledby="what-title"><h2 id="what-title">${esc(t.whatTitle)}</h2><p>${esc(advice)}</p><p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${esc(t.moreInfoUrl)}">${esc(t.moreInfoLink)}</a></p><p><a href="about.html#what-to-do">${esc(t.whatLink)}</a></p></section>`;
+  return `<section class="panel what" aria-labelledby="what-title"><h2 id="what-title">${esc(t.whatTitle)}</h2><p>${esc(advice)}</p>${isVet(e) ? '' : `<p>${esc(t.whatUrgent)}</p>`}<p class="more-info">${esc(t.moreInfo(e.Company))} <a href="${esc(t.moreInfoUrl)}">${esc(t.moreInfoLink)}</a></p><p><a href="about.html#what-to-do">${esc(t.whatLink)}</a></p></section>`;
 }
 // An ended record names the captures that bound it, not the date of today's file.
 function sourceLine(e, left, snapshotDate) {

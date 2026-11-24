@@ -4,6 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 import os
+import re
 import unicodedata
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # MAX_GAP_DAYS (scripts/gaps.py): captures further apart than this are not joined into one continuous series,
 # and a change of an end date across a wider gap is not counted (end_date_changes).
 # Product fields kept out of the shortage events: the holder, and the route and flag details the critical medicines join reads.
-PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id'}
+PRIVATE = {'holder', 'routes', 'eu_flag', 'form_id', 'atc_name'}
 CC_BY = 'https://creativecommons.org/licenses/by/4.0/'
 
 
@@ -80,6 +81,61 @@ def group_key(product):
     return ' '.join(unicodedata.normalize('NFKC', product.get('substitution_group', '')).split()) or None
 
 
+def one_word_substance_name(atc, name):
+    """The Finnish ATC name of a full ATC code when it is one word ("tadalafiili"), else ''.
+    The name of a group, a class or a combination ("progesteronia sisältävä muovikierukka") is not a substance name."""
+    name = (name or '').strip().lower()
+    ok = len(atc or '') == (8 if (atc or '').startswith('Q') else 7) and re.fullmatch(r'[^\W\d_]{5,}', name) and not name.endswith('t') and not any(w in name for w in CLASS_WORDS)
+    return name if ok else ''
+
+
+def _sound(word):
+    """A check spelling for one English substance word and its Finnish name: "metyyliprednisoloni" and "methylprednisolone" both give
+    "metilprednisolon", "gemsitabiini" and "gemcitabine" both give "gemsitabin". Used only to confirm a pair, never to find one."""
+    w = re.sub(r'yyli', 'yl', word.lower())
+    w = re.sub(r'ph', 'f', w)
+    w = re.sub(r'c(?=[eiy])', 's', w)
+    w = re.sub(r'ts', 's', w.replace('h', '').replace('z', 's'))
+    w = w.replace('x', 'cs').replace('k', 'c').replace('y', 'i')
+    return re.sub(r'(.)\1+', r'\1', w).rstrip('aeiou')
+
+
+MIN_PRODUCTS = 2
+# One-word ATC names that are classes, not substances ("elektrolyytit", "rokotteet", "liuokset"): plural words and generic nouns.
+CLASS_WORDS = ('rokote', 'valmiste', 'liuos', 'seos', 'yhdistelm', 'entsyymi')
+
+
+def finnish_pairs(single):
+    """Finnish names for the register's English substance names, from the register itself.
+
+    `single` is an iterable of (substance, atc, atc_name) for products that have exactly one active substance. The whole substance
+    name pairs with the one-word ATC name of the product ("Tadalafil" with G04BE08 "tadalafiili"). Nothing is inferred: no shared first
+    word, no spelling comparison. A pair is kept only when at least MIN_PRODUCTS products give it and every one agrees; a substance with
+    two different Finnish names gets none, and a product whose ATC name is a class ("elektrolyytit") or a label of a code
+    ("progesteronia sisältävä muovikierukka") gives nothing. A name that is not kept is left out: no result is better than a wrong one."""
+    pairs = {}
+    for substance, atc, atc_name in single:
+        finnish = one_word_substance_name(atc, atc_name)
+        key = ' '.join(re.findall(r'[^\W\d_]+', (substance or '').lower()))
+        if finnish and key:
+            pairs.setdefault(key, []).append(finnish)
+    # A second check on the pair: the Finnish name must spell like one word of the whole English name (so "gemsitabiini" for "Gemcitabine
+    # hydrochloride", but not "aprepitantti" for "Fosaprepitant dimeglumine" and not an acid for a salt).
+    confirmed = lambda key, finnish: len(_sound(finnish)) >= 5 and _sound(finnish) in {_sound(w) for w in key.split()}
+    return {k: v[0] for k, v in pairs.items() if len(set(v)) == 1 and len(v) >= MIN_PRODUCTS and confirmed(k, v[0])}
+
+
+def search_names(substances, pairs):
+    """The Finnish names of a package's active substances, for the search: "levonorgestreeli" for "Levonorgestrel".
+
+    The register writes its active substances (`Aine`) in English only; `finnish_pairs` gives the Finnish names, matched on the whole
+    substance name and on nothing else (a salt such as "Meglumine amidotrizoate" is not matched through "Meglumine gadopentate").
+    The ATC name of the package itself is not used, because a code can carry a class label. A substance without a name adds nothing.
+    The result is a search aid for finding packages. It says nothing about availability."""
+    found = [pairs.get(' '.join(re.findall(r'[^\W\d_]+', (substance or '').lower()))) for substance in substances]
+    return ' '.join(dict.fromkeys(sorted(x for x in found if x)))
+
+
 def register(path, wanted, current_shortages=(), members=None, details=None, day=None):
     """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
     on the market, not flagged short in the register and not in the current shortage file.
@@ -93,6 +149,7 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
     day = day or helsinki_today()
     packages, exact, products, substances = {}, set(), {}, {}
     candidates = []
+    pack_refs = set()
     current_shortages = set(current_shortages)
     for _, el in ET.iterparse(path, events=('end',)):
         if el.tag == 'Pakkaus':
@@ -100,6 +157,7 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             unit = el.find('Pakkauskokoyksikko')
             package = (el.get('Laakevalmiste-ref'), [x.get('Laakeaine-ref') for x in el.findall('Pakkaus_Laakeaine')], el.findtext('Pakkauskokoteksti', ''), vnr or '', unit.get('value', '') if unit is not None else '')
             old_vnrs = {x.text for x in el.findall('VanhaVNR') if x.text}
+            pack_refs.add((el.get('Laakevalmiste-ref'), tuple(package[1])))
             candidates.append((el.get('Laakevalmiste-ref'), vnr, old_vnrs, el.findtext('Kaupanolo/Kaupan'), el.findtext('SaatavuushairioTiedot/Saatavuushairio'),
                                el.findtext('Kaupanolo/Kauppaantulopaiva'), el.findtext('Kaupanolo/Kaupastapoistumispaiva'), package[2], package[4]))
             if vnr in wanted:
@@ -114,11 +172,14 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
             routes = [(x.get('id', ''), x.get('value', '')) for x in el.findall('Antoreitti')]
-            products[el.get('id')] = {'routes': routes, 'eu_flag': (el.findtext('EUKriittinenValmiste') or '').strip(), 'form_id': form.get('id', '') if form is not None else '', 'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
+            products[el.get('id')] = {'routes': routes, 'eu_flag': (el.findtext('EUKriittinenValmiste') or '').strip(), 'form_id': form.get('id', '') if form is not None else '', 'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'atc_name': atc.get('value', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
             el.clear()
         elif el.tag == 'Laakeaine':
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
             el.clear()
+    # Products with one active substance pair that substance with the one-word ATC name of the product (finnish_pairs).
+    single = {(ref, names[0]) for ref, refs in pack_refs for names in [list(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))] if len(names) == 1 and ref in products}
+    dictionary = finnish_pairs((substance, products[ref]['atc'], products[ref]['atc_name']) for ref, substance in single)
     available = {}
     for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit in candidates:
         product = products.get(ref, {})
@@ -139,7 +200,7 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             key = group_key(product)
             count = len(available.get(key, set()) - {vnr, current_vnr}) if key else 0
             names = list(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))
-            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(names), other_packages_count=count)
+            result[vnr] = dict(product, current_vnr=current_vnr, pack=pack, pack_label=pack_label(pack, unit, product['form']), substances=', '.join(names), substance_fi=search_names(names, dictionary), other_packages_count=count)
             if details is not None:
                 details[vnr] = dict({k: products[ref][k] for k in ('routes', 'eu_flag', 'form_id')}, substances=names)
     return result
@@ -267,8 +328,12 @@ def build():
     members = {}
     details = {}
     products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details)
+    search_words = {}
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
+        # Finnish substance words for the search; kept only in current.json and removed.json, so the other files stay as they were.
+        if e.get('substance_fi') is not None:
+            search_words[e['NordicArticleNumber']] = e.pop('substance_fi')
         if e['removed_on'] is None:
             e.setdefault('other_packages_count', 0)
             e['impact'] = level(e)
@@ -306,7 +371,7 @@ def build():
             writer.writerow([e['NordicArticleNumber'], e.get('current_vnr', ''), e.get('name', ''), e.get('strength', ''), e.get('form', ''), e.get('pack', ''), e.get('substances', ''), e.get('atc', ''), e['Company'], e['UnavailableFrom'], e['EndingDate'], e['DateOfTheNotification'], 'yes' if e.get('atc', '').startswith('Q') else 'no' if e.get('atc') else '', e.get('other_packages_count', 0) if e.get('substitution_group') else '', e.get('substitution_group', ''), e['impact'], metadata['source_credit']])
     (ROOT / 'site/data.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     current_data = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
-    current_data['events'] = current
+    current_data['events'] = [dict(e, substance_fi=search_words[e['NordicArticleNumber']]) if search_words.get(e['NordicArticleNumber']) else e for e in current]
     history_data = {k: output[k] for k in ('history', 'end_changes', 'rss_counts', 'max_gap_days', 'newly_critical', 'triage_counts')}
     history_data['source_metadata'] = metadata
     history_data['first_capture_count'] = sum(bool(e.get('listed_at_first_capture')) for e in es)
@@ -319,7 +384,7 @@ def build():
     shard_dir.mkdir(exist_ok=True)
     for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs)).items():
         (shard_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    (ROOT / 'site/removed.json').write_text(json.dumps(dict(meta, events=removed_index(es)), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (ROOT / 'site/removed.json').write_text(json.dumps(dict(meta, events=[dict(r, substance_fi=search_words[r['NordicArticleNumber']]) if search_words.get(r['NordicArticleNumber']) else r for r in removed_index(es)]), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     home = summary(current, meta)
     (ROOT / 'site/summary.json').write_text(json.dumps(home, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     (ROOT / 'site/week.json').write_text(json.dumps(week_file(week_summary(es, snapshots, history), metadata), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
