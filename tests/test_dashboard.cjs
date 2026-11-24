@@ -73,9 +73,9 @@ test('the built pages carry the same English text as the copy file, so a string 
   assert.equal(en.sourceNoteEnded('1 Nov 2026', '2 Nov 2026'), 'Source: Fimea shortage file. From our captures: last seen in the capture of 1 Nov 2026, absent on 2 Nov 2026. From the company: the start and end dates.');
   assert.doesNotMatch(copy_fi().listIntro + copy_fi().trendsIntro, /puutteelli|listaa/);
   assert.match(copy_fi().impactCaveat1, /kaupan/);
-  for (const lang of ['en', 'fi']) assert.doesNotMatch(vm.runInContext(`copy.${lang}`, context).heroAnswer(537), /pharmacy can usually|apteekki voi yleensä/);
-  assert.match(en.heroAnswer(537), /^For 537 of them, the register lists an interchangeable package that is on the market and not flagged short\.$/);
-  assert.match(pages['index.html'], /hero-answer[^>]*><\/p>|not flagged short/);
+  for (const lang of ['en', 'fi']) assert.doesNotMatch(vm.runInContext(`copy.${lang}`, context).heroAnswer(537), /pharmacy can usually|apteekki voi yleensä|not flagged short/);
+  assert.equal(en.heroAnswer(537), 'For 537 of them, the check found another package of the group that the register lists as on the market and that is not on the shortage list.');
+  assert.match(pages['index.html'], /hero-answer[^>]*><\/p>|not on the shortage list/);
   assert.doesNotMatch(copy_fi().impactCaveat1, /markkinoilla/);
 });
 
@@ -495,9 +495,9 @@ test('the pages keep the head tags, the one search, the report link and the cita
 test('every current card carries one impact label with its reason, in both languages', () => {
   const record = {name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'N02'};
   const cases = [
-    [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Other packages in its substitution group are on the market (5). Ask your pharmacy if one is in stock.', fi:'Vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia (5). Kysy apteekista, onko jotakin varastossa.'}],
-    [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Other packages in its substitution group are on the market (1). Ask your pharmacy if one is in stock.', fi:'Vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia (1). Kysy apteekista, onko jotakin varastossa.'}],
-    [{substitution_group:'0042', other_packages_count:0}, 'no_alternative', {en:'No interchangeable product on the market. This does not mean there is no treatment. Talk to your pharmacist or doctor before your medicine runs out.', fi:'Ei vaihtokelpoista valmistetta kaupan. Tämä ei tarkoita, ettei hoitoa olisi. Kysy apteekista tai lääkäriltä, ennen kuin lääkkeesi loppuu.'}],
+    [{substitution_group:'0042', other_packages_count:5}, 'substitute', {en:'Other packages in its substitution group are listed as on the market and off the shortage list (5). Ask your pharmacy if one is in stock.', fi:'Rekisterin mukaan vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia, jotka eivät ole saatavuushäiriölistalla (5). Kysy apteekista, onko jotakin varastossa.'}],
+    [{substitution_group:'0042', other_packages_count:1}, 'substitute', {en:'Other packages in its substitution group are listed as on the market and off the shortage list (1). Ask your pharmacy if one is in stock.', fi:'Rekisterin mukaan vaihtokelpoisuusryhmässä on muita kaupan olevia pakkauksia, jotka eivät ole saatavuushäiriölistalla (1). Kysy apteekista, onko jotakin varastossa.'}],
+    [{substitution_group:'0042', other_packages_count:0}, 'no_alternative', {en:'No interchangeable package found in the data: no other package in its substitution group is listed as on the market and off the shortage list. This does not mean there is no treatment. Talk to your pharmacist or doctor before your medicine runs out.', fi:'Aineistosta ei löydy vaihtokelpoista pakkausta: vaihtokelpoisuusryhmän muita pakkauksia ei ole rekisterin mukaan kaupan ilman saatavuushäiriötä. Tämä ei tarkoita, ettei hoitoa olisi. Kysy apteekista tai lääkäriltä, ennen kuin lääkkeesi loppuu.'}],
     [{other_packages_count:0}, 'nogroup', {en:'No substitution group. Ask your pharmacist.', fi:'Ei vaihtokelpoisuusryhmää. Kysy apteekista.'}],
     [{atc:'QN02', substitution_group:'0042', other_packages_count:3}, 'vet', {en:'Veterinary medicine. Ask your veterinarian or pharmacy.', fi:'Eläinlääke. Kysy eläinlääkäriltä tai apteekista.'}],
   ];
@@ -596,7 +596,7 @@ test('home leads with the triage: words and numbers, each part one tap from the 
   const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'no_alternative':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
   assert.ok(html.indexOf('id="q"') < html.indexOf('id="triage"'), 'the search is on the first screen of a phone, ahead of the triage');
   for (const [level, n] of [['substitute', '531'], ['no_alternative', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
-  assert.match(html, /For 531 of them, the register lists an interchangeable package that is on the market and not flagged short\./);
+  assert.match(html, /For 531 of them, the check found another package of the group that the register lists as on the market and that is not on the shortage list\./);
   assert.match(html, /href="shortages\.html\?impact=vet" id="triage-vet">Also on the list: 39 veterinary medicines/);
   // Each row carries its share of the human packages as a bar; the widths follow the human counts only.
   assert.match(html, /<svg class="tri-bar"[^>]*aria-hidden="true"/);
@@ -651,19 +651,19 @@ test('the medicine page shows the impact label with the other packages of the gr
     {vnr:'386574', name:'Ketipinor', strength:'200 mg', pack_label:{en:'100 tablets', fi:'100 tablettia'}, company:'Orion Corporation', listed:true}]},
     '0381': {available: [{vnr:'567362', name:'Seronil', strength:'20 mg', pack_label:{en:'30 capsules', fi:'30 kapselia'}, company:'Orion Corporation'}, {vnr:'138828', name:'Self', strength:'20 mg', pack_label:{en:'30', fi:'30'}, company:'X'}], short: []}};
   const critical = env.impactMarkup({NordicArticleNumber:'147881', atc:'N05AH04', substitution_group:'1299', other_packages_count:0, impact:'no_alternative'}, groups);
-  assert.match(critical, /No interchangeable product on the market\. This does not mean there is no treatment\. Talk to your pharmacist or doctor before your medicine runs out\./);
+  assert.match(critical, /No interchangeable package found in the data: no other package in its substitution group is listed as on the market and off the shortage list\. This does not mean there is no treatment\. Talk to your pharmacist or doctor before your medicine runs out\./);
   assert.match(critical, /The other packages in its substitution group are short too\./);
   assert.match(critical, /<strong>Ketipinor 200&nbsp;mg|<strong>Ketipinor 200\u00a0mg/); assert.match(critical, /Orion Corporation/); assert.doesNotMatch(critical, /class="alt-flag"/, 'packages under "Short too" need no flag of their own');
   assert.doesNotMatch(critical, /Quetiapin Hexal/, 'the package itself is not its own alternative');
   assert.match(critical, /Substitution group 1299\./); assert.match(critical, /href="about\.html#impact"/);
   const substitute = env.impactMarkup({NordicArticleNumber:'138828', atc:'N06AB03', substitution_group:'0381', other_packages_count:1, impact:'substitute'}, groups);
-  assert.match(substitute, /Other packages in its substitution group are on the market \(1\)\. Ask your pharmacy if one is in stock\./);
+  assert.match(substitute, /Other packages in its substitution group are listed as on the market and off the shortage list \(1\)\. Ask your pharmacy if one is in stock\./);
   assert.match(substitute, /Packages in one group can differ in device, pack size or other ingredients\. The pharmacist checks which one fits you\./);
   assert.match(substitute, /Our reading of Fimea’s basic register, not Fimea’s statement\./);
   assert.match(substitute, /<h3>Other packages on the market<\/h3>/); assert.match(substitute, /Seronil 20.mg<\/strong><span>30 capsules<\/span><span>Orion Corporation<\/span>/);
   assert.doesNotMatch(substitute, /<strong>Self/);
   const alone = env.impactMarkup({NordicArticleNumber:'111111', atc:'N01', substitution_group:'9999', other_packages_count:0, impact:'no_alternative'}, groups);
-  assert.match(alone, /It is the only package in its substitution group on the market\./);
+  assert.match(alone, /The register lists no other package of its substitution group as on the market\./);
   const nogroup = env.impactMarkup({NordicArticleNumber:'111111', atc:'L01', impact:'nogroup'}, groups);
   assert.match(nogroup, /No substitution group\. Ask your pharmacist\./); assert.doesNotMatch(nogroup, /Substitution group \d/);
 });
@@ -967,7 +967,7 @@ test('the wording about earlier listings never says supply returned or the medic
 test('a result carries a short impact chip next to the full label, and the compact phone rules hide the intro and the callout while searching', () => {
   setLanguage(context, 'en');
   const html = context.pkgCard({name:'Test', UnavailableFrom:'2026-11-06', EndingDate:'2026-12-01', atc:'N02', substitution_group:'42', other_packages_count:0}, NOW);
-  assert.match(html, /<span class="impact-chip">No interchangeable product on the market<\/span>/);
+  assert.match(html, /<span class="impact-chip">No interchangeable package found in the data<\/span>/);
   const css = read('style.css');
   for (const selector of ['html[data-searching] .page-head .lead', 'html[data-searching] #search-hint', 'html[data-searching] .crit-callout']) assert.ok(css.includes(selector), selector);
   assert.match(css, /@media \(max-width:719px\)\{\s*html\[data-searching\] \.page-head\{/);
@@ -1017,20 +1017,20 @@ test('the safety wording: one label for an interchangeable package, no "usually"
     for (const [key, value] of Object.entries(copy[lang])) {
       if (key.startsWith('whatText')) continue;
       const rendered = typeof value === 'function' ? value(2, 'x', '3') : value;
-      assert.doesNotMatch(rendered, /Substitute usually|Pharmacy can usually|usually offer|usually change|pharmacist or doctor early|early about these|yleensä saatavilla|apteekki voi yleensä|hyvissä ajoin|Not on the list\. That does not guarantee|Ei listalla\. Se ei takaa/, `${lang} ${key}`);
+      assert.doesNotMatch(rendered, /Substitute usually|Pharmacy can usually|usually offer|usually change|pharmacist or doctor early|early about these|yleensä saatavilla|apteekki voi yleensä|hyvissä ajoin|Not on the list\. That does not guarantee|Ei listalla\. Se ei takaa|interchangeable product on the market|Interchangeable package on the market|Can the pharmacy give a substitute|Voiko apteekki vaihtaa|Vaihtokelpoinen pakkaus kaupan|Ei vaihtokelpoista valmistetta kaupan/, `${lang} ${key}`);
     }
     // One label for the level, in the home triage, the filter, the list chip and the About page.
     const label = copy[lang].impactChip_substitute;
     assert.equal(copy[lang].impact_substitute, label, lang);
     assert.ok(copy[lang].aboutImpact_substitute.startsWith(label + ':'), lang);
   }
-  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
-  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
+  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package found in the data');
+  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus löytyy aineistosta');
   const home = pages['index.html'], about = pages['about.html'], list = pages['shortages.html'];
   for (const html of [home, about, list]) assert.doesNotMatch(html, /Substitute usually|usually offer|usually change|pharmacist or doctor early|short now\./);
-  assert.match(home, /data-i18n="impact_substitute">Interchangeable package on the market</);
-  assert.match(list, /data-i18n="impact_substitute">Interchangeable package on the market</);
-  assert.match(about, /Interchangeable package on the market: other packages/);
+  assert.match(home, /data-i18n="impact_substitute">Interchangeable package found in the data</);
+  assert.match(list, /data-i18n="impact_substitute">Interchangeable package found in the data</);
+  assert.match(about, /Interchangeable package found in the data: another package/);
   assert.match(about, /Talk to your pharmacist or doctor before your medicine runs out\./);
   assert.match(about, /GitHub receives the usual technical data of each page request, such as your IP address\./);
   assert.match(copy.fi.privacyText, /GitHub saa jokaisesta sivupyynnöstä tavanomaiset tekniset tiedot, kuten IP-osoitteesi\./);
@@ -1050,12 +1050,28 @@ test('the safety wording: one label for an interchangeable package, no "usually"
   vm.runInContext("language='en'", env);
   assert.match(env.whatMarkup({atc:'N02', NordicArticleNumber:'1'}, 'now'), /In an emergency, call 112\./);
   assert.doesNotMatch(env.whatMarkup({atc:'QN02', NordicArticleNumber:'1'}, 'now'), /call 112/);
+  // Two packages of one group, both on the market and both on the shortage list (Atrovent Eco 121099 and 574917): the check finds no OTHER package, and says only that.
+  const [atro] = pageEnv(['medicine.js']);
+  const atroGroups = {'0777': {available: [], short: [{vnr:'574917', name:'Atrovent Eco', strength:'0.25 mg/ml', pack_label:{en:'20 vials', fi:'20 ampullia'}, company:'Boehringer', listed:true}, {vnr:'121099', name:'Atrovent Eco', strength:'0.25 mg/ml', pack_label:{en:'20 vials', fi:'20 ampullia'}, company:'Boehringer', listed:true}]}};
+  const atroPkg = {NordicArticleNumber:'121099', atc:'R03BB01', substitution_group:'0777', other_packages_count:0, impact:'no_alternative'};
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'`, atro);
+    const html = atro.impactMarkup(atroPkg, atroGroups);
+    assert.doesNotMatch(html, /interchangeable product on the market|vaihtokelpoista valmistetta kaupan|Can the pharmacy give a substitute|Voiko apteekki vaihtaa/, lang);
+    assert.match(html, lang === 'en' ? /No interchangeable package found in the data/ : /Aineistosta ei löydy vaihtokelpoista pakkausta/, lang);
+    assert.match(html, lang === 'en' ? /no other package in its substitution group is listed as on the market and off the shortage list/ : /muita pakkauksia ei ole rekisterin mukaan kaupan ilman saatavuushäiriötä|ei löydy vaihtokelpoista pakkausta/, lang);
+    assert.match(html, lang === 'en' ? /<h2 id="impact-title">Interchangeable packages in the data<\/h2>/ : /<h2 id="impact-title">Vaihtokelpoiset pakkaukset aineistossa<\/h2>/, lang);
+    assert.match(html, /Atrovent Eco/);
+    assert.match(html, lang === 'en' ? /The other packages in its substitution group are short too/ : /Myös ryhmän muiden pakkausten saatavuudessa on häiriö/, lang);
+  }
+  vm.runInContext("language='en'", atro);
+  assert.match(pages['index.html'], /<h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data<\/h2>/);
 });
 
 test('the phone chip states only what the register shows, in both languages', () => {
   const copy = vm.runInContext('copy', context);
-  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package on the market');
-  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus kaupan');
+  assert.equal(copy.en.impactChip_substitute, 'Interchangeable package found in the data');
+  assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus löytyy aineistosta');
   for (const lang of ['en', 'fi']) for (const level of ['substitute', 'no_alternative', 'nogroup', 'vet']) {
     assert.doesNotMatch(copy[lang]['impactChip_' + level], /usually|yleensä|available|saatavilla|substitute|can give/i, `${lang} ${level}`);
     setLanguage(context, lang);

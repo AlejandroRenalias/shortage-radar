@@ -162,3 +162,15 @@ def test_feed_title_translates_strength_words_for_english_only_and_skips_a_stren
             assert titles == ['New on the list: Patch 20 microg / 24 hours, 24 patches', 'New on the list: Patch, 10 mg + 2 ml']
         else:
             assert titles == ['Uusi listalla: Patch 20 mikrog / 24 tuntia, 24 laastaria', 'Uusi listalla: Patch, 10 mg + 2 ml']
+
+
+def test_feed_labels_describe_the_check_not_the_market():
+    from changes import TEXT
+    for lang, text in TEXT.items():
+        joined = ' '.join(str(v) for v in text.values() if isinstance(v, str))
+        assert 'interchangeable product on the market' not in joined and 'vaihtokelpoista valmistetta kaupan' not in joined, lang
+        assert 'early' not in text['critical_advice'] and 'hyvissä ajoin' not in text['critical_advice'], lang
+    assert TEXT['en']['critical'] == 'No interchangeable package found in the data'
+    assert TEXT['fi']['critical'] == 'Aineistosta ei löydy vaihtokelpoista pakkausta'
+    assert 'listed as on the market and off the shortage list' in TEXT['en']['critical_when']('2026-11-01', None)
+

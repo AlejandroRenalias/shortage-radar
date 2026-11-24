@@ -18,7 +18,7 @@ The archive checks Fimea four times daily at 04:35, 10:05, 15:35 and 21:05 UTC t
 
 The list page loads `current.json`. The other pages load small files built with it, so no page downloads the whole archive: `summary.json` (counts, impact counts, longest and newest packages) for home, trends and about, `p/NN.json` (every notice of the packages whose VNR ends in NN, and the other packages in the substitution groups of its current packages) for the medicine page, `history.json` for the trends page and `week.json` for the weekly facts. `removed.json` (one row for each package that was listed earlier and is not now, with the capture it was last seen in and its gaps; `scripts/removed.py`) is read only when a search finds nothing on the current list, so the list page can show "Earlier on the list: last seen <date> (capture)" with a link to the archived medicine page. A past listing never means that supply returned. The downloadable `data.json` retains the complete event history. `week.json` holds the counts for the "This week" summary, and `feed.xml` (English) and `feed-fi.xml` (Finnish) are Atom feeds of the shortages that appeared or left the list in the last 14 days and of the substitution groups that newly have no interchangeable product on the market, with at most 200 entries.
 
-### Impact: can the pharmacy give a substitute?
+### Impact: interchangeable packages in the data
 
 For each current shortage, the build counts the other packages in the same substitution group (vaihtokelpoisuusryhmä) whose register entries say they are on the market and not in shortage, excluding packages listed in the current shortage file. Only Fimea's group code is compared. The register writes the strength and form of one group in different ways ("20 mg/ml" and "20 mg/g", film-coated tablets and capsules), and an earlier version that also compared that text found no alternative for 30 packages that had one. This is not a pharmacy stock check, and a group does not establish that a particular package is suitable.
 
@@ -28,8 +28,8 @@ Each current shortage gets one impact level (`impact` in `current.json`, `data.j
 
 | Level | Meaning |
 | --- | --- |
-| `substitute` | Substitute usually available: the group has at least one other package on the market and not short. |
-| `no_alternative` | No interchangeable product on the market: the package has a group, but no such other package. |
+| `substitute` | Interchangeable package found in the data: the group has at least one other package that the register lists as on the market and that is not on the shortage list. |
+| `no_alternative` | No interchangeable package found in the data: the package has a group, but the check found no such other package. This is not a statement that no treatment exists. |
 | `nogroup` | No substitution group: the pharmacy cannot change the medicine on its own. |
 | `vet` | Veterinary medicine (ATC starting with Q). Substitution groups are for human medicines, so these are counted apart from the human headline. |
 
@@ -57,10 +57,10 @@ The site is static and has five pages, all under `/shortage-radar/` on GitHub Pa
 
 | Page | File | What it does |
 | --- | --- | --- |
-| Home (Etusivu) | `index.html` | One sentence on today's situation, with when Fimea's file changed and when Shortage Radar checked it ("Fimea: N short now, M more expected within 2 weeks."), the impact triage (substitute usually available, no interchangeable product on the market, no substitution group), a search, the newest packages, three facts from this week and three paths. The old `?q=` address is sent to the list. |
+| Home (Etusivu) | `index.html` | One sentence on today's situation, with when Fimea's file changed and when Shortage Radar checked it ("Fimea: N short now, M more expected within 2 weeks."), the impact triage (interchangeable package found in the data, none found in the data, no substitution group), a search, the newest packages, three facts from this week and three paths. The old `?q=` address is sent to the list. |
 | Shortages (Saatavuushäiriöt) | `shortages.html` | The full list with search, filters (impact, status, medicine group, form, company) and sort. The search and filters are in the address, for example `shortages.html?q=burana&status=now` or `shortages.html?impact=critical`, which groups the packages by medicine. |
-| Medicine (Lääke) | `medicine.html?vnr=<VNR>` | One package: label, whether the pharmacy can give a substitute and the other packages of its group, status, timeline, what to do, details and a link to share. Feed entries link here. |
-| Trends (Tilastot) | `trends.html` | Count over time, this week, groups, earliest reported starts, groups newly without an interchangeable product, the recorded impact counts, the end dates that changed and a citation. |
+| Medicine (Lääke) | `medicine.html?vnr=<VNR>` | One package: label, whether the check found an interchangeable package and the other packages of its group, status, timeline, what to do, details and a link to share. Feed entries link here. |
+| Trends (Tilastot) | `trends.html` | Count over time, this week, groups, earliest reported starts, groups newly without an interchangeable package in the data, the recorded impact counts, the end dates that changed and a citation. |
 | About (Tietoa) | `about.html` | What a shortage is, what to do, substitution groups, what the impact label means and its limits, how the data works, limits, downloads, privacy and licence. |
 
 The pages are built by `scripts/pages.py`, which writes the shared header and footer once into every page, and `scripts/build.py` runs it with the data. The generated pages are not committed. Browser code is in `site/`: `i18n.js` holds all text, `lib.js` the shared code (search, dates, the package card, filters, the timeline model, page set-up) and one script for each page. Form pictograms are drawn in `lib.js`. The font is Atkinson Hyperlegible Next, hosted in `site/fonts`; its digits are replaced by Public Sans digits (a 3 KB subset under the same family name) because Atkinson's zero is slashed and reads as a letter in dates and doses.
