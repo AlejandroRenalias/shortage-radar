@@ -42,7 +42,7 @@ function loadPast() {
 function draw() {
   // Nothing is answered before current.json is here: a miss now could be a package that is still loading.
   if (!loaded) return;
-  const t = copy[language], now = todayUTC(), grouped = filters.impact === 'no_alternative';
+  const t = copy[language], now = listNow(filters), grouped = filters.impact === 'no_alternative';
   const found = sortPackages(filterPackages(rows, filters, now), filters.sort, now);
   const fallback = !found.length && Boolean(filters.q) && !activeFilters();
   if (fallback) loadPast();
@@ -80,7 +80,8 @@ function render() {
 function changed(resetPage = true) { if (past.state === 'error') past = {state: 'idle', rows: []}; readControls(); if (resetPage) visible = PAGE_SIZE; draw(); clearTimeout(urlTimer); urlTimer = setTimeout(syncUrl, 300); }
 $('finder').addEventListener('submit', e => e.preventDefault());
 $('search').addEventListener('input', () => changed());
-$('finder').addEventListener('change', e => { if (e.target.id !== 'search') changed(); });
+// A hand-picked status leaves the home tile's two-week window; the general 'Starting soon' filter stays available.
+$('finder').addEventListener('change', e => { if (e.target.id !== 'search') { if (e.target.name === 'status') delete filters.within; changed(); } });
 function clearFilters() { filters = {q: filters.q, impact: '', status: '', group: '', form: '', company: '', sort: ''}; render(); syncUrl(); }
 $('clear').addEventListener('click', clearFilters);
 $('list').addEventListener('click', e => { if (e.target.id === 'clear-inline') clearFilters(); });

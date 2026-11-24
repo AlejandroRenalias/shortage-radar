@@ -87,6 +87,7 @@ select{font:inherit;min-height:44px;width:100%;border:1.5px solid var(--line-str
 .hero-grid{display:grid;gap:var(--s5);align-items:start}
 .hero-head{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s4);align-items:start}
 .hero-head>*{min-width:0}
+.hero .eu-hero-art{display:block;height:72px}
 .hero .home-notes{margin:0}
 .hero .home-notes>p{max-width:60ch;margin:var(--s2) 0 0}
 .hero h1#hero-line{font-size:clamp(1.5rem,1.2rem + 1.6vw,2.75rem);max-width:20ch;margin:0}
@@ -441,7 +442,8 @@ html:not(.js) .needs-js{display:none}
   .hero-grid{gap:var(--s6)}
   .hero-head{grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--s4) var(--s7)}
   .hero-head>*{grid-column:1}
-  .hero-head>.strip{grid-column:2;grid-row:1 / span 4;margin-top:var(--s2)}
+  .hero-head>.strip{grid-column:2;grid-row:1 / span 2;margin-top:var(--s2)}
+  .hero-head>.eu-hero-art{grid-column:2;grid-row:3 / span 2;height:200px;align-self:start}
   .strip-tile{min-height:76px;padding-block:var(--s3)}
   .strip-num{font-size:2.25rem}
   .strip-label{font-size:1rem}

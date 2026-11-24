@@ -5,6 +5,8 @@ and tests/test_pages.py checks that the two agree, so a string is only ever chan
 """
 from html import escape
 
+from critical_charts import hero_art
+
 
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 PREVIEW = SITE_URL + 'preview.png'
@@ -139,21 +141,26 @@ def triage_list(impact):
 
 
 def strip_tile(key, href, num, label, text, hidden=False):
-    return (f'<li{" hidden" if hidden else ""} id="strip-{key}"><a class="strip-tile strip-{key}" href="{href}"><span class="strip-num" id="strip-{key}-num">{num:,}</span>'
+    return (f'<li{" hidden" if hidden else ""} id="strip-{key}"><a class="strip-tile strip-{key}" id="strip-{key}-link" href="{href}"><span class="strip-num" id="strip-{key}-num">{num:,}</span>'
             f'<span class="strip-label" data-i18n="{label}">{text}</span>'
             '<svg class="uicon strip-go" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></a></li>')
 
 
-def home(count, impact=None, soon=0):
-    """`count` packages are short now, and `soon` more are expected within two weeks."""
+def strip_href(query, as_of):
+    """A tile's list link: the same data date as the tile's count, so the list shows exactly the packages counted."""
+    return 'shortages.html?' + query + (f'&asof={as_of}' if as_of else '')
+
+
+def home(count, impact=None, soon=0, as_of=''):
+    """`count` packages are short now, and `soon` more are expected within two weeks, both counted as of the data date `as_of`."""
     line = f'Fimea’s list: {count:,} {"package" if count == 1 else "packages"} in shortage now{f", {soon:,} more expected to start within 2 weeks" if soon else ""}.'
     impact = impact or {}
     sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
     answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
-    strip = ''.join([strip_tile('now', 'shortages.html?status=now', count, 'stripNow', 'Short now'),
-                     strip_tile('soon', 'shortages.html?status=soon', soon, 'stripSoon', 'Starting within 2 weeks'),
-                     strip_tile('sub', 'shortages.html?impact=substitute', sub, 'stripSub', 'Interchangeable package found in the data', hidden=not impact)])
+    strip = ''.join([strip_tile('now', strip_href('status=now', as_of), count, 'stripNow', 'Short now'),
+                     strip_tile('soon', strip_href('status=soon&within=14', as_of), soon, 'stripSoon', 'Starting within 2 weeks'),
+                     strip_tile('sub', strip_href('impact=substitute', as_of), sub, 'stripSub', 'Interchangeable package found in the data', hidden=not impact)])
     return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head">
 <h1 id="hero-line" data-count="{count}" data-soon="{soon}">{line}</h1>
 <p class="hero-fresh" id="hero-fresh" hidden><span id="hero-file"></span><span id="hero-checked"></span></p>
@@ -162,6 +169,7 @@ def home(count, impact=None, soon=0):
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
 </form>
+{hero_art()}
 <details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">How to read these numbers</summary>
 <p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
 {answer}
@@ -292,7 +300,7 @@ def not_found():
 <p><a class="btn" href="/shortage-radar/shortages.html" data-i18n="nfSearch">Search the shortage list</a> <a class="btn-quiet" href="/shortage-radar/index.html" data-i18n="navHome">Home</a></p></div>'''
 
 
-def render_pages(count, impact=None, critical=None, soon=0):
+def render_pages(count, impact=None, critical=None, soon=0, as_of=''):
     """Return {file name: html} for every page; `count` is the number of shortages that have started and `soon` the number
     expected within two weeks, shown in the home headline,
     and `impact` the counts by impact level ({'substitute': n, ...}) for the triage on the home page."""
@@ -300,7 +308,7 @@ def render_pages(count, impact=None, critical=None, soon=0):
     for key, meta in PAGES.items():
         if meta.get('own'):
             continue
-        body = {'index': lambda: home(count, impact, soon), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
+        body = {'index': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
         meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'

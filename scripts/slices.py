@@ -5,12 +5,14 @@ It also holds, for the substitution groups of its current packages, the other pa
 `summary.json` holds the counts and a few packages that the home, trends and about pages need.
 """
 from collections import Counter
+from datetime import date, timedelta
 
 from triage import counts, with_aliases
 
 META_KEYS = ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')
 LONGEST = 8
 NEWEST = 8
+SOON_DAYS = 14  # 'starting within 2 weeks': start date after the data date and up to 14 days after it (day 14 in, day 15 out). site/lib.js SOON_DAYS is the same.
 
 
 def shard_name(vnr):
@@ -33,8 +35,11 @@ def package_shards(events, meta, groups=None):
 def summary(current, meta):
     """Counts by raw form, by ATC prefix (3 letters) and by company, the longest running and the newest current packages."""
     started = sorted((e for e in current if e['UnavailableFrom'] <= meta['snapshot_date']), key=lambda e: e['UnavailableFrom'])
-    soon = sum(e['UnavailableFrom'] > meta['snapshot_date'] for e in current)
-    return dict(meta, total=len(current), short_now=len(current) - soon, expected_soon=soon, company_count=len({e['Company'] for e in current}),
+    # Every count and every list link on the home page uses the data date (snapshot_date), never the date of the visitor's clock.
+    cutoff = (date.fromisoformat(meta['snapshot_date']) + timedelta(days=SOON_DAYS)).isoformat()
+    soon = sum(meta['snapshot_date'] < e['UnavailableFrom'] <= cutoff for e in current)
+    later = sum(e['UnavailableFrom'] > cutoff for e in current)
+    return dict(meta, total=len(current), short_now=len(current) - soon - later, expected_soon=soon, expected_later=later, company_count=len({e['Company'] for e in current}),
                 forms=dict(Counter(e.get('form', '') for e in current)),
                 atc=dict(Counter((e.get('atc') or '')[:3] for e in current)),
                 companies=dict(Counter(e['Company'] for e in current)), impact=with_aliases(counts(current)),

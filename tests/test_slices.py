@@ -26,9 +26,17 @@ def test_summary_counts_and_picks_the_oldest_and_newest_started_packages():
     current.append(event('999999', '2027-01-01'))
     s = summary(current, META)
     assert s['total'] == 21 and s['company_count'] == 3
-    assert (s['short_now'], s['expected_soon']) == (20, 1)
+    assert (s['short_now'], s['expected_soon'], s['expected_later']) == (20, 0, 1)
     assert s['forms'] == {'kapseli': 5, 'tabletti': 16}
     assert s['atc']['S01'] == 3 and s['atc']['N02'] == 18
     assert len(s['longest']) == LONGEST and s['longest'][0]['UnavailableFrom'] == '2026-11-01'
     assert len(s['newest']) == NEWEST and s['newest'][0]['UnavailableFrom'] == '2026-11-20'
     assert all(e['UnavailableFrom'] <= META['snapshot_date'] for e in s['newest'] + s['longest'])
+
+
+def test_two_week_count_takes_day_14_in_and_day_15_out_from_the_data_date():
+    # META is dated 2026-11-22: day 14 is 2026-12-06, day 15 is 2026-12-07.
+    current = [event('000001', '2026-11-22'), event('000002', '2026-11-23'), event('000003', '2026-12-06'), event('000004', '2026-12-07'), event('000005', '2027-01-01')]
+    s = summary(current, META)
+    assert (s['short_now'], s['expected_soon'], s['expected_later']) == (1, 2, 2)
+    assert s['short_now'] + s['expected_soon'] + s['expected_later'] == s['total']
