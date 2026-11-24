@@ -25,6 +25,8 @@ PAGES = {
               'description': 'What a medicine shortage is, what to do about one, and how this site gets and uses Fimea’s open data.', 'form_action': "'none'"},
     'medicine': {'file': 'medicine.html', 'nav': None, 'icon': None, 'title': 'Medicine | Shortage Radar',
                  'description': 'One medicine package on Fimea’s shortage list: status, timeline and what to do.', 'form_action': "'self'"},
+    'medicines': {'file': 'medicines.html', 'nav': None, 'icon': None, 'title': 'Medicine and its packages | Shortage Radar',
+                  'description': 'One medicine on Fimea’s shortage list, with the notices and history of each package.', 'form_action': "'self'"},
 }
 NAV_LABELS = {'navHome': 'Home', 'navShortages': 'Shortages', 'navEuList': 'EU list', 'navTrends': 'Trends', 'navAbout': 'About'}
 NAV_ICONS = {
@@ -217,6 +219,11 @@ def medicine():
 <div class="wrap">{load_error()}</div>'''
 
 
+def medicines():
+    return f'''<div class="wrap needs-js" id="medicines"><p class="state" id="loading">Loading…</p></div>
+<div class="wrap">{load_error()}</div>'''
+
+
 def trends():
     return f'''<div class="wrap page-head"><h1 data-i18n="trendsTitle">Trends</h1><p class="lead" data-i18n="trendsIntro">How many packages Fimea lists as short, and how that has changed.</p><p class="data-date needs-js" id="data-date"></p></div>
 <div class="wrap trend-grid needs-js">
@@ -273,7 +280,7 @@ def render_pages(count, impact=None, critical=None, soon=0):
     for key, meta in PAGES.items():
         if meta.get('own'):
             continue
-        body = {'index': lambda: home(count, impact, soon), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine}[key]()
+        body = {'index': lambda: home(count, impact, soon), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
         meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'

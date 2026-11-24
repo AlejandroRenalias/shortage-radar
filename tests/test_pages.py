@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from pages import PAGES, SITE_URL, footer, header, render_pages
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE_FILES = ['index.html', 'shortages.html', 'medicine.html', 'trends.html', 'about.html']
+PAGE_FILES = ['index.html', 'shortages.html', 'medicine.html', 'medicines.html', 'trends.html', 'about.html']
 
 
 def between(html, start, end):
@@ -44,7 +44,7 @@ def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
     for f in PAGE_FILES:
         html = out[f]
         # The medicine page draws its h1 (the package name) when the data is loaded.
-        assert html.count('<h1') == (0 if f == 'medicine.html' else 1), f
+        assert html.count('<h1') == (0 if f in ('medicine.html', 'medicines.html') else 1), f
         assert 'class="skip-link" href="#main"' in html and '<main id="main"' in html
         assert 'name="referrer" content="no-referrer"' in html
         assert "default-src 'self'" in html and 'script-src \'self\'' in html and '<script>' not in html
@@ -53,7 +53,7 @@ def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
         assert f'property="og:url" content="{expected}"' in html
         assert 'og:image:width" content="1200"' in html
     # Only the pages with a search form that sends the visitor elsewhere may submit forms.
-    assert "form-action 'self'" in out['index.html'] and "form-action 'self'" in out['medicine.html']
+    assert "form-action 'self'" in out['index.html'] and "form-action 'self'" in out['medicine.html'] and "form-action 'self'" in out['medicines.html']
     assert "form-action 'none'" in out['shortages.html'] and "form-action 'none'" in out['about.html']
 
 
@@ -92,13 +92,13 @@ def test_every_script_and_style_a_page_loads_exists():
 
 def test_without_scripts_dead_controls_are_hidden_and_the_data_files_are_linked():
     out = render_pages(749)
-    for f in ['shortages.html', 'medicine.html', 'trends.html']:
+    for f in ['shortages.html', 'medicine.html', 'medicines.html', 'trends.html']:
         html = out[f]
         assert 'needs-js' in html
         noscript = between(html, '<noscript>', '</noscript>')
         assert 'shortages.csv' in noscript and 'data.json' in noscript and 'fimea.fi' in noscript
     assert 'class="wrap finder needs-js"' in out['shortages.html'] and 'class="wrap results needs-js"' in out['shortages.html']
-    assert 'class="wrap needs-js" id="medicine"' in out['medicine.html']
+    assert 'class="wrap needs-js" id="medicine"' in out['medicine.html'] and 'class="wrap needs-js" id="medicines"' in out['medicines.html']
     assert 'class="lang needs-js"' in out['index.html']
     # The home search is a plain form, so it still works without scripts.
     assert 'action="shortages.html" method="get"' in out['index.html'] and 'class="bigsearch"' in out['index.html']

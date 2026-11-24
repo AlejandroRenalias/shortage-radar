@@ -31,7 +31,7 @@ function critRow(g, now) {
   const t = copy[language];
   return `<details class="crit-row"><summary><span class="pkg-icon" title="${esc(kindLabel(g.kind))}">${formIcon(g.kind, 40)}</span><span class="crit-id"><h2 class="crit-name">${esc([g.medicine, g.strength].filter(Boolean).join(' '))}</h2>`
     + `<span class="crit-form">${esc(g.form)}</span><span class="crit-names">${esc(g.names.join(', '))}</span></span><span class="crit-count">${esc(t.critPackages(g.packages.length))}</span>${uiIcon('chevron', 20).replace('class="uicon"', 'class="uicon crit-go"')}</summary>`
-    + `<div class="pkg-list crit-packages">${g.packages.map(e => pkgCard(e, now, 3)).join('')}</div></details>`;
+    + `<div class="pkg-list crit-packages">${g.packages.map(e => pkgCard(e, now, 3, true)).join('')}</div></details>`;
 }
 // Loads removed.json the first time a search finds nothing on the current list.
 function loadPast() {
@@ -58,7 +58,7 @@ function draw() {
   const none = limited ? `<p class="state">${esc(t.emptyFilteredSearch)} <button type="button" class="btn-quiet" id="clear-inline">${esc(t.clearFilters)}</button></p>`
     : `<p class="state">${esc(filters.q ? t.empty : t.emptyFiltered)}</p>` + status;
   $('list').innerHTML = earlier.length ? `<p class="state past-note">${esc(t.pastNote)}</p>` + earlier.slice(0, visible).map(e => pastRow(e, 2)).join('')
-    : items.slice(0, visible).map(x => grouped ? critRow(x, now) : pkgCard(x, now, 2)).join('') || none;
+    : items.slice(0, visible).map(x => grouped ? critRow(x, now) : pkgCard(x, now, 2, true)).join('') || none;
   $('more').hidden = visible >= items.length;
   $('more').parentElement.hidden = items.length <= PAGE_SIZE;
   $('more-count').textContent = items.length > PAGE_SIZE ? t.moreCount(Math.min(visible, items.length), items.length) : '';

@@ -1,6 +1,6 @@
 # Medicine groups: what makes two packages the same medicine
 
-Status: a rule for review, and an audit of it (`scripts/audit_groups.py`, output in `data/audit/`). Nothing on the site uses it yet. Page build is on hold until this spec and the audit pass review.
+Status: a rule, and an audit of it (`scripts/audit_groups.py`, output in `data/audit/`). The site uses it for one thing: a medicine page (`medicines.html?id=<group id>`, `scripts/medicine_pages.py`) for each group with `first_release_candidate`. The page lists the packages of the group that have a shortage notice in the archive. All other packages keep their package pages.
 
 A medicine group is a set of register packages with equal rule inputs. A group that is "unsure" gets no medicine page, and its packages stay package pages. A wrong group could lead to a wrong health-related claim, so the rule keeps packages apart whenever the register data does not show that they are equal. A missing identity makes a group unsure.
 

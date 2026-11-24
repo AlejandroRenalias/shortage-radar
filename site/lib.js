@@ -280,24 +280,26 @@ function pastNotes(e) {
   if (e.removed_on) notes.push(e.removed_after_gap ? t.tlGap(d(e.last_seen), d(e.removed_on)) : t.pastGone(d(e.removed_on)));
   return notes;
 }
+// The page a search result opens: the medicine page when the build made one for the package (scripts/medicine_pages.py), else the package page.
+const resultHref = (e, medicine = true) => medicine && /^m[0-9a-f]{12}$/.test(e.medicine_page || '') ? `medicines.html?id=${e.medicine_page}` : `medicine.html?vnr=${e.NordicArticleNumber || ''}`;
 function pastRow(e, level = 3) {
-  const t = copy[language], spec = [strengthShown(e), packText(e)].filter(Boolean), vnr = e.NordicArticleNumber || '';
+  const t = copy[language], spec = [strengthShown(e), packText(e)].filter(Boolean);
   return `<article class="pkg pkg-past"><p class="pkg-tab">${uiIcon('ended', 18)}<span>${esc(t.pastStatus)}</span></p>`
-    + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(formKind(e.form)))}">${formIcon(formKind(e.form), 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="medicine.html?vnr=${esc(vnr)}">${esc(e.name || t.unavailable)}</a></h${level}>`
+    + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(formKind(e.form)))}">${formIcon(formKind(e.form), 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="${esc(resultHref(e))}">${esc(e.name || t.unavailable)}</a></h${level}>`
     + (spec.length ? `<p class="form pkg-spec">${spec.map(x => `<span>${esc(x)}</span>`).join(' ')}</p>` : '')
     + `<ul class="past-notes">${pastNotes(e).map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="past-open">${esc(t.pastOpen)}${uiIcon('chevron', 16)}</p></div></div></article>`;
 }
 
 // ---- Package card: the shelf label. Status tab, pictogram, name, strength and pack, form and group, dates.
 const daysBetween = (from, to) => Math.floor((to - from) / DAY);
-function pkgCard(e, now = todayUTC(), level = 3) {
+// `medicine` is true for the lists that open a search result: the card then opens the medicine page when there is one.
+function pkgCard(e, now = todayUTC(), level = 3, medicine = false) {
   const t = copy[language], start = parsedDate(e.UnavailableFrom), end = parsedDate(e.EndingDate), status = statusOf(e, now);
   const late = status === 'now' && end && end.valueOf() < now;
   const spec = [strengthShown(e), packText(e)].filter(Boolean), kind = formKind(e.form), formName = formText(e.form), group = groupName(e.atc);
   const startNote = !start ? '' : status === 'soon' ? t.inDays(daysBetween(now, start.valueOf())) : t.daysAgo(daysBetween(start.valueOf(), now));
-  const vnr = e.NordicArticleNumber || '';
   return `<article class="pkg pkg-${status}"><p class="pkg-tab">${uiIcon(status === 'soon' ? 'soon' : status === 'unknown' ? 'unknown' : 'now', 18)}<span>${esc(statusLabel(status))}</span></p>`
-    + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(kind))}">${formIcon(kind, 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="medicine.html?vnr=${esc(vnr)}">${esc(e.name || t.unavailable)}</a></h${level}>`
+    + `<div class="pkg-main"><span class="pkg-icon" title="${esc(kindLabel(kind))}">${formIcon(kind, 40)}</span><div class="pkg-id"><h${level} class="pkg-name"><a href="${esc(resultHref(e, medicine))}">${esc(e.name || t.unavailable)}</a></h${level}>`
     + (spec.length ? `<p class="form pkg-spec">${spec.map(x => `<span>${esc(x)}</span>`).join(' ')}</p>` : '')
     + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<dl class="pkg-dates"><div><dt>${esc(status === 'soon' ? t.startsLabel : t.fromLabel)}</dt><dd>${esc(dateText(e.UnavailableFrom))}${startNote ? `<small>${esc(startNote)}</small>` : ''}</dd></div>`
@@ -319,6 +321,43 @@ function timelineModel(e, now = todayUTC()) {
     daysSinceStart: start && status === 'now' ? daysBetween(start.valueOf(), now) : null, daysUntilStart: start && status === 'soon' ? daysBetween(now, start.valueOf()) : null,
     daysPastEstimate: late ? daysBetween(end.valueOf(), now) : null, daysToEstimate: end && !late ? daysBetween(now, end.valueOf()) : null,
     marks: points.map(p => ({key: p.key, pos: pos(p.at)})), order: points.slice().sort((a, b) => a.at - b.at || (a.key === 'today' ? 1 : -1)).map(p => p.key)};
+}
+
+// Where the archive saw the notice: one sentence for each run of captures, then each stretch that was not observed.
+// Captures more than the gap limit apart (scripts/gaps.py) are not one continuous listing.
+function captureSentences(e, t) {
+  const spans = e.spans && e.spans.length ? e.spans : [{first_seen: e.first_seen, last_seen: e.last_seen}], d = dateText;
+  const out = spans.map((s, i) => i === 0 && e.listed_at_first_capture ? t.tlListedAtFirst(d(s.first_seen), d(s.last_seen)) : s.first_seen === s.last_seen ? t.tlListedOne(d(s.first_seen)) : t.tlListedFrom(d(s.first_seen), d(s.last_seen)));
+  const gaps = e.gaps && e.gaps.length ? e.gaps : [];
+  for (const g of gaps) out.push(t.tlGap(d(g.from), d(g.to)));
+  if (e.removed_after_gap && e.removed_on) out.push(t.tlGap(d(e.last_seen), d(e.removed_on)));
+  return out;
+}
+// One track with markers in time order and the actual dates next to each marker.
+// `opts.bare` gives the track and notes without a panel and title, for a page that draws several timelines; `opts.level` is the heading level of its earlier estimates.
+function timelineMarkup(e, archive, opts = {}) {
+  const t = copy[language], now = archive ? parsedDate(e.last_seen).valueOf() : todayUTC(), model = timelineModel(e, now);
+  const items = {
+    start: [t.tlStart, dateText(e.UnavailableFrom), !archive && model.daysSinceStart !== null ? t.tlDuration(model.daysSinceStart) : model.daysUntilStart !== null ? t.tlSoonNote(model.daysUntilStart) : ''],
+    today: [archive ? t.tlLastListed : t.tlToday, dateText(new Date(now).toISOString().slice(0, 10)), archive && e.removed_on ? t.tlGone(dateText(e.removed_on)) : ''],
+    end: [t.tlEnd, dateText(e.EndingDate), model.late ? t.tlPast(model.daysPastEstimate) : !archive && model.daysToEstimate !== null ? t.tlRemaining(model.daysToEstimate) : '']
+  };
+  // Each stretch of the line is hatched when a gap in the captures overlaps it: nothing is known about those days, so the line must not claim them.
+  const iso = {start: e.UnavailableFrom, end: e.EndingDate, today: new Date(now).toISOString().slice(0, 10)};
+  const unknownBetween = (x, y) => { const [a, b] = [iso[x], iso[y]].sort(); return (e.gaps || []).some(g => g.from < b && g.to > a); };
+  const tone = model.late ? 'late' : model.status === 'soon' ? 'soon' : 'now';
+  const todayAt = model.order.indexOf('today');
+  const track = model.order.map((key, i) => {
+    const [label, date, note] = items[key], prev = model.order[i - 1];
+    // The connector before a marker is solid when that stretch has happened, dashed when it is still ahead.
+    const base = !prev ? '' : (prev === 'end' && key === 'today') ? 'seg-over' : (i - 1 >= todayAt) ? 'seg-ahead' : `seg-done seg-${tone}`;
+    const seg = base && base !== 'seg-ahead' && unknownBetween(prev, key) ? 'seg-unknown' : base;
+    return `<li class="tl-item tl-${key} ${seg}${key === 'end' && model.late ? ' is-late' : ''}"><span class="tl-dot" aria-hidden="true"></span><strong>${esc(label)}</strong><span class="tl-date">${esc(date)}</span>${note ? `<small>${esc(note)}</small>` : ''}${key === 'end' && model.late ? `<small class="late-flag">${esc(t.late)}</small>` : ''}</li>`;
+  }).join('');
+  const range = archive || (e.gaps && e.gaps.length) ? `<p class="note">${esc(captureSentences(e, t).join(' '))}</p>` : '';
+  const h = opts.level || 3, earlier = model.earlier.length ? `<div class="tl-earlier"><h${h}>${esc(t.tlEarlier)}</h${h}>${opts.bare ? '' : `<p>${esc(t.tlEarlierNote)}</p>`}<ul>${model.earlier.map(x => `<li><span class="tl-date">${esc(dateText(x.date))}</span><small>${esc(t.tlSeen(dateText(x.seen)))}</small></li>`).join('')}${model.hasEnd ? `<li class="is-now"><span class="tl-date">${esc(dateText(e.EndingDate))}</span><small>${esc(t.tlCurrent)}</small></li>` : ''}</ul></div>` : '';
+  const body = `<ol class="tl-track tl-count-${model.order.length}">${track}</ol>${range}${model.hasEnd ? '' : `<p class="note">${esc(t.tlNoEnd)}</p>`}${earlier}`;
+  return opts.bare ? `<div class="timeline">${body}</div>` : `<section class="panel timeline" aria-labelledby="tl-title"><h2 id="tl-title">${esc(t.timelineTitle)}</h2>${body}</section>`;
 }
 
 // ---- Page set-up: language, static text, shared links, stale warning and footer.

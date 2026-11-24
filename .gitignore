@@ -12,6 +12,7 @@ site/feed-fi.xml
 site/index.html
 site/shortages.html
 site/medicine.html
+site/medicines.html
 site/trends.html
 site/about.html
 site/404.html
@@ -28,3 +29,4 @@ site/critical.csv
 site/critical.json
 site/critical-feed.xml
 site/critical-feed.json
+site/m/
