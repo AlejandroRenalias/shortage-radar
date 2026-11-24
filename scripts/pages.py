@@ -5,7 +5,6 @@ and tests/test_pages.py checks that the two agree, so a string is only ever chan
 """
 from html import escape
 
-from critical_charts import hero_art
 
 SITE_URL = 'https://alejandrorenalias.github.io/shortage-radar/'
 PREVIEW = SITE_URL + 'preview.png'
@@ -139,6 +138,12 @@ def triage_list(impact):
     return ''.join(rows)
 
 
+def strip_tile(key, href, num, label, text, hidden=False):
+    return (f'<li{" hidden" if hidden else ""} id="strip-{key}"><a class="strip-tile strip-{key}" href="{href}"><span class="strip-num" id="strip-{key}-num">{num:,}</span>'
+            f'<span class="strip-label" data-i18n="{label}">{text}</span>'
+            '<svg class="uicon strip-go" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></a></li>')
+
+
 def home(count, impact=None, soon=0):
     """`count` packages are short now, and `soon` more are expected within two weeks."""
     line = f'Fimea’s list: {count:,} {"package" if count == 1 else "packages"} in shortage now{f", {soon:,} more expected to start within 2 weeks" if soon else ""}.'
@@ -146,24 +151,28 @@ def home(count, impact=None, soon=0):
     sub, vet = impact.get('substitute', 0), impact.get('vet', 0)
     answer = f'<p class="hero-answer" id="hero-answer" data-count="{sub}">For {sub:,} of them, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.</p>' if impact else '<p class="hero-answer" id="hero-answer"></p>'
     vet_line = f'Also on the list: {vet:,} veterinary {"medicine" if vet == 1 else "medicines"}.'
-    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head"><div class="hero-text">
+    strip = ''.join([strip_tile('now', 'shortages.html?status=now', count, 'stripNow', 'Short now'),
+                     strip_tile('soon', 'shortages.html?status=soon', soon, 'stripSoon', 'Starting within 2 weeks'),
+                     strip_tile('sub', 'shortages.html?impact=substitute', sub, 'stripSub', 'Interchangeable package found in the data', hidden=not impact)])
+    return f'''<section class="hero wrap"><div class="hero-grid"><div class="hero-head">
 <h1 id="hero-line" data-count="{count}" data-soon="{soon}">{line}</h1>
 <p class="hero-fresh" id="hero-fresh" hidden><span id="hero-file"></span><span id="hero-checked"></span></p>
-<p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
-{answer}
+<ul class="strip" id="strip" aria-label="Counts from Fimea’s list" data-i18n-attr="aria-label=stripLabel">{strip}</ul>
 <form class="bigsearch" action="shortages.html" method="get" role="search">
 <label for="q" data-i18n="homeSearchLabel">Search for your medicine</label>
 <div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="e.g. Burana or ibuprofen" data-i18n-attr="placeholder=placeholder"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
-<p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p>
 </form>
-</div>{hero_art()}</div>
+<details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">How to read these numbers</summary>
+<p class="hero-label" id="hero-label" data-i18n="heroReading">Our reading of Fimea’s register, not a stock check.</p>
+{answer}
+<p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
+<p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
+<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p>
+<p class="hint" data-i18n="hint">Search by medicine, active substance, ATC, company or VNR.</p></details>
+</div>
 <section class="triage" id="triage" aria-labelledby="triage-title" data-impact="{escape(','.join(f'{k}:{impact.get(k, 0)}' for k in ('substitute', 'no_alternative', 'nogroup', 'vet')), quote=True)}"><h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data</h2>
 <ul class="triage-list" id="triage-list">{triage_list(impact)}</ul>
 <p class="triage-vet"><a href="shortages.html?impact=vet" id="triage-vet">{vet_line}</a></p>
-<details class="eu-fold eu-notes home-notes"><summary data-i18n="homeNotes">Notes: what these numbers mean</summary>
-<p id="hero-sub" data-i18n="heroSub">Includes shortages that have started and ones expected within two weeks. A listing does not tell you whether a medicine is available at your pharmacy.</p>
-<p data-i18n="triageVetNote">Substitution groups are for human medicines.</p>
-<p class="note"><span data-i18n="triageHint">Counts are packages. “On the market” is not a pharmacy stock check.</span> <a href="about.html#impact" data-i18n="impactLink">What the impact label means</a></p></details>
 </section></div></section>
 <section class="wrap home-section needs-js" aria-labelledby="shelf-title"><h2 id="shelf-title" data-i18n="shelfTitle">Browse by form</h2><p class="note" data-i18n="shelfIntro">Pick a form to see its shortages.</p><ul class="shelf-grid" id="shelf"></ul></section>
 <section class="wrap home-section newest needs-js" aria-labelledby="newest-title"><h2 id="newest-title" data-i18n="heroNewest">Newest on the list</h2><div id="newest" class="rail"></div></section>

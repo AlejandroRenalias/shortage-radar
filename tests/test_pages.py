@@ -70,6 +70,26 @@ def test_home_headline_carries_the_count_and_search_goes_to_the_list():
     assert 'Our reading of Fimea’s register, not a stock check.' in html
 
 
+def test_home_top_keeps_headline_strip_search_and_one_closed_dropdown_for_the_rest():
+    html = render_pages(714, {'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}, None, 42)['index.html']
+    top = html[:html.index('id="triage"')]
+    # One dropdown at the top, closed, with the notes that used to stand open.
+    assert top.count('<details') == 1 and '<details class="eu-fold eu-notes home-notes">' in top
+    box = top[top.index('<details'):top.index('</details>')]
+    assert 'data-i18n="homeNotes">How to read these numbers</summary>' in box
+    for caveat in ('Our reading of Fimea’s register, not a stock check.', 'For 539 of them, the check found another package',
+                   'A listing does not tell you whether a medicine is available at your pharmacy.', 'Substitution groups are for human medicines.',
+                   '“On the market” is not a pharmacy stock check.', 'Search by medicine, active substance, ATC, company or VNR.', 'href="about.html#impact"'):
+        assert caveat in box, caveat
+    # The old long lines are not outside the dropdown any more.
+    outside = top.replace(box, '')
+    for gone in ('id="hero-label"', 'id="hero-answer"', 'class="hint"', 'id="hero-sub"'):
+        assert gone not in outside, gone
+    assert html.count('home-notes') == 1  # the old notes box under the triage list is merged in
+    # Date line is one paragraph with the file date and the check date.
+    assert outside.count('id="hero-fresh"') == 1 and '<span id="hero-file"></span><span id="hero-checked"></span>' in outside
+
+
 def test_404_page_uses_absolute_paths_for_the_project_site():
     html = render_pages(749)['404.html']
     assert 'href="/shortage-radar/style.css"' in html and 'src="/shortage-radar/lib.js"' in html

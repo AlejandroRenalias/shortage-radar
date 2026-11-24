@@ -1,4 +1,4 @@
-// Home: one sentence on today's situation, a search, the impact triage, a list of forms, the newest packages, three facts and three paths.
+// Home: one sentence on today's situation, a status strip, a search, the impact triage, a list of forms, the newest packages, three facts and three paths.
 let data, week = null;
 function started(rows, now) { return rows.filter(e => parsedDate(e.UnavailableFrom) && parsedDate(e.UnavailableFrom).valueOf() <= now); }
 // Counts for the form shelf, from the raw form text counted at build time.
@@ -35,7 +35,12 @@ function renderHome() {
   if (Number.isFinite(n)) hero.textContent = t.heroLine(n, soon || 0);
   $('hero-label').textContent = t.heroReading;
   const counts = impactCounts();
+  // The status strip: the same numbers as the headline and the triage, each linking to its list view.
+  if (Number.isFinite(n)) $('strip-now-num').textContent = numberText(n);
+  if (Number.isFinite(n)) $('strip-soon-num').textContent = numberText(soon || 0);
+  $('strip-sub').hidden = !Number.isFinite(counts.substitute);
   if (Number.isFinite(counts.substitute)) {
+    $('strip-sub-num').textContent = numberText(counts.substitute);
     $('hero-answer').textContent = t.heroAnswer(counts.substitute);
     $('triage-list').innerHTML = triageMarkup(counts);
     $('triage-vet').textContent = t.triageVet(counts.vet || 0);

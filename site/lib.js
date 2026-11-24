@@ -414,8 +414,9 @@ function renderChrome(d) {
   if ($('source-times')) $('source-times').textContent = [t.latest(dateText(d.snapshot_date)), show ? freshness.text : '', ...times].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. ') + '.';
   // Next to the headline on the home page: when Fimea's file last changed (HTTP Last-Modified) and when our job last checked it.
   if ($('hero-fresh')) {
-    $('hero-file').textContent = t.fileChanged(days.shortages ? dateText(days.shortages) : t.dateUnknown);
-    $('hero-checked').textContent = show ? freshness.text : '';
+    $('hero-file').textContent = t.heroFile(days.shortages ? dateText(days.shortages) : t.dateUnknown);
+    // One short line; when the check date is missing, the longer text with the page build time still shows.
+    $('hero-checked').textContent = !show ? '' : parsedDate(d.last_checked) ? t.heroChecked(dateText(d.last_checked)) : freshness.text;
     $('hero-fresh').hidden = false;
   }
   if ($('stale')) {

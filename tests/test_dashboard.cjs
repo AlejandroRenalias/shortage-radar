@@ -306,18 +306,65 @@ test('the home page shows when Fimea’s file changed and when Shortage Radar ch
   const meta = {snapshot_date:'2026-11-23', last_checked:'2026-11-23', generated_at:'2026-11-23T05:00:00Z', source_metadata:{shortages_last_modified:'Sun, 22 Nov 2026 23:20:01 GMT', register_date:'2026-11-23', register_last_modified:'Mon, 23 Nov 2026 00:31:00 GMT'}};
   env.renderChrome(meta);
   assert.equal(get('hero-fresh').hidden, false);
-  assert.equal(get('hero-file').textContent, 'Fimea file last modified: 23 Nov 2026');
-  assert.equal(get('hero-checked').textContent, 'Checked by Shortage Radar: 23 Nov 2026');
+  assert.equal(get('hero-file').textContent, 'Fimea file modified 23 Nov 2026');
+  assert.equal(get('hero-checked').textContent, 'Checked 23 Nov 2026');
   assert.match(get('source-times').textContent, /Fimea file last modified: 23 Nov 2026, 01:20 Helsinki time/);
   vm.runInContext("setLanguage('fi', null)", env);
-  assert.equal(get('hero-file').textContent, 'Fimean tiedosto viimeksi muokattu: 23.11.2026');
-  assert.equal(get('hero-checked').textContent, 'Saatavuustutka tarkisti: 23.11.2026');
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muokattu 23.11.2026');
+  assert.equal(get('hero-checked').textContent, 'Tarkistettu 23.11.2026');
   // No file time: the line says so instead of showing nothing, and a failed check date is never replaced by the build time.
   env.renderChrome({snapshot_date:'2026-11-23', last_checked:null, generated_at:'2026-11-23T05:00:00Z', source_metadata:{}});
-  assert.equal(get('hero-file').textContent, 'Fimean tiedosto viimeksi muokattu: ei tiedossa');
+  assert.equal(get('hero-file').textContent, 'Fimean tiedosto muokattu ei tiedossa');
   assert.match(get('hero-checked').textContent, /^Saatavuustutka tarkisti: ei tiedossa\. Sivu koostettu: /);
   assert.match(pages['index.html'], /id="hero-fresh"[^>]* hidden/);
   assert.ok(pages['index.html'].indexOf('id="hero-line"') < pages['index.html'].indexOf('id="hero-fresh"') && pages['index.html'].indexOf('id="hero-fresh"') < pages['index.html'].indexOf('id="hero-label"'));
+});
+
+const homeWith = (impact, soon = 42) => JSON.parse(execFileSync('python', ['-c', `import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(714, ${impact}, None, ${soon})['index.html']))`], {encoding: 'utf8'}));
+
+test('the home status strip shows the headline counts and the interchangeable count, each linking to its list view', () => {
+  const html = homeWith("{'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}");
+  const strip = html.match(/<ul class="strip"[\s\S]*?<\/ul>/)[0];
+  assert.match(strip, /href="shortages\.html\?status=now"[^>]*><span class="strip-num" id="strip-now-num">714<\/span><span class="strip-label" data-i18n="stripNow">Short now</);
+  assert.match(strip, /href="shortages\.html\?status=soon"[^>]*><span class="strip-num" id="strip-soon-num">42<\/span>/);
+  assert.match(strip, /href="shortages\.html\?impact=substitute"[^>]*><span class="strip-num" id="strip-sub-num">539<\/span>/);
+  assert.doesNotMatch(strip, /<li hidden/);
+  // Without impact data the third tile is hidden instead of showing a made-up 0.
+  assert.match(homeWith('None').match(/<li[^>]*id="strip-sub"/)[0], / hidden/);
+  assert.doesNotMatch(html, /eu-hero-art/);
+  // The strip sits between the headline and the search, and makes no claim about stock.
+  assert.ok(html.indexOf('id="hero-line"') < html.indexOf('class="strip"') && html.indexOf('class="strip"') < html.indexOf('role="search"'));
+  for (const lang of ['en', 'fi']) {
+    const t = vm.runInContext(`copy.${lang}`, context);
+    for (const key of ['homeNotes', 'heroReading', 'heroSub', 'triageVetNote', 'triageHint', 'impactLink', 'hint'])
+      assert.ok(t[key] && t[key].length > 5, `${lang} dropdown ${key}`);
+    for (const key of ['stripNow', 'stripSoon', 'stripSub', 'stripLabel']) assert.equal(typeof t[key], 'string', `${lang} ${key}`);
+    assert.doesNotMatch([t.stripNow, t.stripSoon, t.stripSub].join(' '), /in stock|available at|varastossa|saatavilla/i);
+  }
+  const css = fs.readFileSync('site/style.css', 'utf8');
+  assert.match(css, /\.strip li\{[^}]*animation:strip-in/);
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important/);
+});
+
+test('the home status strip is filled from the same data as the headline and the triage, in both languages', () => {
+  const [env, get] = pageEnv(['home.js']);
+  for (const id of ['hero-line', 'hero-label', 'hero-answer', 'triage-list', 'triage-vet', 'shelf', 'newest', 'facts', 'facts-since', 'facts-title', 'strip-now-num', 'strip-soon-num', 'strip-sub-num', 'strip-sub']) get(id);
+  get('triage-vet').parentElement = {hidden: false};
+  vm.runInContext("data = {short_now: 714, expected_soon: 42, impact: {substitute: 539, no_alternative: 61, nogroup: 117, vet: 39}, forms: {}, newest: [], longest: [], total: 756, company_count: 10}", env);
+  for (const lang of ['en', 'fi']) {
+    vm.runInContext(`language='${lang}'`, env);
+    env.renderHome();
+    assert.equal(get('strip-now-num').textContent, vm.runInContext('numberText(714)', env));
+    assert.equal(get('strip-soon-num').textContent, vm.runInContext('numberText(42)', env));
+    assert.equal(get('strip-sub-num').textContent, vm.runInContext('numberText(539)', env));
+    assert.equal(get('strip-sub').hidden, false);
+    assert.ok(get('hero-line').textContent.includes('714') && get('hero-line').textContent.includes('42'));
+    assert.ok(get('hero-answer').textContent.includes('539'));
+  }
+  vm.runInContext("data = {short_now: 3, expected_soon: 0, impact: null, forms: {}, newest: [], longest: [], total: 3, company_count: 1}", env);
+  env.renderHome();
+  assert.equal(get('strip-now-num').textContent, '3');
+  assert.equal(get('strip-soon-num').textContent, '0');
 });
 
 test('history and end-date rendering uses translated dates and states one dated fact', () => {
