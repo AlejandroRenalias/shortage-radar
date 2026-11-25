@@ -12,9 +12,8 @@ A day has two kinds of rows, `type` "company" and `type` "group", in this order:
   `listed` (packages on the shortage list, one for each VNR), `on_market` (register packages with `Kaupan` 1), each also split in
   `_human` and `_vet` (veterinary: ATC starting with Q, as in triage.level), and `register_date`.
 - group: one row for each substitution group with at least one listed package: `on_market` (packages of the group on the market by
-  triage.on_market on that day), `listed`, `alternatives` (packages of the group that triage.is_available_alternative accepts, the
-  value the ledger writes for the group), `distinct_alternative_holders` (distinct register holders among those alternatives)
-  and `register_date`.
+  triage.on_market on that day), `listed`, `alternatives` (the value the ledger writes for the group, read from the ledger rows of the day) and
+  `register_date`. A group row has no holder field yet: a later change records the alternative holders in the ledger step.
 
 No second definition is made here: the market and alternative rules are the ones in scripts/triage.py.
 """
@@ -30,7 +29,7 @@ from pathlib import Path
 from build import ROOT, group_key, read_snapshot, register
 from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import register_date
-from triage import is_available_alternative, on_market
+from triage import on_market
 
 
 def holder_name(text):
@@ -73,7 +72,7 @@ def rows_for(day, rows, register_path, ledger_rows):
     it is the value in the recorded ledger rows `ledger_rows` of the day."""
     vnrs = {r['NordicArticleNumber'] for r in rows}
     members = {}
-    products = register(register_path, vnrs, vnrs, members=members, day=day)
+    register(register_path, vnrs, vnrs, members=members, day=day)
     ran = register_date(register_path)
     on_market_by_holder, owner = holder_pass(register_path, vnrs)
     # Listed packages: one for each VNR of the file; the company is the register holder of the package.
@@ -98,15 +97,11 @@ def rows_for(day, rows, register_path, ledger_rows):
         key = group_key({'substitution_group': r['group']}) if r['group'] else None
         if key:
             group_alternatives.setdefault(key, r['alternatives'])
-    # The package of each listed VNR and its current VNR are not alternatives, as in the ledger (build.register subtracts both).
-    own = set(vnrs) | {p['current_vnr'] for p in products.values()}
     for group in sorted(group_alternatives):
         packs = members.get(group, [])
         listed_vnrs = {p['vnr'] for p in packs if ({p['vnr']} | p['old']) & shortage_vnrs}
-        # Holders: only records that are themselves alternatives the ledger counted (a short duplicate, or the current package of a listed old VNR, adds no holder).
-        holders = {holder_name(p['company']) for p in packs if p['vnr'] not in own and is_available_alternative(p, shortage_vnrs, day, True)}
         out.append({'date': day, 'type': 'group', 'group': group, 'on_market': len({p['vnr'] for p in packs if on_market(p, day)}), 'listed': len(listed_vnrs),
-                    'alternatives': group_alternatives[group], 'distinct_alternative_holders': len(holders), 'register_date': ran})
+                    'alternatives': group_alternatives[group], 'register_date': ran})
     return out
 
 

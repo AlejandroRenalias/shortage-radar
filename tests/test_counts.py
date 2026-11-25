@@ -74,9 +74,9 @@ def test_group_rows_use_the_repo_rules_for_market_and_alternatives(tmp_path, mon
     groups = {r['group']: r for r in read(folder) if r['type'] == 'group'}
     assert sorted(groups) == ['0042', '0043']  # no row for the empty group of the veterinary package
     # Group 0042: 012346 and 012348 are alternatives (on the market, not short, not listed); 012349 is not on the market.
-    assert groups['0042'] == {'date': DAY, 'type': 'group', 'group': '0042', 'on_market': 3, 'listed': 1, 'alternatives': 2, 'distinct_alternative_holders': 2, 'register_date': DAY}
+    assert groups['0042'] == {'date': DAY, 'type': 'group', 'group': '0042', 'on_market': 3, 'listed': 1, 'alternatives': 2, 'register_date': DAY}
     # Group 0043: both packages are listed, so none is an alternative.
-    assert groups['0043'] == {'date': DAY, 'type': 'group', 'group': '0043', 'on_market': 2, 'listed': 2, 'alternatives': 0, 'distinct_alternative_holders': 0, 'register_date': DAY}
+    assert groups['0043'] == {'date': DAY, 'type': 'group', 'group': '0043', 'on_market': 2, 'listed': 2, 'alternatives': 0, 'register_date': DAY}
 
 
 def group_alternatives(folder, day):
@@ -305,7 +305,7 @@ def test_a_listed_package_resolved_through_its_old_vnr_gives_the_same_alternativ
     assert counts_values == ledger_values == {'0042': 2}  # the ledger's number; counts used to say 3
 
 
-def test_a_short_duplicate_of_a_vnr_adds_no_holder(tmp_path, monkeypatch):
+def test_a_short_duplicate_of_a_vnr_in_another_holder_gives_the_same_alternatives_as_the_ledger(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
     short_other = ('  <Pakkaus Laakevalmiste-ref="p5"><VNR-numero>012346</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>1</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
                    '  <Laakevalmiste id="p5"><Kauppanimi>Five</Kauppanimi><ATC-koodi id="N02" value="x"/><Myyntilupa><Haltija>Delta Oy</Haltija></Myyntilupa><Substituutioryhma id="0042" value="0042"/></Laakevalmiste>\n')
@@ -313,7 +313,7 @@ def test_a_short_duplicate_of_a_vnr_adds_no_holder(tmp_path, monkeypatch):
     day = build.helsinki_today()
     rec(day, folder, register)
     row = next(r for r in read(folder, day) if r['type'] == 'group' and r['group'] == '0042')
-    assert (row['alternatives'], row['distinct_alternative_holders']) == (2, 2)
+    assert row['alternatives'] == 2 and 'distinct_alternative_holders' not in row  # group rows have no holder field yet
     ledger_values, counts_values = group_alternatives(folder, day)
     assert ledger_values == counts_values
 
@@ -344,18 +344,3 @@ def test_counts_take_alternatives_from_the_ledger_rows_even_when_the_ledger_cloc
     assert counts.record(None, folder, register) > 0
     ledger_values, counts_values = group_alternatives(folder, '2026-11-25')
     assert ledger_values == counts_values and counts_values['0042'] == 2  # counting again with the date 25 Nov would give 1
-
-
-def test_a_current_package_of_a_listed_old_vnr_adds_no_holder(tmp_path, monkeypatch):
-    register, folder = setup(tmp_path, monkeypatch)
-    # The reviewer's fixture with the available duplicate of 012345 assigned to another holder.
-    delta = ('  <Pakkaus Laakevalmiste-ref="p5"><VNR-numero>012345</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>0</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
-             '  <Laakevalmiste id="p5"><Kauppanimi>Five</Kauppanimi><ATC-koodi id="N02" value="x"/><Myyntilupa><Haltija>Delta Oy</Haltija></Myyntilupa><Substituutioryhma id="0042" value="0042"/></Laakevalmiste>\n')
-    register.write_text(old_vnr_register(delta), encoding='utf-8')
-    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(HEADER + '099998;K;2026-11-01;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
-    day = build.helsinki_today()
-    rec(day, folder, register)
-    row = next(r for r in read(folder, day) if r['type'] == 'group' and r['group'] == '0042')
-    assert (row['alternatives'], row['distinct_alternative_holders']) == (2, 2)
-    ledger_values, counts_values = group_alternatives(folder, day)
-    assert ledger_values == counts_values
