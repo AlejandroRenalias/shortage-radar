@@ -20,7 +20,7 @@ def test_every_page_is_built_with_the_same_header_and_footer():
     headers = {between(out[f], '<header', '</header>') for f in PAGE_FILES}
     footers = {between(out[f], '<footer', '</footer>') for f in PAGE_FILES}
     # The header differs only in which link is the current page.
-    normal = {re.sub(r' aria-current="page"', '', h) for h in headers}
+    normal = {re.sub(r' aria-current="page"|<i class="nav-mark" aria-hidden="true"></i>', '', h) for h in headers}
     assert len(normal) == 1 and len(footers) == 1
     for f in PAGE_FILES:
         assert between(out[f], '<header', '</header>') == header(re.search(r'data-page="(\w+)"', out[f]).group(1), '').split('\n')[0]
@@ -164,7 +164,7 @@ def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
 def test_tab_bar_markup_has_five_solid_icon_tabs_and_one_current_page():
     out = render_pages(749)
     nav = between(out['shortages.html'], '<nav class="nav"', '</nav>')
-    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
+    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(?:<i class="nav-mark" aria-hidden="true"></i>)?(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
     assert [t[0] for t in tabs] == ['index.html', 'shortages.html', 'trends.html', 'critical.html', 'about.html']
     assert [t[3] for t in tabs] == ['navHome', 'navShortages', 'navTrends', 'navEuList', 'navAbout']
     assert [t[1] for t in tabs] == ['', ' aria-current="page"', '', '', '']
@@ -192,3 +192,28 @@ def test_tab_bar_blends_in_clears_content_and_respects_motion_and_safe_area():
     assert '.nav a:focus-visible{' in css
     assert re.search(r'@media \(min-width:720px\)\{\s*:root\{--nav-h:0px\}\s*body\{padding-bottom:0\}', css)
     assert re.search(r'prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important', css)
+
+
+def test_tab_mark_is_one_element_in_the_current_tab_only():
+    out = render_pages(749)
+    for key, meta in PAGES.items():
+        if meta.get('own') or not meta['nav']:
+            continue
+        nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
+        assert nav.count('class="nav-mark"') == 1
+        assert re.search(r'aria-current="page"><i class="nav-mark" aria-hidden="true"></i><svg', nav)
+        assert out[meta['file']].count('<script src="tabbar.js"></script>') == 1
+
+def test_tab_mark_slides_with_view_transitions_and_only_below_720px_without_reduced_motion():
+    css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
+    block = re.search(r'@media \(max-width:719px\) and \(prefers-reduced-motion:no-preference\)\{(.*?)\n\}', css, re.S).group(1)
+    assert '@view-transition{navigation:auto}' in block
+    assert '.nav{view-transition-name:tabbar}' in block and '.nav-mark{view-transition-name:tabmark}' in block
+    # The page and the bar stay still: no fade, no slide, old picture hidden.
+    assert '::view-transition-group(root),::view-transition-group(tabbar){animation:none}' in block
+    assert '::view-transition-old(root),::view-transition-old(tabbar){display:none}' in block
+    assert '::view-transition-new(root),::view-transition-new(tabbar){animation:none' in block
+    assert re.search(r'::view-transition-group\(tabmark\)\{animation-duration:\.25s', block)
+    assert css.count('@view-transition') == 1
+    assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)
+

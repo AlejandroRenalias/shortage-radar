@@ -71,12 +71,14 @@ def header(current, prefix):
         if not meta['nav']:
             continue
         mark = ' aria-current="page"' if key == current else ''
-        links.append(f'<a href="{prefix}{meta["file"]}"{mark}>{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
+        bar = '<i class="nav-mark" aria-hidden="true"></i>' if key == current else ''
+        links.append(f'<a href="{prefix}{meta["file"]}"{mark}>{bar}{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
     return ('<header class="site-header"><div class="wrap header-bar">'
             f'<a class="brand" href="{prefix}index.html">{MARK}<span data-i18n="brand">Shortage Radar</span></a>'
             f'<nav class="nav" aria-label="Main menu" data-i18n-attr="aria-label=navLabel">{"".join(links)}</nav>'
             '<div class="lang needs-js" role="group" aria-label="Language" data-i18n-attr="aria-label=languageLabel"><button type="button" lang="fi" data-lang-btn="fi" aria-pressed="false">Suomi</button><button type="button" lang="en" data-lang-btn="en" aria-pressed="false">English</button></div>'
             '</div></header>\n'
+            f'<script src="{prefix}tabbar.js"></script>\n'
             '<div class="stale" id="stale" hidden><div class="wrap"><svg class="uicon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 3.500 2.500 20h19z"/><path d="M12 10v4.500M12 17.500h.01"/></svg><p id="stale-text"></p></div></div>')
 
 
