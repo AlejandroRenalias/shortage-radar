@@ -321,13 +321,15 @@ def test_name_index_has_every_register_name_once_and_nothing_else(tmp_path):
       <Laakeaine id="s1"><VaikuttavaAine><Aine value="Paracetamol"/></VaikuttavaAine></Laakeaine>
       <Laakeaine id="s2"><VaikuttavaAine><Aine value="Insulin glargine"/></VaikuttavaAine><VaikuttavaAine><Aine value="Paracetamol"/></VaikuttavaAine></Laakeaine>
     </Perusrekisteri>''', encoding='utf-8')
-    names = {'trade': Counter(), 'substances': Counter()}
+    names = {'trade': Counter(), 'substances': Counter(), 'strengths': {}}
     register(path, {'000001'}, names=names)
     index = build.name_index(names, '2026-11-25')
-    assert index == {'register_date': '2026-11-25', 'names': ['Lantus Solostar', 'Panadol'], 'substances': ['Insulin glargine', 'Paracetamol']}
+    # A name carries every strength the register writes for it (the spellings of one name are joined), so "Panadol 500 mg" is a label of the register.
+    assert index == {'register_date': '2026-11-25', 'names': ['Lantus Solostar', 'Panadol|500 mg|665 mg'], 'substances': ['Insulin glargine', 'Paracetamol']}
     # The same register gives the same file, whatever the order of the counts; the spelling used most often wins.
     assert build.name_index({'trade': Counter(['b', 'A', 'a', 'a']), 'substances': Counter()})['names'] == ['a', 'b']
     assert build.name_index({'trade': Counter(['A', 'A', 'a']), 'substances': Counter()})['names'] == ['A']
+    assert build.name_index({'trade': Counter(['A', 'a']), 'substances': Counter(), 'strengths': {'A': {'5 mg'}, 'a': {'10 mg', ''}}})['names'] == ['A|10 mg|5 mg']
 
 
 def test_build_writes_the_name_index(tmp_path, monkeypatch):
@@ -340,9 +342,10 @@ def test_build_writes_the_name_index(tmp_path, monkeypatch):
 
     def fake_register(path, wanted, current, members, details, day, names):
         names['trade'].update(['Panadol', 'Lantus'])
+        names['strengths'].update({'Panadol': {'500 mg'}})
         names['substances'].update(['Paracetamol'])
         return {'012345': {'name': 'Example'}}
     monkeypatch.setattr(build, 'register', fake_register)
     build.build()
     index = json.loads((tmp_path / 'site/names.json').read_text(encoding='utf-8'))
-    assert index['names'] == ['Lantus', 'Panadol'] and index['substances'] == ['Paracetamol'] and set(index) == {'register_date', 'names', 'substances'}
+    assert index['names'] == ['Lantus', 'Panadol|500 mg'] and index['substances'] == ['Paracetamol'] and set(index) == {'register_date', 'names', 'substances'}

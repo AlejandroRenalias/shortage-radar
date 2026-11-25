@@ -146,8 +146,8 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
     history of the groups and for the list of alternatives on the medicine page.
     When `details` is a dict, it is filled with {vnr: {'routes', 'eu_flag', 'form_id', 'substances'}} for the wanted VNRs:
     what the critical medicines join needs and the other pages do not.
-    When `names` is a dict, it is filled with {'trade': Counter of every trade name, 'substances': Counter of every active substance name}
-    for the name index (`name_index`).
+    When `names` is a dict, it is filled with {'trade': Counter of every trade name, 'substances': Counter of every active substance name,
+    'strengths': {trade name: set of the strengths the register writes for it}} for the name index (`name_index`).
     `day` (default: today in Helsinki) is the day the register is read for; see triage.is_available_alternative.
     """
     day = day or helsinki_today()
@@ -177,7 +177,10 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
             routes = [(x.get('id', ''), x.get('value', '')) for x in el.findall('Antoreitti')]
             if names is not None and el.findtext('Kauppanimi', '').strip():
-                names['trade'][' '.join(el.findtext('Kauppanimi', '').split())] += 1
+                trade = ' '.join(el.findtext('Kauppanimi', '').split())
+                names['trade'][trade] += 1
+                # Every strength the register writes for the name, so a label such as "Panadol 500 mg" is found as a label, not only its name.
+                names['strengths'].setdefault(trade, set()).add(' '.join(el.findtext('Vahvuus', '').split()))
             products[el.get('id')] = {'routes': routes, 'eu_flag': (el.findtext('EUKriittinenValmiste') or '').strip(), 'form_id': form.get('id', '') if form is not None else '', 'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'atc_name': atc.get('value', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
             el.clear()
         elif el.tag == 'Laakeaine':
@@ -219,15 +222,24 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
 def name_index(names, day=''):
     """The name index for the home page search (site/names.json): every trade name and active substance name of the register, once each.
 
-    A name is kept once whatever its case ("PANADOL" and "Panadol"); the spelling used most often wins, then the first in sorted order.
-    The lists are sorted, so the file is the same for the same register. The index says only that the register has the name: it says
-    nothing about shortages or about whether a package is on the market. The page uses it to tell "not on the shortage list" from "not in the register"."""
+    A trade name is written "Name|strength|strength": the name, then every strength the register writes for it ("Panadol|125 mg|250 mg|500 mg"),
+    so the page can tell a label that is in the register ("Panadol 500 mg") from a strength that is not. A substance is written as its name.
+    A name is kept once whatever its case ("PANADOL" and "Panadol"); the spelling used most often wins, then the first in sorted order, and the
+    strengths of the spellings are joined. The lists are sorted, so the file is the same for the same register. The index says only that the
+    register has the name and strength: it says nothing about shortages or about whether a package is on the market."""
     def unique(counter):
         best = {}
         for name, n in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
             best.setdefault(name.casefold(), name)
-        return sorted(best.values(), key=lambda x: (x.casefold(), x))
-    return {'register_date': day, 'names': unique(names['trade']), 'substances': unique(names['substances'])}
+        return best
+    strengths = names.get('strengths', {})
+    trade = unique(names['trade'])
+    joined = {}
+    for name, strength_set in strengths.items():
+        joined.setdefault(name.casefold(), set()).update(x for x in strength_set if x)
+    rows = [name + ''.join('|' + x for x in sorted(joined.get(key, ()))) for key, name in trade.items()]
+    return {'register_date': day, 'names': sorted(rows, key=lambda x: (x.casefold(), x)),
+            'substances': sorted(unique(names['substances']).values(), key=lambda x: (x.casefold(), x))}
 
 
 def events(snapshots):
@@ -351,7 +363,7 @@ def build():
     current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
     members = {}
     details = {}
-    names = {'trade': Counter(), 'substances': Counter()}
+    names = {'trade': Counter(), 'substances': Counter(), 'strengths': {}}
     products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details, None, names)
     search_words = {}
     for e in es:

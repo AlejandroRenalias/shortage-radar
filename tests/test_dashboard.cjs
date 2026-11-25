@@ -15,11 +15,11 @@ const dict = (a, b) => Object.assign({}, a, b);
 const nb = text => String(text).replace(/ /g, ' ');
 const pages = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749)))"], {encoding: 'utf8'}));
 // A page environment with a fake document, for the scripts that draw into elements.
-function pageEnv(scripts = ['trends.js']) {
+function pageEnv(scripts = ['trends.js'], fetchImpl = () => new Promise(() => {})) {
   const elements = {};
   const get = id => elements[id] ||= {textContent:'', innerHTML:'', hidden:true, href:'', value:'en', clientWidth:400, dataset:{}, addEventListener(){}, setAttribute(){}};
   const document = {getElementById:get, documentElement:{dataset:{},classList:{remove(){}}}, querySelector:()=>({}), querySelectorAll:()=>[]};
-  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia: () => ({matches: false}), document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:()=>new Promise(()=>{}), location:{search:''}});
+  const env = vm.createContext({Intl, Date, URLSearchParams, matchMedia: () => ({matches: false}), document, navigator:{language:'en'}, localStorage:{getItem:()=>null,setItem(){}}, fetch:(...args)=>fetchImpl(...args), location:{search:''}});
   vm.runInContext(shared + '\n' + scripts.map(read).join('\n'), env);
   return [env, get];
 }
@@ -68,7 +68,8 @@ const gone = [
   {NordicArticleNumber:'036934', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', last_seen:'2026-01-01', removed_on:'2026-02-01'}
 ];
 // The name index of the register: names that were never on the list, and one name that is also on it.
-const index = {names: ['Burana', 'Burana Comp', 'Buranagel', 'Lantus', 'Panadol', 'Panadol Forte', 'Äkkiä'], substances: ['Ibuprofen', 'Insulin glargine', 'Paracetamol', 'Galantamine', 'parasetamoli']};
+// A trade name is "Name|strength|strength", as scripts/build.py writes it.
+const index = {names: ['Burana|400 mg|600 mg', 'Burana Comp', 'Buranagel|50 mg/g', 'Lantus|100 U/ml', 'Panadol|125 mg|250 mg|500 mg', 'Panadol Forte|500 mg', 'Äkkiä'], substances: ['Hyoscyamine sulfate', 'Ibuprofen', 'Insulin glargine', 'Paracetamol', 'Galantamine', 'parasetamoli']};
 function patientEnv() {
   const [env, get] = pageEnv(['patient.js']);
   vm.runInContext("snapshotDate='2026-11-25'", env);
@@ -78,14 +79,16 @@ const answer = (env, q, idx = index) => plain(vm.runInContext(`answerFor(${JSON.
 
 test('the patient search forgives typos and takes brand and substance names, English or Finnish', () => {
   const [env] = patientEnv();
-  const states = q => answer(env, q).map(i => i.state + ':' + (i.e ? i.e.name : ''));
+  const states = q => answer(env, q).map(i => i.state + ':' + (i.e ? i.e.name : (i.labels || []).join('/')).replace(/ /g, ' '));
   assert.deepEqual(states('Burana'), ['shortage:Buranagel', 'notlisted:Burana sitruuna', 'registered:Burana', 'registered:Burana Comp']);
-  assert.ok(states('buranna').includes('shortage:Buranagel'), 'one extra letter');
-  assert.ok(states('burnaa').some(s => s.includes('Burana')), 'swapped letters');
+  // A typing mistake gets names to choose from and no card (see the regression tests below).
+  assert.deepEqual(states('buranna').map(s => s.split(':')[0]), ['suggest'], 'one extra letter');
+  assert.ok(states('buranna')[0].includes('Buranagel'));
+  assert.ok(states('burnaa')[0].includes('Burana'), 'swapped letters');
   assert.deepEqual(states('galantamiini'), ['shortage:Galantamin Orion']);
   assert.deepEqual(states('galantamiin'), ['shortage:Galantamin Orion']);
   assert.deepEqual(states('galantamine'), ['shortage:Galantamin Orion']);
-  assert.deepEqual(states('galantamiinni'), ['shortage:Galantamin Orion']);
+  assert.deepEqual(states('galantamiinni'), ['suggest:Galantamin Orion'], 'a typing mistake: a name to choose, no card');
   assert.deepEqual(states('ibuprofeeni').sort(), ['notlisted:Burana sitruuna', 'shortage:Buranagel']);
   assert.deepEqual(states('xqzvt'), ['notfound:']);
   assert.equal(vm.runInContext("fuzzyMatches({name:'Burana'}, 'bur')", env), false);
@@ -95,17 +98,19 @@ test('the patient search forgives typos and takes brand and substance names, Eng
 
 test('a name that is in the register but never was short gets the "not on the list" answer, and only a name outside the register is "not found"', () => {
   const [env] = patientEnv();
-  const states = (q, idx) => answer(env, q, idx).map(i => i.state + ':' + (i.e ? i.e.name : ''));
+  const states = (q, idx) => answer(env, q, idx).map(i => i.state + ':' + (i.e ? i.e.name : (i.labels || []).join('/')).replace(/ /g, ' '));
   assert.deepEqual(states('Panadol'), ['registered:Panadol', 'registered:Panadol Forte']);
+  assert.deepEqual(states('Panadol 500 mg'), ['registered:Panadol 500 mg', 'registered:Panadol Forte 500 mg'], 'a label of the register is a name in the register');
   assert.deepEqual(states('lantus'), ['registered:Lantus']);
   assert.deepEqual(states('LANTUS'), ['registered:Lantus'], 'case');
   assert.deepEqual(states('akkia'), ['registered:Äkkiä'], 'accents');
-  assert.deepEqual(states('lantas'), ['registered:Lantus'], 'a typing mistake finds a register name');
-  assert.deepEqual(states('panadool'), ['registered:Panadol', 'registered:Panadol Forte']);
+  assert.deepEqual(states('lantas'), ['suggest:Lantus'], 'a typing mistake gets the name to choose, not a card');
+  assert.deepEqual(states('panadool'), ['suggest:Panadol/Panadol Forte']);
   assert.deepEqual(states('Paracetamol'), ['registered:Paracetamol'], 'a substance of the register');
   assert.deepEqual(states('parasetamoli'), ['registered:Paracetamol', 'registered:parasetamoli']);
   assert.deepEqual(states('Nonexistium'), ['notfound:']);
   assert.deepEqual(states('Lantus', {names: [], substances: []}), ['notfound:'], 'an empty index finds nothing');
+  assert.deepEqual(states('Lantus', null), ['unchecked:'], 'without the index nothing is claimed');
   // A name that has a card on the lists is not shown a second time as a register name.
   assert.deepEqual(states('buranagel'), ['shortage:Buranagel']);
   // A substance that has packages on the lists is never shown as "not on the list".
@@ -116,6 +121,86 @@ test('a name that is in the register but never was short gets the "not on the li
   const big = {names: Array.from({length: 14000}, (_, i) => 'Name' + i + ' Pharma'), substances: Array.from({length: 6000}, (_, i) => 'Substance' + i)};
   const t0 = Date.now(); answer(env, 'Lantus', big); answer(env, 'nonexistium', big);
   assert.ok(Date.now() - t0 < 1500, 'two searches over 20 000 names took ' + (Date.now() - t0) + ' ms');
+});
+
+// ---- Review round 1: a typing mistake never hides a shortage, a strength is exact or nothing, a label of the register is never absent, and the cards show without names.json.
+const row = (vnr, name, strength, extra = {}) => Object.assign({NordicArticleNumber: vnr, name, strength, substances: '', pack_label: {en: '28 tablets', fi: '28 tablettia'}, UnavailableFrom: '2025-01-01', EndingDate: '2027-01-01'}, extra);
+const rnow = [row('022508', 'Yasmin', '0.03 mg / 3 mg', {substances: 'Drospirenone, Ethinylestradiol'}), row('022519', 'Yasmin', '0.03 mg / 3 mg', {substances: 'Drospirenone, Ethinylestradiol'}),
+  row('036934', 'Buranagel', '50 mg/g', {substances: 'Ibuprofen'}), row('036945', 'Buranagel', '50 mg/g', {substances: 'Ibuprofen'}),
+  row('068937', 'Galantamin Orion', '16 mg', {substances: 'Galantamine hydrobromide'}), row('192182', 'Galantamin Orion', '16 mg', {substances: 'Galantamine hydrobromide'}), row('050002', 'Galantamin Orion', '24 mg', {substances: 'Galantamine hydrobromide'})];
+const rindex = {names: ['Panadol|125 mg|250 mg|500 mg', 'Yasmin|0.03 mg / 3 mg', 'Buranagel|50 mg/g', 'Galantamin Orion|16 mg|24 mg'], substances: ['Hyoscyamine sulfate', 'Ibuprofen']};
+const rans = (env, q, idx = rindex) => plain(vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(rnow)}, [], ${JSON.stringify(idx)})`, env));
+const rshow = items => items.map(i => i.state + ':' + (i.e ? `${i.e.name} ${i.e.strength || ''} ${i.e.NordicArticleNumber || ''}`.trim() : (i.labels || []).join('/'))).join(' | ').replace(/ /g, ' ');
+
+test('a typing mistake never hides a shortage or leads to a "no shortage" card: "Yamin" offers Yasmin', () => {
+  const [env] = patientEnv();
+  const items = rans(env, 'Yamin');
+  // "yamin" is inside "Hyoscyamine" but does not start it: no card for the substance, and no card at all for the typed text.
+  assert.deepEqual(items.map(i => i.state), ['suggest']);
+  assert.equal(items[0].labels[0], 'Yasmin');
+  assert.equal(rans(env, 'hyoscyamine').map(i => i.state).join(), 'registered', 'the real name still has its card');
+  assert.deepEqual(rans(env, 'yasmin').map(i => i.e.NordicArticleNumber), ['022508', '022519'], 'the right name shows both packages');
+  // Typing mistakes of other names: names only, never a card, never "not on the list".
+  for (const q of ['Yasmn', 'Burannagel', 'Galantaminn', 'Panadool']) assert.deepEqual(rans(env, q).map(i => i.state), ['suggest'], q);
+  const html = vm.runInContext(`${JSON.stringify(items)}.map(cardMarkup).join('')`, env).replace(/<[^>]+>/g, ' ');
+  assert.ok(html.includes('Did you mean:') && html.includes('Yasmin'));
+  assert.doesNotMatch(html, /Not on Fimea|Fimea lists a shortage|did not find|available/);
+});
+
+test('a strength matches exactly or not at all: "Burannagel 5 mg" never shows 50 mg/g, "Galantaminn Orion 16 mg" never shows 24 mg', () => {
+  const [env] = patientEnv();
+  const bad = rans(env, 'Burannagel 5 mg');
+  assert.deepEqual(bad.map(i => i.state), ['suggest']);
+  assert.deepEqual(bad[0].labels, ['Buranagel'], 'the typed 5 mg is dropped, not changed into 50 mg/g');
+  assert.deepEqual(rans(env, 'Burannagel 50 mg/g')[0].labels.map(x => x.replace(/ /g, ' ')), ['Buranagel 50 mg/g']);
+  assert.deepEqual(rans(env, 'Galantaminn Orion 16 mg')[0].labels.map(x => x.replace(/ /g, ' ')), ['Galantamin Orion 16 mg'], 'a near name keeps only the strength that was typed');
+  assert.equal(rshow(rans(env, 'Galantamin Orion 16 mg')), 'shortage:Galantamin Orion 16 mg 068937 | shortage:Galantamin Orion 16 mg 192182', 'both listed 16 mg packs, no 24 mg');
+  assert.equal(rshow(rans(env, 'Buranagel 5 mg')).includes('shortage'), false, '5 mg is not 50 mg/g');
+  assert.equal(rshow(rans(env, 'Buranagel 50')).includes('036934'), true, 'a number without a unit matches the first number');
+  assert.equal(vm.runInContext("[strengthMatches('50 mg/g','5mg'), strengthMatches('2.5 mg','5'), strengthMatches('0.03 mg / 3 mg','0.03mg/3mg'), strengthMatches('100 U/ml','100u/ml'), strengthMatches('400 mg','400')]", env).join(), 'false,false,true,true,true');
+  assert.equal(vm.runInContext("fuzzyMatches({name:'Buranagel', strength:'50 mg/g'}, 'burannagel 5 mg')", env), false);
+  assert.equal(vm.runInContext("fuzzyMatches({name:'Buranagel', strength:'50 mg/g'}, 'burannagel 50 mg/g')", env), true);
+});
+
+test('a label that is in the register is never called absent: "Panadol 500 mg" has its card, a strength it lacks gets "Did you mean"', () => {
+  const [env] = patientEnv();
+  assert.equal(rshow(rans(env, 'Panadol 500 mg')), 'registered:Panadol 500 mg');
+  assert.equal(rshow(rans(env, 'Panadol 500mg')), 'registered:Panadol 500 mg');
+  assert.equal(rshow(rans(env, 'panadol 125')), 'registered:Panadol 125 mg');
+  const lacks = rans(env, 'Panadol 999 mg');
+  assert.deepEqual(lacks.map(i => i.state), ['suggest']);
+  assert.deepEqual(lacks[0].labels.map(x => x.replace(/ /g, ' ')), ['Panadol 125 mg', 'Panadol 250 mg', 'Panadol 500 mg']);
+  for (const lang of ['en', 'fi']) {
+    setLanguage(env, lang);
+    const html = vm.runInContext(`answerFor('Panadol 500 mg', [], [], ${JSON.stringify(rindex)}).concat(answerFor('Panadol 999 mg', [], [], ${JSON.stringify(rindex)})).map(cardMarkup).join('')`, env);
+    assert.doesNotMatch(html, /did not find|Emme löytäneet|not in Fimea|ei ole Fimean/);
+  }
+  setLanguage(env, 'en');
+  assert.deepEqual(rans(env, 'Nonexistium 5 mg').map(i => i.state), ['notfound'], 'only a name that is nowhere is not found');
+});
+
+test('without names.json the shortage cards still show, with a note that name search is limited; a later success clears it', async () => {
+  let fail = true;
+  const [env, get] = pageEnv(['patient.js'], url => url === 'names.json' ? (fail ? Promise.resolve({ok: false, status: 503, json: () => Promise.reject(Error('503'))}) : Promise.resolve({ok: true, json: () => Promise.resolve(rindex)})) : new Promise(() => {}));
+  vm.runInContext(`snapshotDate='2026-11-25'; currentRows=${JSON.stringify(rnow)}; pastRows=[]; query='buranagel'; ensureNames();`, env);
+  await new Promise(r => setTimeout(r, 20));
+  let html = get('pt-results').innerHTML.replace(/<[^>]+>/g, ' ').replace(/ /g, ' ');
+  assert.ok(html.includes('Fimea lists a shortage.') && html.includes('Buranagel 50 mg/g'), 'shortage cards without the index');
+  assert.ok(html.includes('Name search is limited now. Some names may be missing.'));
+  // A name that only the index could place is neither "not on the list" nor "not in the register".
+  vm.runInContext("query='lantus'; render();", env);
+  html = get('pt-results').innerHTML.replace(/<[^>]+>/g, ' ').replace(/ /g, ' ');
+  assert.ok(html.includes('We could not check this name now.') && !/did not find|Not on Fimea/.test(html));
+  // The visitor searches again and the index loads: the note and the stale error go.
+  fail = false; get('load-error').hidden = false;
+  vm.runInContext("readQuery('buranagel', true)", env);
+  await new Promise(r => setTimeout(r, 20));
+  html = get('pt-results').innerHTML.replace(/<[^>]+>/g, ' ').replace(/ /g, ' ');
+  assert.ok(html.includes('Fimea lists a shortage.') && !html.includes('limited'));
+  assert.equal(get('load-error').hidden, true);
+  setLanguage(env, 'fi');
+  vm.runInContext("registerNames=null; namesStarted=false; namesFailed=true; render();", env);
+  assert.ok(get('pt-results').innerHTML.includes('Nimihaku on nyt rajallinen. Kaikkia nimiä ei ehkä löydy.'));
 });
 
 test('a package on the list now is never also shown as past, and a past package shows once', () => {
@@ -136,13 +221,13 @@ test('cards have exactly three states with the agreed sentences, the data date a
   for (const piece of ['Not on Fimea’s list now.', 'Elvanse 40 mg', '30 capsules', 'Earlier on the list. Last seen on 15 Sep 2026.', 'This does not show if the pharmacy has it.', 'Source: Fimea, updated 25 Nov 2026']) assert.ok(past.includes(piece), piece);
   for (const piece of ['Ei Fimean listalla nyt.', 'Tämä ei kerro, onko lääkettä apteekissa.', 'Lähde: Fimea, päivitetty 25.11.2026']) assert.ok(pastFi.includes(piece), piece);
   const none = text(card('xqzvt', 'en')), noneFi = text(card('xqzvt', 'fi'));
-  assert.ok(none.includes('This name is not in Fimea’s medicine register. This does not show if the medicine is available. Check the name on the box or ask your pharmacy. Source: Fimea, updated 25 Nov 2026'));
-  assert.ok(noneFi.includes('Tätä nimeä ei ole Fimean lääkerekisterissä. Tämä ei kerro, onko lääke saatavilla. Katso nimi pakkauksesta tai kysy apteekista. Lähde: Fimea, päivitetty 25.11.2026'));
+  assert.ok(none.includes('We did not find this name in Fimea’s medicine register. This does not show if the medicine is available. Check the name on the box or ask your pharmacy. Source: Fimea, updated 25 Nov 2026'));
+  assert.ok(noneFi.includes('Emme löytäneet tätä nimeä Fimean lääkerekisteristä. Tämä ei kerro, onko lääke saatavilla. Katso nimi pakkauksesta tai kysy apteekista. Lähde: Fimea, päivitetty 25.11.2026'));
   // A name that is in the register but has no shortage: the "not on the list" card, never "not found" or "unavailable".
   const never = text(card('panadol', 'en')), neverFi = text(card('panadol', 'fi'));
   assert.ok(never.includes('Not on Fimea’s list now. Panadol This does not show if the pharmacy has it. Source: Fimea, updated 25 Nov 2026'));
   assert.ok(neverFi.includes('Ei Fimean listalla nyt. Panadol Tämä ei kerro, onko lääkettä apteekissa. Lähde: Fimea, päivitetty 25.11.2026'));
-  for (const html of [never, neverFi]) assert.doesNotMatch(html, /not in Fimea|ei ole Fimean|Earlier on the list|Oli aiemmin/);
+  for (const html of [never, neverFi]) assert.doesNotMatch(html, /did not find|Emme löytäneet|Earlier on the list|Oli aiemmin/);
   vm.runInContext("snapshotDate='2026-01-02'", env);
   assert.ok(text(card('xqzvt', 'en')).includes('updated 2 Jan 2026'));
   for (const html of [short, shortFi, past, pastFi, none, noneFi, never, neverFi]) assert.doesNotMatch(html, /interchangeable|vaihtokelp|other package|toinen pakkaus|in stock|supply returned|stop taking|lopeta|change your medicine/i);
