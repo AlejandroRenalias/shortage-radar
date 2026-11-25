@@ -222,6 +222,24 @@ def test_main_reports_refused_inputs_in_the_log(tmp_path, monkeypatch, capsys):
     assert counts.main([]) == 1 and '::error::Daily counts not written: no ledger rows' in capsys.readouterr().out
 
 
+def find_bash():
+    """A bash that can run the workflow's shell lines: on Windows Git Bash (found next to git), never the WSL launcher in System32 or WindowsApps."""
+    candidates = []
+    git_path = shutil.which('git')
+    if git_path:
+        root = Path(git_path).resolve().parent.parent
+        candidates += [root / 'bin/bash.exe', root.parent / 'bin/bash.exe', root / 'usr/bin/bash.exe']
+    candidates += [Path(p) for p in (shutil.which('bash'),) if p]
+    for path in candidates:
+        if path.exists() and not any(part.lower() in ('system32', 'windowsapps') for part in path.parts):
+            try:
+                if subprocess.run([str(path), '-c', 'echo ok'], capture_output=True, text=True, timeout=30).stdout.strip() == 'ok':
+                    return str(path)
+            except (OSError, subprocess.SubprocessError):
+                continue
+    return None
+
+
 def guard_script():
     text = (Path(__file__).resolve().parents[1] / '.github/workflows/archive.yml').read_text(encoding='utf-8')
     start, end = text.index('# counts guard start'), text.index('# counts guard end')
@@ -237,10 +255,10 @@ GOOD = '{"date":"%s","type":"group"}\n'
 
 
 def test_the_workflow_guard_restores_or_removes_invalid_files_and_never_stages_a_deletion(tmp_path):
-    bash = shutil.which('bash')
+    bash = find_bash()
     if not bash or not shutil.which('git'):
         import pytest
-        pytest.skip('needs bash and git')
+        pytest.skip('needs a working bash (Git Bash on Windows; the WSL launcher in System32 is not used) and git')
     git(tmp_path, 'init', '-q')
     git(tmp_path, 'config', 'user.email', 'a@b.c')
     git(tmp_path, 'config', 'user.name', 'a')
@@ -265,3 +283,52 @@ def test_the_workflow_guard_restores_or_removes_invalid_files_and_never_stages_a
     assert (folder / '2026-11-24.jsonl').read_text(encoding='utf-8') == GOOD % '2026-11-24'
     assert (folder / '2026-11-25.jsonl').read_text(encoding='utf-8') == GOOD % '2026-11-25'
     assert sorted(p.name for p in folder.iterdir()) == ['2026-11-24.jsonl', '2026-11-25.jsonl', '2026-11-26.jsonl']
+
+
+def old_vnr_register(extra=''):
+    """The reviewer's fixture: 099998 is the old VNR of 012345; the register has two rows for 012345, the first with the old VNR and short, the second
+    without it and available."""
+    first = '<Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012345</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>1</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>'
+    assert first in REGISTER
+    rows = ('<Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012345</VNR-numero><VanhaVNR>099998</VanhaVNR><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>1</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
+            '  <Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012345</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>0</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>')
+    return REGISTER.replace(first, rows, 1).replace('  <Laakevalmiste id="p1">', extra + '  <Laakevalmiste id="p1">', 1)
+
+
+def test_a_listed_package_resolved_through_its_old_vnr_gives_the_same_alternatives_as_the_ledger(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    register.write_text(old_vnr_register(), encoding='utf-8')
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(HEADER + '099998;K;2026-11-01;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
+    day = build.helsinki_today()
+    rec(day, folder, register)
+    ledger_values, counts_values = group_alternatives(folder, day)
+    assert counts_values == ledger_values == {'0042': 2}  # the ledger's number; counts used to say 3
+
+
+def test_a_short_duplicate_of_a_vnr_adds_no_holder(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    short_other = ('  <Pakkaus Laakevalmiste-ref="p5"><VNR-numero>012346</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>1</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
+                   '  <Laakevalmiste id="p5"><Kauppanimi>Five</Kauppanimi><ATC-koodi id="N02" value="x"/><Myyntilupa><Haltija>Delta Oy</Haltija></Myyntilupa><Substituutioryhma id="0042" value="0042"/></Laakevalmiste>\n')
+    register.write_text(REGISTER.replace('  <Laakevalmiste id="p1">', short_other + '  <Laakevalmiste id="p1">', 1), encoding='utf-8')
+    day = build.helsinki_today()
+    rec(day, folder, register)
+    row = next(r for r in read(folder, day) if r['type'] == 'group' and r['group'] == '0042')
+    assert (row['alternatives'], row['distinct_alternative_holders']) == (2, 2)
+    ledger_values, counts_values = group_alternatives(folder, day)
+    assert ledger_values == counts_values
+
+
+def test_counts_use_the_newest_ledger_day_not_the_clock(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    ledger.record('2026-11-23', folder, register)  # written at 23:59:59 Helsinki time
+    assert not hasattr(counts, 'datetime')  # the counts step reads no clock: at 00:00:01 it still counts 23 Nov
+    assert counts.record(None, folder, register) > 0
+    assert sorted(p.name for p in (folder / 'counts').iterdir()) == ['2026-11-23.jsonl']
+    ledger.record('2026-11-24', folder, register)
+    assert counts.record(folder=folder, register_path=register) > 0
+    assert sorted(p.name for p in (folder / 'counts').iterdir()) == ['2026-11-23.jsonl', '2026-11-24.jsonl']
+    try:
+        counts.record(folder=tmp_path / 'empty', register_path=register)
+        raise AssertionError('no ledger, no counts')
+    except counts.CountsInputError:
+        pass

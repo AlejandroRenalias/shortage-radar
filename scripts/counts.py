@@ -25,14 +25,12 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from build import ROOT, group_key, read_snapshot, register
 from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import register_date
-from triage import on_market
+from triage import is_available_alternative, on_market
 
 
 def holder_name(text):
@@ -74,8 +72,7 @@ def rows_for(day, rows, register_path):
     """The count rows of `day` for the shortage rows `rows`, from the register file `register_path`."""
     vnrs = {r['NordicArticleNumber'] for r in rows}
     members = {}
-    available = {}
-    products = register(register_path, vnrs, vnrs, members=members, day=day, available_out=available)
+    products = register(register_path, vnrs, vnrs, members=members, day=day)
     ran = register_date(register_path)
     on_market_by_holder, owner = holder_pass(register_path, vnrs)
     # Listed packages: one for each VNR of the file; the company is the register holder of the package.
@@ -93,15 +90,21 @@ def rows_for(day, rows, register_path):
         out.append({'date': day, 'type': 'company', 'company': holder, 'listed': c['listed'], 'listed_human': c['listed'] - c['listed_vet'], 'listed_vet': c['listed_vet'],
                     'on_market': m['on_market'], 'on_market_human': m['on_market'] - m['on_market_vet'], 'on_market_vet': m['on_market_vet'], 'register_date': ran})
     shortage_vnrs = set(vnrs)
-    for group in sorted({group_key(p) for p in products.values()} - {None}):
+    # `alternatives` of a group is the value the ledger writes for its listed packages: `other_packages_count` of build.register, the same number, taken
+    # from the lowest listed VNR of the group (the ledger check 2 requires all of them to be equal). There is no second calculation.
+    group_alternatives = {}
+    for v in sorted(vnrs):
+        product = products.get(v)
+        key = group_key(product) if product else None
+        if key:
+            group_alternatives.setdefault(key, product['other_packages_count'])
+    for group in sorted(group_alternatives):
         packs = members.get(group, [])
         listed_vnrs = {p['vnr'] for p in packs if ({p['vnr']} | p['old']) & shortage_vnrs}
-        if not listed_vnrs:
-            continue
-        # The alternatives are the sets the ledger's `alternatives` is counted from (build.register), so the two cannot differ.
-        found = available.get(group, set())
-        out.append({'date': day, 'type': 'group', 'group': group, 'on_market': len({p['vnr'] for p in packs if on_market(p, day)}), 'listed': len(listed_vnrs), 'alternatives': len(found),
-                    'distinct_alternative_holders': len({holder_name(p['company']) for p in packs if p['vnr'] in found}), 'register_date': ran})
+        # Holders: only records that are themselves available alternatives (a short duplicate of a VNR adds no holder).
+        holders = {holder_name(p['company']) for p in packs if is_available_alternative(p, shortage_vnrs, day, True)}
+        out.append({'date': day, 'type': 'group', 'group': group, 'on_market': len({p['vnr'] for p in packs if on_market(p, day)}), 'listed': len(listed_vnrs),
+                    'alternatives': group_alternatives[group], 'distinct_alternative_holders': len(holders), 'register_date': ran})
     return out
 
 
@@ -152,12 +155,21 @@ def inputs_of_the_ledger(day, folder, register_path, snapshot_folder):
     raise CountsInputError(f'no shortage file has the SHA-256 {", ".join(sorted(shortage_hashes))} of the ledger rows of {day}')
 
 
+def newest_ledger_day(folder):
+    """The date of the newest ledger rows: the day the ledger step of this run just wrote. Counts do not read the clock, so a run that crosses midnight
+    between the two steps still counts the day the ledger recorded."""
+    days = {r['date'] for r in read_rows(folder, canonical=False)}
+    if not days:
+        raise CountsInputError('the ledger has no rows; the counts of a day are made only from the inputs of its ledger rows')
+    return max(days)
+
+
 def record(day=None, folder=LEDGER, register_path=ROOT / 'data/source/register.xml', snapshot_folder=None):
-    """Write the count rows of `day` (default: today in Helsinki, like the ledger) to `<folder>/counts/<day>.jsonl`, once. The rows are made from the
+    """Write the count rows of `day` (default: the newest ledger day, see newest_ledger_day) to `<folder>/counts/<day>.jsonl`, once. The rows are made from the
     shortage file and the register that the ledger rows of that day were made from. The whole day is written to a temporary file in the same folder,
     flushed to disk and renamed, so a file with the day's name is always a complete day or does not exist. An existing day file is never touched.
     Returns the number of rows written; 0 when the day already has its file. Raises CountsInputError when the inputs are not on disk."""
-    day = day or datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
+    day = day or newest_ledger_day(folder)
     target_folder = counts_folder(folder)
     target_folder.mkdir(parents=True, exist_ok=True)
     for leftover in target_folder.glob(TEMP_PREFIX + '*'):

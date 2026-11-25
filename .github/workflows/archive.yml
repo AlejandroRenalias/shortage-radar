@@ -72,8 +72,15 @@ jobs:
         env:
           TZ: Europe/Helsinki
         run: python scripts/ledger.py
+      - name: Record daily counts
+        # Writes the day's company and group counts once, as the whole file data/ledger/counts/YYYY-MM-DD.jsonl (temporary file, then rename); an existing day file is not touched. The day is the newest ledger day. A failure here does not stop the archive; check 9 of the validation reports a missing file.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TZ: Europe/Helsinki
+        run: python scripts/counts.py
       - name: Validate the daily ledger
-        # Eight checks on the day's ledger rows (scripts/validate_daily.py). It only reads: a failed check changes and deletes no data, writes the message in this log and
+        # Nine checks on the day's ledger rows and counts (scripts/validate_daily.py). It only reads: a failed check changes and deletes no data, writes the message in this log and
         # lets the alert job open the data-validation entry of the pipeline issue. It runs before the commit and before anything is published.
         id: validate
         continue-on-error: true
@@ -81,13 +88,6 @@ jobs:
         env:
           TZ: Europe/Helsinki
         run: python scripts/validate_daily.py
-      - name: Record daily counts
-        # Writes the day's company and group counts once, as the whole file data/ledger/counts/YYYY-MM-DD.jsonl (temporary file, then rename); an existing day file is not touched. A failure here does not stop the archive.
-        continue-on-error: true
-        timeout-minutes: 5
-        env:
-          TZ: Europe/Helsinki
-        run: python scripts/counts.py
       - name: Check age of the source files
         # Fails when the shortage file's Last-Modified or the register's run date is more than 2 days old. It does not stop the archive; the alert job opens the pipeline issue (source-stale).
         id: age

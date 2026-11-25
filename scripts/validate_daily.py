@@ -1,6 +1,6 @@
 """Daily validation of the ledger, run by the archive job right after the ledger step and before anything is published.
 
-Eight checks read the day's ledger rows (and the month file, the register and the snapshot they came from). A check is FAIL, WARN or
+Nine checks read the day's ledger rows (and the month file, the register and the snapshot they came from). A check is FAIL, WARN or
 PASS; SKIP means it could not be judged (see check 1 and 5). A failed check never deletes or changes data: this script only reads,
 prints one line for each check (`::error::` for FAIL, `::warning::` for WARN) and exits 1 when a check failed. The archive job then opens or
 updates the `data-validation` entry of the data-pipeline issue (scripts/pipeline_alert.py) and closes it when the checks pass again.
@@ -14,6 +14,7 @@ A WARN is written to the run log and does not open the issue.
 6. `register_date` of the day's rows equals the ledger `date`, or is at most STALE_DAYS old. WARN when older.
 7. The ledger VNR set equals the snapshot's VNR set and `shortages_sha256` is the snapshot's hash. FAIL
 8. `impact` is one of the allowed values (`critical` only in rows of days up to LAST_CRITICAL_DAY). FAIL
+9. The day's counts file (scripts/counts.py) exists and its group `alternatives` equal the ledger's for every group. FAIL
 
 The register changes about once a day. A later run of the same day may have downloaded a newer register than the one the ledger rows
 were made with (their `register_sha256`); checks 1 and 5 compare with the register, so they are SKIP then (`--force-register` runs them anyway).
@@ -27,6 +28,7 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import counts as daily_counts
 from build import ROOT, group_key, read_snapshot, register
 from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import STALE_DAYS, iso_day
@@ -133,6 +135,16 @@ def check_impact_values(month_rows):
     return verdict(8, 'impact values allowed', bad, 'FAIL', 'ok', 'not allowed:')
 
 
+def check_counts(rows, counts_rows):
+    """9. The counts of the day give the same `alternatives` for every group as the ledger rows (`counts_rows` is None when the day has no counts file)."""
+    if counts_rows is None:
+        return Result(9, 'counts agree with the ledger', 'FAIL', 'the day has no counts file (the counts step did not write it)')
+    ledger_values = {r['group']: r['alternatives'] for r in rows if r['group']}
+    counts_values = {r['group']: r['alternatives'] for r in counts_rows if r.get('type') == 'group'}
+    bad = [f'group {g}: ledger {ledger_values.get(g)}, counts {counts_values.get(g)}' for g in sorted(set(ledger_values) | set(counts_values)) if ledger_values.get(g, 'none') != counts_values.get(g, 'none')]
+    return verdict(9, 'counts agree with the ledger', bad, 'FAIL', f'{len(counts_values)} groups equal', 'different:')
+
+
 def helsinki_today():
     return datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
 
@@ -179,6 +191,8 @@ def run(day, ledger_folder=LEDGER, register_path=ROOT / 'data/source/register.xm
     snap = snapshot_for(rows, day, snapshot_folder)
     results.append(check_snapshot(rows, *snap) if snap else Result(7, 'ledger matches the snapshot', 'FAIL', f'no snapshot dated on or before {day}'))
     results.append(check_impact_values(month))
+    counts_path = daily_counts.counts_folder(ledger_folder) / f'{day}.jsonl'
+    results.append(check_counts(rows, [json.loads(line) for line in counts_path.read_text(encoding='utf-8').splitlines()] if counts_path.exists() else None))
     hashes = {r['register_sha256'] for r in rows}
     if not register_path.exists():
         for n, name in ((1, 'ledger VNRs join to the register'), (5, '`alternatives` at most the other packages of the group')):

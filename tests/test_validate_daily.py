@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build
+import counts
 import ledger
 import triage
 import validate_daily as v
@@ -106,7 +107,9 @@ def setup(tmp_path, monkeypatch):
     register.write_text(REGISTER, encoding='utf-8')
     monkeypatch.setattr(build, 'ROOT', tmp_path)
     monkeypatch.setattr(ledger, 'ROOT', tmp_path)
+    monkeypatch.setattr(counts, 'ROOT', tmp_path)
     ledger.record(DAY, tmp_path / 'ledger', register)
+    counts.record(DAY, tmp_path / 'ledger', register)
     return register, tmp_path / 'ledger', tmp_path / 'data/snapshots'
 
 
@@ -117,7 +120,7 @@ def results(register, folder, snaps, **kw):
 def test_run_passes_on_a_ledger_written_by_the_ledger_script(tmp_path, monkeypatch):
     register, folder, snaps = setup(tmp_path, monkeypatch)
     found = results(register, folder, snaps)
-    assert {n: r.status for n, r in found.items()} == dict.fromkeys(range(1, 9), 'PASS')
+    assert {n: r.status for n, r in found.items()} == dict.fromkeys(range(1, 10), 'PASS')
 
 
 def test_run_reports_without_changing_any_file(tmp_path, monkeypatch):
@@ -181,7 +184,7 @@ def test_main_prints_the_status_and_exits_1_only_for_a_failure(tmp_path, monkeyp
 
 def test_the_workflow_runs_the_validation_after_the_ledger_and_before_the_commit():
     text = (Path(__file__).resolve().parents[1] / '.github/workflows/archive.yml').read_text(encoding='utf-8')
-    assert text.index('python scripts/ledger.py') < text.index('python scripts/validate_daily.py') < text.index('name: Commit changes')
+    assert text.index('python scripts/ledger.py') < text.index('python scripts/counts.py\n') < text.index('python scripts/validate_daily.py') < text.index('name: Commit changes')
     assert 'python scripts/counts.py' in text and 'PIPELINE=data-validation RESULT=failure' in text and 'PIPELINE=data-validation RESULT=success' in text
     from pipeline_alert import MEANING
     assert 'data-validation' in MEANING
@@ -219,3 +222,27 @@ def test_read_rows_reads_only_files_named_yyyy_mm(tmp_path):
     for name in ('2026-11.jsonl', 'notes-11.jsonl', 'counts-2026-11.jsonl', '2026-11.jsonl.bak', '2026-1.jsonl'):
         (tmp_path / name).write_text(line, encoding='utf-8')
     assert len(ledger.read_rows(tmp_path)) == 1
+
+
+# 9 counts agree with the ledger
+def test_check_9_counts_agree_with_the_ledger():
+    rows = [row('1', group='0042', alternatives=2), row('2', group='0042', alternatives=2), row('3', group='', alternatives=None, impact='nogroup')]
+    same = [{'type': 'company', 'company': 'A'}, {'type': 'group', 'group': '0042', 'alternatives': 2}]
+    assert status(v.check_counts(rows, same)) == 'PASS'
+    failing = v.check_counts(rows, [{'type': 'group', 'group': '0042', 'alternatives': 3}])
+    assert status(failing) == 'FAIL' and 'group 0042: ledger 2, counts 3' in failing.message
+    assert status(v.check_counts(rows, [])) == 'FAIL'  # a group of the ledger is missing in the counts
+    assert status(v.check_counts(rows, same + [{'type': 'group', 'group': '0099', 'alternatives': 0}])) == 'FAIL'  # an extra group
+    assert status(v.check_counts(rows, None)) == 'FAIL'  # no counts file for the day
+
+
+def test_run_fails_check_9_when_the_counts_file_is_missing_or_different(tmp_path, monkeypatch):
+    register, folder, snaps = setup(tmp_path, monkeypatch)
+    path = folder / 'counts' / f'{DAY}.jsonl'
+    text = path.read_text(encoding='utf-8')
+    path.write_text(text.replace('"alternatives":1,', '"alternatives":5,'), encoding='utf-8')
+    assert results(register, folder, snaps)[9].status == 'FAIL'
+    path.unlink()
+    assert results(register, folder, snaps)[9].status == 'FAIL'
+    path.write_text(text, encoding='utf-8')
+    assert results(register, folder, snaps)[9].status == 'PASS'

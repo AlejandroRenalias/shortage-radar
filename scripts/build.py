@@ -138,7 +138,7 @@ def search_names(substances, pairs):
     return ' '.join(dict.fromkeys(sorted(x for x in found if x)))
 
 
-def register(path, wanted, current_shortages=(), members=None, details=None, day=None, names=None, available_out=None):
+def register(path, wanted, current_shortages=(), members=None, details=None, day=None, names=None):
     """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
     on the market, not flagged short in the register and not in the current shortage file.
 
@@ -148,8 +148,6 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
     what the critical medicines join needs and the other pages do not.
     When `names` is a dict, it is filled with {'trade': Counter of every trade name, 'substances': Counter of every active substance name,
     'strengths': {trade name: set of the strengths the register writes for it}} for the name index (`name_index`).
-    When `available_out` is a dict, it is filled with {group: set of the VNRs that are available alternatives} (the sets `other_packages_count` is taken from),
-    so a second record of the day's counts (scripts/counts.py) uses the same sets as the ledger and cannot differ.
     `day` (default: today in Helsinki) is the day the register is read for; see triage.is_available_alternative.
     """
     day = day or helsinki_today()
@@ -208,8 +206,6 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             available.setdefault(key, set()).add(vnr)
         if members is not None:
             members.setdefault(key, []).append(member)
-    if available_out is not None:
-        available_out.update(available)
     result = {}
     for vnr, (ref, refs, pack, current_vnr, unit) in packages.items():
         if ref in products:
