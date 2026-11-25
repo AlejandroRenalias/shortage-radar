@@ -179,11 +179,16 @@ def test_finnish_shortages_tab_can_wrap_at_a_soft_hyphen():
     assert i18n.count('navShortages:') == 2
 
 
-def test_tab_bar_floats_clears_content_and_respects_motion_and_safe_area():
+def test_tab_bar_blends_in_clears_content_and_respects_motion_and_safe_area():
     css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
     nav = re.search(r'\n\.nav\{([^}]*)\}', css).group(1)
-    assert 'position:fixed' in nav and 'bottom:calc(12px + env(safe-area-inset-bottom))' in nav
-    assert re.search(r'--nav-h:100px', css) and re.search(r'body\{[^}]*padding-bottom:calc\(var\(--nav-h\) \+ env\(safe-area-inset-bottom\)\)', css)
-    assert re.search(r'\.nav a\{[^}]*min-height:56px', css)
+    assert 'position:fixed' in nav and 'left:0;right:0;bottom:0' in nav
+    assert 'background:var(--surface)' in nav and 'border-top:1px solid var(--line)' in nav
+    assert 'env(safe-area-inset-bottom)' in nav
+    assert 'box-shadow' not in nav and 'border-radius' not in nav and 'var(--ink)' not in nav
+    assert re.search(r'--nav-h:61px', css) and re.search(r'body\{[^}]*padding-bottom:calc\(var\(--nav-h\) \+ env\(safe-area-inset-bottom\)\)', css)
+    assert re.search(r'\.nav a\{[^}]*min-height:var\(--nav-h\)', css)
+    assert re.search(r'\.nav a\[aria-current="page"\]\{[^}]*color:var\(--green-ink\);font-weight:700', css)
     assert '.nav a:focus-visible{' in css
+    assert re.search(r'@media \(min-width:720px\)\{\s*:root\{--nav-h:0px\}\s*body\{padding-bottom:0\}', css)
     assert re.search(r'prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important', css)

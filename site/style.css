@@ -13,7 +13,7 @@ html.i18n-pending body{animation:reveal-fallback 0s 2s both}@keyframes reveal-fa
   --icon-fill:#d3e8de;
   --sub:#067647;--sub-tint:#eef7f2;--sub-line:#bfe3cd;--crit:#8a4b00;--crit-tint:#fdf4e3;--crit-line:#e6cf9f;--crit-bar:#b7791f;--nog:#4a625c;--nog-tint:#f3f6f5;--nog-line:#d3ded9;--nog-bar:#6f877e;
   --font:'Atkinson Hyperlegible Next','Atkinson Fallback',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --nav-h:100px;--header-h:60px;--header-stick:var(--header-h);
+  --nav-h:61px;--header-h:60px;--header-stick:var(--header-h);
   font-family:var(--font);color:var(--text);background:var(--surface);font-size:18px;line-height:1.55;
   scroll-padding-top:calc(var(--header-stick) + 12px);scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
   -webkit-text-size-adjust:100%;text-size-adjust:100%;
@@ -54,21 +54,19 @@ img,svg{max-width:100%}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:500;font-size:1.1875rem;text-decoration:none;min-height:44px}
 .brand:hover{text-decoration:underline}
 .mark{border-radius:9px}
-/* Tab bar. Below 720px: a dark floating dock, 12px above the screen edge. From 720px it sits in the header as a row of pills. */
-.nav{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:30;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:6px;background:var(--ink);border-radius:28px;box-shadow:0 12px 30px rgba(15,42,36,.30),0 2px 6px rgba(15,42,36,.22)}
-.nav a{--cut:var(--ink);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;min-height:56px;padding:7px 1px 6px;border-radius:22px;color:#c9dcd3;font-size:.72rem;font-weight:400;line-height:1.1;text-decoration:none;text-align:center;hyphens:manual;overflow-wrap:normal;-webkit-tap-highlight-color:transparent;transition:background-color .2s ease,color .2s ease}
-.nav a:hover{background:rgba(255,255,255,.09)}
-.nav a:focus-visible{outline:3px solid #fff;outline-offset:-3px;border-radius:22px}
-.nav a[aria-current="page"]{--cut:var(--green-ink);color:#fff;font-weight:500;background:var(--green-ink);animation:dock-in .4s cubic-bezier(.2,.8,.2,1) both}
-.nav a[aria-current="page"]::after{content:"";position:absolute;top:4px;right:calc(50% - 20px);width:6px;height:6px;border-radius:50%;background:#bff0d8}
-.nav a[aria-current="page"] .ic-b{animation:lift .4s cubic-bezier(.2,.8,.2,1) both}
+/* Tab bar. Below 720px: a full-width bar fixed to the bottom edge, same surface, border and font as the header. From 720px the links sit in the header instead (see the media queries below). */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);background:var(--surface);border-top:1px solid var(--line)}
+.nav a{--cut:var(--surface);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:var(--nav-h);padding:7px 1px 6px;color:var(--muted);font-size:.72rem;font-weight:400;line-height:1.1;text-decoration:none;text-align:center;hyphens:manual;overflow-wrap:normal;-webkit-tap-highlight-color:transparent;transition:color .15s ease}
+.nav a:hover{background:var(--mint);--cut:var(--mint)}
+.nav a:focus-visible{outline:3px solid var(--green);outline-offset:-3px;border-radius:8px}
+.nav a[aria-current="page"]{color:var(--green-ink);font-weight:700;animation:tab-fade .15s ease both}
+.nav a[aria-current="page"]::before{content:"";position:absolute;top:-1px;left:50%;width:32px;margin-left:-16px;height:3px;border-radius:0 0 3px 3px;background:var(--green-ink)}
 .ic-b{width:24px;height:24px;fill:currentColor;stroke:currentColor;stroke-width:1.2;stroke-linejoin:round;overflow:visible}
 .ic-b .c{fill:none;stroke:var(--cut,var(--surface));stroke-width:2.2;stroke-linecap:round}
 .ic-b .k{fill:var(--cut,var(--surface));stroke:none}
 @media (max-width:389px){.nav a{font-size:.68rem}}
-@media (max-width:339px){.nav{left:6px;right:6px;padding:3px;gap:0}.nav a{padding-inline:0;font-size:.65rem}}
-@keyframes dock-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-@keyframes lift{from{transform:translateY(3px)}to{transform:translateY(-1px)}}
+@media (max-width:339px){.nav a{padding-inline:0;font-size:.65rem}}
+@keyframes tab-fade{from{opacity:.4}to{opacity:1}}
 .lang{display:inline-flex;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px}
 .lang button{font:inherit;font-size:.9375rem;font-weight:400;min-height:40px;min-width:44px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
 .lang button[aria-pressed="true"]{background:var(--ink);color:#fff}
@@ -479,13 +477,12 @@ html:not(.js) .needs-js{display:none}
   :root{--nav-h:0px}
   body{padding-bottom:0}
   .site-header .header-bar{display:grid;grid-template-columns:auto 1fr auto;gap:24px}
-  .nav{position:static;display:flex;justify-content:center;gap:4px;padding:0;background:transparent;border-radius:0;box-shadow:none}
+  .nav{position:static;display:flex;justify-content:center;gap:4px;padding:0;background:transparent;border:0}
   .nav a{--cut:var(--surface);flex-direction:row;justify-content:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;color:var(--muted);font-size:1rem}
-  .nav a:hover{background:var(--mint);--cut:var(--mint)}
-  .nav a:focus-visible{outline:3px solid var(--green);outline-offset:2px}
-  .nav a[aria-current="page"]{--cut:var(--mint);background:var(--mint);color:var(--green-ink);font-weight:400;animation:none}
-  .nav a[aria-current="page"]::after{display:none}
-  .nav a[aria-current="page"] .ic-b{animation:none}
+  .nav a:hover{--cut:var(--mint)}
+  .nav a:focus-visible{outline-offset:2px;border-radius:999px}
+  .nav a[aria-current="page"]{--cut:var(--mint);background:var(--mint);font-weight:400;animation:none}
+  .nav a[aria-current="page"]::before{display:none}
   .ic-b{width:22px;height:22px}
   :root{scroll-padding-bottom:16px}
 }
