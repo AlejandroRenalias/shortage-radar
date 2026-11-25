@@ -4,7 +4,14 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const queryFromUrl = search => { try { return (new URLSearchParams(search).get('q') || '').trim().slice(0,100); } catch (_) { return ''; } };
 const aliases = {parasetamoli:'paracetamol', ibuprofeeni:'ibuprofen', insuliini:'insulin', asetyylisalisyylihappo:'acetylsalicylic acid', amoksisilliini:'amoxicillin', atsitromysiini:'azithromycin', doksisykliini:'doxycycline', metformiini:'metformin', atorvastatiini:'atorvastatin', simvastatiini:'simvastatin', rosuvastatiini:'rosuvastatin', amlodipiini:'amlodipine', bisoprololi:'bisoprolol', metoprololi:'metoprolol', propranololi:'propranolol', losartaani:'losartan', kandesartaani:'candesartan', enalapriili:'enalapril', ramipriili:'ramipril', furosemidi:'furosemide', spironolaktoni:'spironolactone', varfariini:'warfarin', apiksabaani:'apixaban', rivaroksabaani:'rivaroxaban', klopidogreeli:'clopidogrel', omepratsoli:'omeprazole', pantopratsoli:'pantoprazole', esomepratsoli:'esomeprazole', levotyroksiini:'levothyroxine', prednisoloni:'prednisolone', hydrokortisoni:'hydrocortisone', deksametasoni:'dexamethasone', salbutamoli:'salbutamol', budesonidi:'budesonide', formoteroli:'formoterol', setiritsiini:'cetirizine', loratadiini:'loratadine', desloratadiini:'desloratadine', sertraliini:'sertraline', sitalopraami:'citalopram', essitalopraami:'escitalopram', fluoksetiini:'fluoxetine', venlafaksiini:'venlafaxine', duloksetiini:'duloxetine', mirtatsapiini:'mirtazapine', amitriptyliini:'amitriptyline', diatsepaami:'diazepam', oksatsepaami:'oxazepam', tematsepaami:'temazepam', tsolpideemi:'zolpidem', melatoniini:'melatonin', tramadoli:'tramadol', kodeiini:'codeine', morfiini:'morphine', oksikodoni:'oxycodone', gabapentiini:'gabapentin', pregabaliini:'pregabalin', levetirasetaami:'levetiracetam', lamotrigiini:'lamotrigine', karbamatsepiini:'carbamazepine', metotreksaatti:'methotrexate', allopurinoli:'allopurinol', diklofenaakki:'diclofenac', naprokseeni:'naproxen', ketoprofeeni:'ketoprofen', finasteridi:'finasteride', tamsulosiini:'tamsulosin', metronidatsoli:'metronidazole', flukonatsoli:'fluconazole', nitrofurantoiini:'nitrofurantoin', siprofloksasiini:'ciprofloxacin', klindamysiini:'clindamycin', fenoksimetyylipenisilliini:'phenoxymethylpenicillin', asikloviiri:'aciclovir', valasikloviiri:'valaciclovir', ondansetroni:'ondansetron', metoklopramidi:'metoclopramide', glargiini:'insulin glargine', insuliiniglargiini:'insulin glargine', glargininsuliini:'insulin glargine'};
-const fold = s => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+// Folded text is kept, because the name index is searched with tens of thousands of entries on every search.
+const foldCache = new Map();
+const fold = s => {
+  const text = String(s || '');
+  let folded = foldCache.get(text);
+  if (folded === undefined) { folded = text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); if (foldCache.size < 100000) foldCache.set(text, folded); }
+  return folded;
+};
 // Page numbers for a long list: at most seven slots, "…" for a gap; the first and last page, the current page and its neighbours always show.
 const pageCount = (total, size) => Math.max(1, Math.ceil(total / size));
 const clampPage = (page, pages) => Math.min(Math.max(Math.trunc(page) || 1, 1), pages);
@@ -57,16 +64,21 @@ const NUMBER = /^\d+(?:\.\d*)?$/;
 const FI_ENDINGS = ['i','ia','in','ina','iksi','iin','issa','ista','illa','ilta','ille','it','ien','eja','eina'];
 // Aliases for names the register does not write (its Finnish name for insulin glargine is "glargininsuliini"); they take only these endings.
 const STRICT_ALIASES = ['glargiini', 'insuliiniglargiini', 'glargininsuliini'];
+// The folded alias keys and the terms of a word do not depend on the package, so they are made once, not for every package (the name index is searched with tens of thousands of entries).
+const ALIAS_KEYS=Object.keys(aliases).map(fi=>[fold(fi),fi]), termCache=new Map();
+// A Finnish word with its ending ("parasetamolia") finds the alias of its stem; when several aliases fit, the longest one wins, so "insuliiniglargiini" does not also mean "insuliini".
+function termsFor(word) {
+  if (word.length<3 || word.includes(' ')) return [word];
+  if (termCache.has(word)) return termCache.get(word);
+  const keys=ALIAS_KEYS, stemOf=([key])=>word.startsWith(key.slice(0,-1)), longest=Math.max(0,...keys.filter(stemOf).map(([key])=>key.length));
+  // The aliases of STRICT_ALIASES take the Finnish endings only; a word that starts with their stem and has another tail finds nothing, not the shorter alias.
+  const inflected=([key,fi])=>stemOf([key]) && key.length===longest && (!STRICT_ALIASES.includes(fi) || FI_ENDINGS.includes(word.slice(key.length-1)));
+  const terms=[word, ...keys.filter(k=>k[0].startsWith(word) || inflected(k)).map(([,fi])=>fold(aliases[fi]))];
+  termCache.set(word, terms);
+  return terms;
+}
 function searchMatches(e, query) {
   const q=foldNumbers(fold(query.trim()));
-  // A Finnish word with its ending ("parasetamolia") finds the alias of its stem; when several aliases fit, the longest one wins, so "insuliiniglargiini" does not also mean "insuliini".
-  const termsFor=word=>{
-    if (word.length<3 || word.includes(' ')) return [word];
-    const keys=Object.keys(aliases).map(fi=>[fold(fi),fi]), stemOf=([key])=>word.startsWith(key.slice(0,-1)), longest=Math.max(0,...keys.filter(stemOf).map(([key])=>key.length));
-    // The aliases of STRICT_ALIASES take the Finnish endings only; a word that starts with their stem and has another tail finds nothing, not the shorter alias.
-    const inflected=([key,fi])=>stemOf([key]) && key.length===longest && (!STRICT_ALIASES.includes(fi) || FI_ENDINGS.includes(word.slice(key.length-1)));
-    return [word, ...keys.filter(k=>k[0].startsWith(word) || inflected(k)).map(([,fi])=>fold(aliases[fi]))];
-  };
   const fields=[e.name,e.strength,e.substances,e.atc,e.Company,e.NordicArticleNumber].map(x=>foldNumbers(fold(x)));
   // substance_fi: the Finnish names of the package's active substances (scripts/build.py). A name matches from its start (typing), or in a Finnish case form ("galantamiinia", "galantamiinin", "galantamiinilla"); no other tail, and never inside another word. It finds packages only; it says nothing about supply.
   const fiWords=fold(e.substance_fi).split(' ').filter(Boolean);
@@ -79,8 +91,110 @@ function searchMatches(e, query) {
   // A number matches whole numbers only, so "5" does not match "2.5" or "50"; a trailing point allows "2," while typing.
   return words.every(word=>NUMBER.test(word) ? new RegExp(String.raw`(?<![\d.])` + word.replace('.', String.raw`\.`) + (word.endsWith('.') ? '' : String.raw`(?!\d|\.\d)`)).test(text) : fiStem(word) || termsFor(word).some(term=>text.includes(term)));
 }
+// The phone's language setting: the first language of the list that the site has (Finnish or English); English when it has none. A saved choice wins over it.
+function detectLanguage(nav) {
+  const list = nav && Array.isArray(nav.languages) && nav.languages.length ? nav.languages : [nav && nav.language];
+  const found = list.map(l => String(l || '').toLowerCase().split('-')[0]).find(l => l === 'fi' || l === 'en');
+  return found || 'en';
+}
+// Typing mistakes: the edit distance (insert, delete, change, or swap of two neighbours) between two words, or max+1 when it is above max.
+function editDistance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2 = null, prev = Array.from({length: b.length + 1}, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) row[j] = Math.min(row[j], prev2[j - 2] + 1);
+    }
+    prev2 = prev; prev = row;
+  }
+  return prev[b.length];
+}
+// ---- Labels: a typed name with an optional strength ("Panadol 500 mg"), and tolerant matching on names.
+// ONE function writes strength text in a single form: normalizeStrength. The register's strengths (the name index and the packages of the lists) and the typed text all pass through it, so
+// "50 mg/g", "50mg/g" and "50 MG / G" are one strength, and so are "0.03 mg / 3 mg" and "0,03mg/3mg" and "0.3 mg/annos" and "0.3MG/ANNOS": case, spaces, decimal comma or point and the micro sign are the only differences it removes.
+// A strength matches exactly (same numbers, same units) or not at all; a number without a unit ("400") matches the first number of a strength ("400 mg") and nothing longer ("4" does not match "400 mg" or "2.5 mg").
+const normalizeStrength = s => foldNumbers(fold(s).replace(/[µμ]g/g, 'mikrog').replace(/(?<![a-z])(?:mcg|microg)(?![a-z])/g, 'mikrog').replace(/\s+/g, ''));
+// A typed text is split into the words of a name and a strength at every word: the first k words are the name and the rest is the strength (the strength of a homeopathic product
+// is text, "D6, 12, 30", and "0.3 mg/annos" has a unit nobody listed, so no list of units or digits is used). An entry matches when one split matches it.
+// `words` and `strength` are the split at the first word that starts with a digit, used to suggest names; the whole text is the name when there is none.
+function parseLabel(query) {
+  const tokens = fold(String(query || '').trim()).split(/\s+/).filter(Boolean);
+  const parts = [];
+  if (tokens.length && /^\d/.test(tokens[0])) parts.push({words: [], strength: normalizeStrength(tokens.join(' '))});
+  for (let k = 1; k <= tokens.length; k++) parts.push({words: tokens.slice(0, k), strength: normalizeStrength(tokens.slice(k).join(' '))});
+  const at = tokens.findIndex((t, i) => i > 0 && /^\d/.test(t));
+  const main = at > 0 ? {words: tokens.slice(0, at), strength: normalizeStrength(tokens.slice(at).join(' '))} : {words: tokens, strength: ''};
+  return {parts, words: main.words, strength: main.strength};
+}
+function strengthMatches(have, key) {
+  if (!key) return true;
+  const own = normalizeStrength(have);
+  return !!own && (own === key || (/^[\d.]+$/.test(key) && new RegExp('^' + key.replace(/\./g, String.raw`\.`) + String.raw`(?![\d.])`).test(own)));
+}
+// The strength text of the entry that matches the typed strength ('' when none does); an entry has `strength` (a package) or `strengths` (a register name).
+const matchedStrength = (e, key) => [e.strength, ...(e.strengths || [])].find(x => x && strengthMatches(x, key)) || '';
+// Does the text have a word that starts with the term? ("yamin" is not the start of "hyoscyamine".)
+function startsWord(hay, term) {
+  for (let i = hay.indexOf(term); i >= 0; i = hay.indexOf(term, i + 1)) if (i === 0 || !/[\p{L}\p{N}]/u.test(hay[i - 1])) return true;
+  return false;
+}
+// An exact label: every typed word starts a word of the name or of an active substance (English, or Finnish with the aliases and endings of searchMatches), and the typed strength is one the entry has.
+// Returns null, or {strength} with the entry's own text of the strength that matched ('' when no strength was typed). Nothing else counts: a word from the middle of a name, or a typing mistake, is no match.
+function labelMatch(e, parsed) {
+  const fields = [e.name, e.substances, e.substance_fi].map(fold);
+  const fiWords = fields[2].split(' ').filter(Boolean);
+  const fiStem = word => word.length >= 3 && fiWords.some(w => w.startsWith(word) || (w.endsWith('i') && word.startsWith(w.slice(0, -1)) && FI_ENDINGS.includes(word.slice(w.length - 1))));
+  for (const part of parsed.parts || [parsed]) {
+    if (!part.words.length || !part.words.every(word => fiStem(word) || termsFor(word).some(term => fields.some(f => startsWord(f, term))))) continue;
+    if (!part.strength) return {strength: ''};
+    const strength = matchedStrength(e, part.strength);
+    if (strength) return {strength};
+  }
+  return null;
+}
+const labelMatches = (e, parsed) => labelMatch(e, parsed) !== null;
+// How many mistakes a typed word may have: none for short words, one for 5-7 letters, two from 8.
+const typoLimit = word => word.length >= 8 ? 2 : word.length >= 5 ? 1 : 0;
+const nameWords = new WeakMap(), closeCache = new Map();
+// The mistakes between the typed word and a name word, or limit+1 when there are more. The start of a longer name word (while typing) counts half a mistake more, so
+// "yamin" is nearer to "yasmin" than to the start "amin" of "aminolevulinic". Names repeat across thousands of entries, so the answer is kept.
+function closeness(word, n, limit) {
+  const key = word + '\u0000' + n;
+  let close = closeCache.get(key);
+  if (close === undefined) {
+    close = Math.min(editDistance(word, n, limit), ...[word.length - 1, word.length].filter(len => n.length > len).map(len => editDistance(word, n.slice(0, len), limit) + 0.5));
+    // A wrong first letter is a less likely mistake than a wrong letter inside the word, so it ranks lower.
+    if (word[0] !== n[0]) close += 0.25;
+    if (closeCache.size > 300000) closeCache.clear();
+    closeCache.set(key, close);
+  }
+  return close;
+}
+// How near an entry is to the typed label: the sum of the mistakes of its words, or null when a word is too far, the typed strength is not one the entry has, or the text has too many words.
+// A word that starts a word of the entry costs nothing. Used for "Did you mean": it never says anything about shortages.
+function fuzzyScore(e, query) {
+  const parsed = typeof query === 'string' ? parseLabel(query) : query;
+  if (!parsed.words.length || parsed.words.length > 3) return null;
+  if (parsed.strength && !matchedStrength(e, parsed.strength)) return null;
+  let known = nameWords.get(e);
+  if (!known) nameWords.set(e, known = {fields: [e.name, e.substances, e.substance_fi].map(fold), names: [...new Set(fold([e.name, e.substances, e.substance_fi].join(' ')).split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 4))]});
+  let score = 0;
+  for (const word of parsed.words) {
+    if (known.fields.some(f => startsWord(f, word))) continue;
+    const limit = typoLimit(word);
+    if (!limit || /\d/.test(word)) return null;
+    let best = limit + 1;
+    for (const n of known.names) best = Math.min(best, closeness(word, n, limit));
+    if (Math.floor(best) > limit) return null;
+    score += best;
+  }
+  return score;
+}
+const fuzzyMatches = (e, query) => fuzzyScore(e, query) > 0;
 let language = 'en';
-try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : ((navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en'); } catch (_) { language = (typeof navigator !== 'undefined' && (navigator.language || '').toLowerCase().startsWith('fi')) ? 'fi' : 'en'; }
+try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : detectLanguage(typeof navigator !== 'undefined' ? navigator : null); } catch (_) { language = detectLanguage(typeof navigator !== 'undefined' ? navigator : null); }
 const numberText = n => new Intl.NumberFormat(language === 'fi' ? 'fi-FI' : 'en-GB').format(n);
 // Ordered so specific forms are matched before general ingredients of their names.
 const forms = ["silmätipat", "korvatipat", "nenäsumute", "inhalaatio", "injektio", "infuusio", "emulsiovoide", "purutabletti", "resoribletti", "tabletti", "kapseli", "laastari", "oraaliliuos", "oraalisuspensio", "voide", "geeli", "shampoo", "peräpuikko", "peräruisk"];
@@ -309,6 +423,9 @@ const relevant = rows => rows.filter(e => !e.removed_on);
 // ---- Earlier on the list: packages from removed.json (scripts/removed.py), searched only when the current list has no match.
 // removed.json is loaded on that first miss, so the first page stays light. A past listing says nothing about supply.
 let removedPromise;
+// The name index of the register (scripts/build.py name_index): every trade name and active substance name, so a name that was never short is not called "not found".
+let namesPromise;
+const loadNames = () => namesPromise || (namesPromise = fetchJson('names.json').catch(error => { namesPromise = undefined; throw error; }));
 const loadRemoved = () => removedPromise || (removedPromise = fetchJson('removed.json').catch(error => { removedPromise = undefined; throw error; }));
 function pastMatches(rows, query) { return rows.filter(e => searchMatches(e, query)); }
 // What the captures show: the last capture that listed the package, then each stretch that was not observed (scripts/gaps.py).

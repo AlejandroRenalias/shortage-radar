@@ -304,3 +304,48 @@ def test_search_names_use_only_whole_name_pairs_of_the_register():
 def test_the_credit_says_what_the_impact_field_is():
     from build import fimea_credit
     assert "The impact column or field is Shortage Radar's own reading of Fimea's files, not a Fimea field." in fimea_credit({})
+
+
+def test_name_index_has_every_register_name_once_and_nothing_else(tmp_path):
+    from collections import Counter
+    import build
+    path = tmp_path / 'register.xml'
+    # Panadol and Lantus were never short (no VNR is wanted); "PANADOL" is the same name in other case; a product without a name adds none.
+    path.write_text('''<Perusrekisteri>
+      <Pakkaus Laakevalmiste-ref="a"><VNR-numero>000001</VNR-numero><Pakkaus_Laakeaine Laakeaine-ref="s1"/></Pakkaus>
+      <Laakevalmiste id="a"><Kauppanimi>Panadol</Kauppanimi><Vahvuus>500 mg</Vahvuus></Laakevalmiste>
+      <Laakevalmiste id="b"><Kauppanimi>Panadol</Kauppanimi><Vahvuus>665 mg</Vahvuus></Laakevalmiste>
+      <Laakevalmiste id="c"><Kauppanimi>PANADOL</Kauppanimi></Laakevalmiste>
+      <Laakevalmiste id="d"><Kauppanimi>  Lantus   Solostar </Kauppanimi></Laakevalmiste>
+      <Laakevalmiste id="e"><Kauppanimi/></Laakevalmiste>
+      <Laakeaine id="s1"><VaikuttavaAine><Aine value="Paracetamol"/></VaikuttavaAine></Laakeaine>
+      <Laakeaine id="s2"><VaikuttavaAine><Aine value="Insulin glargine"/></VaikuttavaAine><VaikuttavaAine><Aine value="Paracetamol"/></VaikuttavaAine></Laakeaine>
+    </Perusrekisteri>''', encoding='utf-8')
+    names = {'trade': Counter(), 'substances': Counter(), 'strengths': {}}
+    register(path, {'000001'}, names=names)
+    index = build.name_index(names, '2026-11-25')
+    # A name carries every strength the register writes for it (the spellings of one name are joined), so "Panadol 500 mg" is a label of the register.
+    assert index == {'register_date': '2026-11-25', 'names': ['Lantus Solostar', 'Panadol|500 mg|665 mg'], 'substances': ['Insulin glargine', 'Paracetamol']}
+    # The same register gives the same file, whatever the order of the counts; the spelling used most often wins.
+    assert build.name_index({'trade': Counter(['b', 'A', 'a', 'a']), 'substances': Counter()})['names'] == ['a', 'b']
+    assert build.name_index({'trade': Counter(['A', 'A', 'a']), 'substances': Counter()})['names'] == ['A']
+    assert build.name_index({'trade': Counter(['A', 'a']), 'substances': Counter(), 'strengths': {'A': {'5 mg'}, 'a': {'10 mg', ''}}})['names'] == ['A|10 mg|5 mg']
+
+
+def test_build_writes_the_name_index(tmp_path, monkeypatch):
+    import json
+    import build
+    (tmp_path / 'site').mkdir()
+    monkeypatch.setattr(build, 'ROOT', tmp_path)
+    monkeypatch.setattr(build, 'load_snapshots', lambda: ([('2026-11-01', [row()])], set()))
+    monkeypatch.setattr(build, 'read_rss_counts', lambda: [])
+
+    def fake_register(path, wanted, current, members, details, day, names):
+        names['trade'].update(['Panadol', 'Lantus'])
+        names['strengths'].update({'Panadol': {'500 mg'}})
+        names['substances'].update(['Paracetamol'])
+        return {'012345': {'name': 'Example'}}
+    monkeypatch.setattr(build, 'register', fake_register)
+    build.build()
+    index = json.loads((tmp_path / 'site/names.json').read_text(encoding='utf-8'))
+    assert index['names'] == ['Lantus', 'Panadol|500 mg'] and index['substances'] == ['Paracetamol'] and set(index) == {'register_date', 'names', 'substances'}

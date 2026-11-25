@@ -1,5 +1,6 @@
 """Build a static dataset from Fimea snapshots and its basic register."""
 import csv
+from collections import Counter
 import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
@@ -137,7 +138,7 @@ def search_names(substances, pairs):
     return ' '.join(dict.fromkeys(sorted(x for x in found if x)))
 
 
-def register(path, wanted, current_shortages=(), members=None, details=None, day=None):
+def register(path, wanted, current_shortages=(), members=None, details=None, day=None, names=None):
     """Register details for the wanted VNRs, with the count of other packages in the same substitution group that are
     on the market, not flagged short in the register and not in the current shortage file.
 
@@ -145,6 +146,8 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
     history of the groups and for the list of alternatives on the medicine page.
     When `details` is a dict, it is filled with {vnr: {'routes', 'eu_flag', 'form_id', 'substances'}} for the wanted VNRs:
     what the critical medicines join needs and the other pages do not.
+    When `names` is a dict, it is filled with {'trade': Counter of every trade name, 'substances': Counter of every active substance name,
+    'strengths': {trade name: set of the strengths the register writes for it}} for the name index (`name_index`).
     `day` (default: today in Helsinki) is the day the register is read for; see triage.is_available_alternative.
     """
     day = day or helsinki_today()
@@ -173,14 +176,23 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
         elif el.tag == 'Laakevalmiste':
             atc, form, group = el.find('ATC-koodi'), el.find('Laakemuoto'), el.find('Substituutioryhma')
             routes = [(x.get('id', ''), x.get('value', '')) for x in el.findall('Antoreitti')]
+            if names is not None and el.findtext('Kauppanimi', '').strip():
+                trade = ' '.join(el.findtext('Kauppanimi', '').split())
+                names['trade'][trade] += 1
+                # Every strength the register writes for the name, so a label such as "Panadol 500 mg" is found as a label, not only its name.
+                names['strengths'].setdefault(trade, set()).add(' '.join(el.findtext('Vahvuus', '').split()))
             products[el.get('id')] = {'routes': routes, 'eu_flag': (el.findtext('EUKriittinenValmiste') or '').strip(), 'form_id': form.get('id', '') if form is not None else '', 'name': el.findtext('Kauppanimi', ''), 'strength': el.findtext('Vahvuus', ''), 'form': form.get('value', '') if form is not None else '', 'atc': atc.get('id', '') if atc is not None else '', 'atc_name': atc.get('value', '') if atc is not None else '', 'substitution_group': group.get('value', '') if group is not None else '', 'holder': el.findtext('Myyntilupa/Haltija', '')}
             el.clear()
         elif el.tag == 'Laakeaine':
             substances[el.get('id')] = [x.get('value', '') for x in el.findall('./VaikuttavaAine/Aine')]
+            if names is not None:
+                names['substances'].update(' '.join(x.split()) for x in substances[el.get('id')] if x.strip())
             el.clear()
     # Products with one active substance pair that substance with the one-word ATC name of the product (finnish_pairs).
     single = {(ref, names[0]) for ref, refs in pack_refs for names in [list(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))] if len(names) == 1 and ref in products}
     dictionary = finnish_pairs((substance, products[ref]['atc'], products[ref]['atc_name']) for ref, substance in single)
+    if names is not None:
+        names['substances'].update(set(dictionary.values()))
     available = {}
     for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit in candidates:
         product = products.get(ref, {})
@@ -205,6 +217,29 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             if details is not None:
                 details[vnr] = dict({k: products[ref][k] for k in ('routes', 'eu_flag', 'form_id')}, substances=names)
     return result
+
+
+def name_index(names, day=''):
+    """The name index for the home page search (site/names.json): every trade name and active substance name of the register, once each.
+
+    A trade name is written "Name|strength|strength": the name, then every strength the register writes for it ("Panadol|125 mg|250 mg|500 mg"),
+    so the page can tell a label that is in the register ("Panadol 500 mg") from a strength that is not. A substance is written as its name.
+    A name is kept once whatever its case ("PANADOL" and "Panadol"); the spelling used most often wins, then the first in sorted order, and the
+    strengths of the spellings are joined. The lists are sorted, so the file is the same for the same register. The index says only that the
+    register has the name and strength: it says nothing about shortages or about whether a package is on the market."""
+    def unique(counter):
+        best = {}
+        for name, n in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
+            best.setdefault(name.casefold(), name)
+        return best
+    strengths = names.get('strengths', {})
+    trade = unique(names['trade'])
+    joined = {}
+    for name, strength_set in strengths.items():
+        joined.setdefault(name.casefold(), set()).update(x for x in strength_set if x)
+    rows = [name + ''.join('|' + x for x in sorted(joined.get(key, ()))) for key, name in trade.items()]
+    return {'register_date': day, 'names': sorted(rows, key=lambda x: (x.casefold(), x)),
+            'substances': sorted(unique(names['substances']).values(), key=lambda x: (x.casefold(), x))}
 
 
 def events(snapshots):
@@ -328,7 +363,8 @@ def build():
     current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
     members = {}
     details = {}
-    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details)
+    names = {'trade': Counter(), 'substances': Counter(), 'strengths': {}}
+    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details, None, names)
     search_words = {}
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
@@ -379,6 +415,8 @@ def build():
     for name, value in [('current.json', current_data), ('history.json', history_data)]:
         (ROOT / 'site' / name).write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     meta = {k: output[k] for k in ('archive_start', 'snapshot_date', 'source_metadata', 'generated_at', 'last_checked')}
+    # The name index of the home page: every register name, so a name that was never short is not answered with "not found".
+    (ROOT / 'site/names.json').write_text(json.dumps(name_index(names, metadata.get('register_date') or ''), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     # The pages that load no other data (the EU list pages, 404) read this for the freshness banner and footer, from the same build.
     (ROOT / 'site/source.json').write_text(json.dumps(meta, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     shard_dir = ROOT / 'site/p'

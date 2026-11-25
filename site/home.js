@@ -61,7 +61,7 @@ function renderHome() {
   $('facts-since').textContent = data && week ? t.factsSince(dateText(week.from)) : '';
   $('facts-title').textContent = week ? t.factsTitle : t.factsToday;
 }
-if (typeof document !== 'undefined' && document.documentElement.dataset && document.documentElement.dataset.page === 'index') {
+if (typeof document !== 'undefined' && document.documentElement.dataset && document.documentElement.dataset.page === 'professionals') {
   start(renderHome);
   loadSummary().then(d => { data = d; renderChrome(d); renderHome(); }).catch(showLoadError);
   fetchJson('week.json').then(w => { week = w; renderHome(); }).catch(() => {});
