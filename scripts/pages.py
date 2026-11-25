@@ -49,7 +49,7 @@ def head(page, prefix, meta):
     url = SITE_URL + ('' if page == 'index' else meta['file'])
     csp = f"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action {meta['form_action']}"
     title, desc = escape(meta['title'], quote=True), escape(meta['description'], quote=True)
-    scripts = f'<script src="{prefix}language.js"></script><script src="{prefix}i18n.js" defer></script><script src="{prefix}lib.js" defer></script>'
+    scripts = f'<script src="{prefix}tabbar.js"></script><script src="{prefix}language.js"></script><script src="{prefix}i18n.js" defer></script><script src="{prefix}lib.js" defer></script>'
     if meta.get('script'):
         scripts += f'<script src="{prefix}{meta["script"]}" defer></script>'
     canonical = f'<link rel="canonical" href="{url}">' if page != '404' else ''

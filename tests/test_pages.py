@@ -202,7 +202,9 @@ def test_tab_mark_is_one_element_in_the_current_tab_only():
         nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
         assert nav.count('class="nav-mark"') == 1
         assert re.search(r'aria-current="page"><i class="nav-mark" aria-hidden="true"></i><svg', nav)
-        assert out[meta['file']].count('<script src="tabbar.js"></script>') == 1
+        # The script sits in the head, so it hears pagereveal before the first paint.
+        assert between(out[meta['file']], '<head>', '</head>').count('<script src="tabbar.js"></script>') == 1
+        assert out[meta['file']].count('<script src="tabbar.js">') == 1
 
 def test_tab_mark_slides_with_view_transitions_and_only_below_720px_without_reduced_motion():
     css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
@@ -214,6 +216,7 @@ def test_tab_mark_slides_with_view_transitions_and_only_below_720px_without_redu
     assert '::view-transition-old(root),::view-transition-old(tabbar){display:none}' in block
     assert '::view-transition-new(root),::view-transition-new(tabbar){animation:none' in block
     assert re.search(r'::view-transition-group\(tabmark\)\{animation-duration:\.25s', block)
+    # The animation layer never catches taps, so the bar stays usable during the slide.
+    assert re.search(r'::view-transition,::view-transition-group\(\*\),[^{]*\{pointer-events:none\}', block)
     assert css.count('@view-transition') == 1
     assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)
-
