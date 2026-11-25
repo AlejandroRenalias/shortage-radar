@@ -1,10 +1,10 @@
 """Daily denominators, saved next to the ledger from the day they were first recorded.
 
 The basic register describes only today, so the number of packages a company or a substitution group had on an earlier day cannot be
-rebuilt later. `data/ledger/counts-YYYY-MM.jsonl` keeps them, one file for each month, rows only added, never rewritten. The first run of a
-day writes that day; later runs on the same day add nothing, the same rule as the ledger. A day with no rows was not recorded.
+rebuilt later. `data/ledger/counts/YYYY-MM-DD.jsonl` keeps them, one file for each day, written whole and never changed. The first run of a
+day writes that day; later runs on the same day add nothing, the same rule as the ledger. A day with no file was not recorded.
 The rows of a day are made from the shortage file and the register that the ledger rows of that day were made from (their SHA-256), never from
-newer files, and the day is added to the file in one atomic step.
+newer files. The day is written to a temporary file and renamed, so a file with a day's name is always a whole day.
 
 A day has two kinds of rows, `type` "company" and `type` "group", in this order: companies by name, then groups by code.
 
@@ -21,6 +21,7 @@ No second definition is made here: the market and alternative rules are the ones
 import argparse
 import json
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -31,7 +32,7 @@ from zoneinfo import ZoneInfo
 from build import ROOT, group_key, read_snapshot, register
 from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import register_date
-from triage import is_available_alternative, on_market
+from triage import on_market
 
 
 def holder_name(text):
@@ -73,7 +74,8 @@ def rows_for(day, rows, register_path):
     """The count rows of `day` for the shortage rows `rows`, from the register file `register_path`."""
     vnrs = {r['NordicArticleNumber'] for r in rows}
     members = {}
-    products = register(register_path, vnrs, vnrs, members=members, day=day)
+    available = {}
+    products = register(register_path, vnrs, vnrs, members=members, day=day, available_out=available)
     ran = register_date(register_path)
     on_market_by_holder, owner = holder_pass(register_path, vnrs)
     # Listed packages: one for each VNR of the file; the company is the register holder of the package.
@@ -92,13 +94,14 @@ def rows_for(day, rows, register_path):
                     'on_market': m['on_market'], 'on_market_human': m['on_market'] - m['on_market_vet'], 'on_market_vet': m['on_market_vet'], 'register_date': ran})
     shortage_vnrs = set(vnrs)
     for group in sorted({group_key(p) for p in products.values()} - {None}):
-        packs = list({p['vnr']: p for p in reversed(members.get(group, []))}.values())  # one package for each VNR, as the ledger counts them
-        listed_packs = [p for p in packs if ({p['vnr']} | p['old']) & shortage_vnrs]
-        if not listed_packs:
+        packs = members.get(group, [])
+        listed_vnrs = {p['vnr'] for p in packs if ({p['vnr']} | p['old']) & shortage_vnrs}
+        if not listed_vnrs:
             continue
-        alternatives = [p for p in packs if is_available_alternative(p, shortage_vnrs, day, True)]
-        out.append({'date': day, 'type': 'group', 'group': group, 'on_market': sum(on_market(p, day) for p in packs), 'listed': len(listed_packs), 'alternatives': len(alternatives),
-                    'distinct_alternative_holders': len({holder_name(p['company']) for p in alternatives}), 'register_date': ran})
+        # The alternatives are the sets the ledger's `alternatives` is counted from (build.register), so the two cannot differ.
+        found = available.get(group, set())
+        out.append({'date': day, 'type': 'group', 'group': group, 'on_market': len({p['vnr'] for p in packs if on_market(p, day)}), 'listed': len(listed_vnrs), 'alternatives': len(found),
+                    'distinct_alternative_holders': len({holder_name(p['company']) for p in packs if p['vnr'] in found}), 'register_date': ran})
     return out
 
 
@@ -106,75 +109,31 @@ class CountsInputError(ValueError):
     """The counts of a day cannot be made from the same inputs as the ledger rows of that day."""
 
 
-def parse_lines(text):
-    """The (line, row) pairs of a counts file. Raises ValueError when a line is not a complete counts row or the last line has no newline."""
-    if text and not text.endswith('\n'):
-        raise ValueError('the last line is not complete')
-    rows = []
-    for number, line in enumerate(text.splitlines(), 1):
-        try:
-            row = json.loads(line)
-            row['date'], row['type']
-        except (ValueError, KeyError, TypeError):
-            raise ValueError(f'line {number} is not a counts row') from None
-        rows.append((line, row))
-    return rows
+DAY_FILE = re.compile(r'\d{4}-\d{2}-\d{2}\.jsonl')
+TEMP_PREFIX = '.tmp-'
+
+
+def counts_folder(folder=LEDGER):
+    return folder / 'counts'
 
 
 def check_file(path):
-    """Raises ValueError when a counts file does not parse. The archive job runs this before it stages the file."""
-    parse_lines(path.read_text(encoding='utf-8'))
-
-
-def write_atomically(path, text):
-    """Replace the file in one step, so an interrupted write leaves the old file and never half a line."""
-    temporary = path.with_name(path.name + '.tmp')
+    """Raises ValueError when a counts file is not a complete day: it must be UTF-8, end with a newline, hold only JSON rows of the kind
+    `company` or `group`, and every row must carry the date in the file's name. The archive job runs this before it stages a new file."""
     try:
-        with temporary.open('w', encoding='utf-8', newline='\n') as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def recover(path, day):
-    """Repair a file whose last line was left incomplete by an interrupted run (an older writer, or damage): the incomplete line is removed, and so
-    are the rows of `day` when that is the day being written, so the day is written again from the start. A bad line anywhere else is real damage
-    and raises ValueError."""
-    if not path.exists():
-        return
-    text = path.read_text(encoding='utf-8')
-    try:
-        parse_lines(text)
-        return
-    except ValueError:
-        pass
-    lines = text.split('\n')
-    lines = lines[:-1]  # the text after the last newline is never trusted; it is empty when the file ended with one
-    if lines and not lines[-1].strip():
-        lines.pop()
-    while lines:
+        text = path.read_bytes().decode('utf-8')
+    except UnicodeDecodeError as error:
+        raise ValueError(f'not UTF-8: {error}') from None
+    if not text or not text.endswith('\n'):
+        raise ValueError('the last line is not complete')
+    for number, line in enumerate(text.splitlines(), 1):
         try:
-            parse_lines(lines[-1] + '\n')
-            break
-        except ValueError:
-            lines.pop()  # one incomplete line
-            break
-    rows = parse_lines(''.join(line + '\n' for line in lines))
-    dropped_day = bool(rows) and rows[-1][1]['date'] == day
-    if dropped_day:
-        rows = [(line, row) for line, row in rows if row['date'] != day]
-    print(f'::warning::{path.name} ended with an incomplete line; it was removed' + (f' together with the rows of {day}, which are written again' if dropped_day else ''))
-    if rows:
-        write_atomically(path, ''.join(line + '\n' for line, _ in rows))
-    else:
-        path.unlink()
-
-
-def has_day(path, day):
-    return path.exists() and any(row['date'] == day for _, row in parse_lines(path.read_text(encoding='utf-8')))
+            row = json.loads(line)
+            ok = row['type'] in ('company', 'group') and row['date'] == path.stem
+        except (ValueError, KeyError, TypeError):
+            ok = False
+        if not ok:
+            raise ValueError(f'line {number} is not a counts row of {path.stem}')
 
 
 def inputs_of_the_ledger(day, folder, register_path, snapshot_folder):
@@ -194,25 +153,41 @@ def inputs_of_the_ledger(day, folder, register_path, snapshot_folder):
 
 
 def record(day=None, folder=LEDGER, register_path=ROOT / 'data/source/register.xml', snapshot_folder=None):
-    """Write the count rows of `day` (default: today in Helsinki, like the ledger) once, from the shortage file and the register that the ledger rows of
-    that day were made from. Returns the number of rows written; 0 when the day is already in the file. Raises CountsInputError when those inputs
-    are not on disk: a later run with a newer register does not write the day with it. The day is added in one atomic step."""
+    """Write the count rows of `day` (default: today in Helsinki, like the ledger) to `<folder>/counts/<day>.jsonl`, once. The rows are made from the
+    shortage file and the register that the ledger rows of that day were made from. The whole day is written to a temporary file in the same folder,
+    flushed to disk and renamed, so a file with the day's name is always a complete day or does not exist. An existing day file is never touched.
+    Returns the number of rows written; 0 when the day already has its file. Raises CountsInputError when the inputs are not on disk."""
     day = day or datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
-    path = folder / f'counts-{day[:7]}.jsonl'
-    recover(path, day)
-    if has_day(path, day):
+    target_folder = counts_folder(folder)
+    target_folder.mkdir(parents=True, exist_ok=True)
+    for leftover in target_folder.glob(TEMP_PREFIX + '*'):
+        leftover.unlink()  # what an interrupted run left behind; it was never a day file
+    target = target_folder / f'{day}.jsonl'
+    if target.exists():
         return 0
     rows = inputs_of_the_ledger(day, folder, register_path, snapshot_folder or ROOT / 'data/snapshots')
     new = rows_for(day, rows, register_path)
-    folder.mkdir(parents=True, exist_ok=True)
-    old = path.read_text(encoding='utf-8') if path.exists() else ''
-    write_atomically(path, old + ''.join(json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n' for r in new))
+    temporary = target_folder / f'{TEMP_PREFIX}{day}'
+    with temporary.open('w', encoding='utf-8', newline='\n') as f:
+        f.write(''.join(json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n' for r in new))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temporary, target)
     return len(new)
+
+
+def read_days(folder=LEDGER):
+    """{day: rows} of every day file `YYYY-MM-DD.jsonl` in the counts folder; temporary and other files are ignored."""
+    out = {}
+    for path in sorted(counts_folder(folder).glob('*.jsonl')):
+        if DAY_FILE.fullmatch(path.name):
+            out[path.stem] = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+    return out
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--check', nargs='+', metavar='FILE', help='exit 1 when a counts file does not parse')
+    parser.add_argument('--check', nargs='+', metavar='FILE', help='exit 1 when a counts day file is not complete')
     args = parser.parse_args(argv)
     if args.check:
         bad = 0
@@ -220,7 +195,7 @@ def main(argv=None):
             try:
                 check_file(Path(name))
             except ValueError as error:
-                print(f'::error::{name} does not parse: {error}')
+                print(f'::error::{name} is not a complete counts day: {error}')
                 bad = 1
         return bad
     try:

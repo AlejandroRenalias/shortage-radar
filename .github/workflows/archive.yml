@@ -82,7 +82,7 @@ jobs:
           TZ: Europe/Helsinki
         run: python scripts/validate_daily.py
       - name: Record daily counts
-        # Appends the day's company and group counts once to data/ledger/counts-YYYY-MM.jsonl; a second run on the same day adds nothing. A failure here does not stop the archive.
+        # Writes the day's company and group counts once, as the whole file data/ledger/counts/YYYY-MM-DD.jsonl (temporary file, then rename); an existing day file is not touched. A failure here does not stop the archive.
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -109,15 +109,19 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/snapshots data/source/metadata.json data/triage-counts.json
           # The ledger is optional output: it does not exist when its step failed before writing the first file.
-          # A counts file that does not parse is never staged: the committed version comes back (a new file is removed).
-          rm -f data/ledger/*.tmp
-          for f in data/ledger/counts-*.jsonl; do
+          # counts guard start
+          # A committed counts day is never changed or deleted: whatever happened to it in this run is undone. A new day file that is not a complete
+          # UTF-8 day is removed, never staged. Temporary files are never staged.
+          rm -f data/ledger/counts/.tmp-*
+          git ls-files data/ledger/counts | while read -r f; do git checkout -- "$f"; done
+          for f in data/ledger/counts/*.jsonl; do
             [ -e "$f" ] || continue
             if ! python scripts/counts.py --check "$f"; then
-              echo "::error::$f does not parse; the committed version is kept"
-              git checkout -- "$f" 2>/dev/null || rm -f "$f"
+              echo "::error::$f is not a complete counts day and is not committed"
+              git ls-files --error-unmatch "$f" >/dev/null 2>&1 || rm -f "$f"
             fi
           done
+          # counts guard end
           if [ -d data/ledger ]; then git add data/ledger; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update Fimea shortage data'
