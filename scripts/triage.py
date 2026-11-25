@@ -42,11 +42,16 @@ def level(e):
     return 'substitute' if e.get('other_packages_count', 0) > 0 else 'no_alternative'
 
 
+def canonical_impact(value):
+    """The current name of an impact level: the old `critical` is `no_alternative`. Ledger rows written before the rename keep the old name, so every
+    history query that reads old `impact` values must pass them through this one function (ledger.read_rows does) before it compares or counts them."""
+    return ALIASES.get(value, value)
+
+
 def counts(current):
     out = dict.fromkeys(LEVELS, 0)
     for e in current:
-        k = e.get('impact') or level(e)
-        out[ALIASES.get(k, k)] += 1
+        out[canonical_impact(e.get('impact') or level(e))] += 1
     return out
 
 

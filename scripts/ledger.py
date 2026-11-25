@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from build import ROOT, load_snapshots, register
 from record_triage import register_date
-from triage import level
+from triage import canonical_impact, level
 
 LEDGER = ROOT / 'data/ledger'
 
@@ -33,6 +33,19 @@ def has_day(path, day):
         return False
     lines = path.read_text(encoding='utf-8').splitlines()
     return any(json.loads(line)['date'] == day for line in lines)
+
+
+def read_rows(folder=LEDGER, canonical=True):
+    """Every ledger row of the month files `YYYY-MM.jsonl`, oldest first (other files in the folder, such as the counts files, are not read).
+    With `canonical` (the default) `impact` is passed through triage.canonical_impact, so rows written before the rename of `critical`
+    read as `no_alternative`; every history query uses this default. Validation reads the written value (`canonical=False`)."""
+    out = []
+    for path in sorted(folder.glob('????-??.jsonl')):
+        for line in path.read_text(encoding='utf-8').splitlines():
+            if line.strip():
+                row = json.loads(line)
+                out.append(dict(row, impact=canonical_impact(row['impact'])) if canonical else row)
+    return out
 
 
 def rows_for(day, rows, register_path, shortage_path):
