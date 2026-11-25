@@ -109,6 +109,15 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/snapshots data/source/metadata.json data/triage-counts.json
           # The ledger is optional output: it does not exist when its step failed before writing the first file.
+          # A counts file that does not parse is never staged: the committed version comes back (a new file is removed).
+          rm -f data/ledger/*.tmp
+          for f in data/ledger/counts-*.jsonl; do
+            [ -e "$f" ] || continue
+            if ! python scripts/counts.py --check "$f"; then
+              echo "::error::$f does not parse; the committed version is kept"
+              git checkout -- "$f" 2>/dev/null || rm -f "$f"
+            fi
+          done
           if [ -d data/ledger ]; then git add data/ledger; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update Fimea shortage data'

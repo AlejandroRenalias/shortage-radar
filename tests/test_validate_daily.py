@@ -185,3 +185,37 @@ def test_the_workflow_runs_the_validation_after_the_ledger_and_before_the_commit
     assert 'python scripts/counts.py' in text and 'PIPELINE=data-validation RESULT=failure' in text and 'PIPELINE=data-validation RESULT=success' in text
     from pipeline_alert import MEANING
     assert 'data-validation' in MEANING
+
+
+def test_check_7_accepts_the_capture_of_an_earlier_day_that_the_first_run_of_the_day_used(tmp_path, monkeypatch):
+    # Saturday's capture; the first Sunday run downloads the same bytes, so no Sunday file exists and the ledger uses Saturday's.
+    (tmp_path / 'data/snapshots').mkdir(parents=True)
+    (tmp_path / 'data/snapshots/2026-11-21.txt').write_text(SNAPSHOT, encoding='utf-8')
+    register = tmp_path / 'register.xml'
+    register.write_text(REGISTER, encoding='utf-8')
+    monkeypatch.setattr(build, 'ROOT', tmp_path)
+    monkeypatch.setattr(ledger, 'ROOT', tmp_path)
+    ledger.record(DAY, tmp_path / 'ledger', register)
+    folder, snaps = tmp_path / 'ledger', tmp_path / 'data/snapshots'
+    assert results(register, folder, snaps)[7].status == 'PASS'
+    # A later Sunday run finds changed bytes and saves Sunday's own file; there is nothing to move to superseded.
+    (snaps / f'{DAY}.txt').write_text(SNAPSHOT + '012346;K;2026-11-01;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
+    assert not (snaps / 'superseded').exists()
+    assert results(register, folder, snaps)[7].status == 'PASS'
+    # A ledger that matches neither file still fails.
+    (snaps / '2026-11-21.txt').write_text(SNAPSHOT + '012346;K;2026-11-02;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
+    assert results(register, folder, snaps)[7].status == 'FAIL'
+
+
+def test_a_negative_alternatives_count_fails_and_a_register_dated_after_the_ledger_warns():
+    assert status(v.check_alternatives_per_group([row('1', alternatives=-1), row('2', alternatives=-1)])) == 'FAIL'
+    assert status(v.check_other_packages([row('1', alternatives=-1)], {'1': 2})) == 'FAIL'
+    future = v.check_register_date([row(register_date='2026-11-24')], DAY)
+    assert status(future) == 'WARN' and 'after the ledger date' in future.message and 'older' not in future.message
+
+
+def test_read_rows_reads_only_files_named_yyyy_mm(tmp_path):
+    line = json.dumps(row()) + '\n'
+    for name in ('2026-11.jsonl', 'notes-11.jsonl', 'counts-2026-11.jsonl', '2026-11.jsonl.bak', '2026-1.jsonl'):
+        (tmp_path / name).write_text(line, encoding='utf-8')
+    assert len(ledger.read_rows(tmp_path)) == 1

@@ -37,7 +37,14 @@ def setup(tmp_path, monkeypatch):
     register.write_text(REGISTER, encoding='utf-8')
     monkeypatch.setattr(build, 'ROOT', tmp_path)
     monkeypatch.setattr(counts, 'ROOT', tmp_path)
+    monkeypatch.setattr(ledger, 'ROOT', tmp_path)
     return register, tmp_path / 'ledger'
+
+
+def rec(day, folder, register, **kw):
+    """The ledger rows of the day first (the job does the same), then the counts."""
+    ledger.record(day, folder, register)
+    return counts.record(day, folder, register, **kw)
 
 
 def read(folder):
@@ -46,7 +53,7 @@ def read(folder):
 
 def test_company_rows_count_listed_and_on_market_with_the_human_and_vet_split(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
-    assert counts.record(DAY, folder, register) == 4
+    assert rec(DAY, folder, register) == 4
     companies = [r for r in read(folder) if r['type'] == 'company']
     assert companies == [
         {'date': DAY, 'type': 'company', 'company': 'Alfa Oy', 'listed': 3, 'listed_human': 3, 'listed_vet': 0, 'on_market': 4, 'on_market_human': 4, 'on_market_vet': 0, 'register_date': DAY},
@@ -57,7 +64,7 @@ def test_company_rows_count_listed_and_on_market_with_the_human_and_vet_split(tm
 
 def test_group_rows_use_the_repo_rules_for_market_and_alternatives(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
-    counts.record(DAY, folder, register)
+    rec(DAY, folder, register)
     groups = {r['group']: r for r in read(folder) if r['type'] == 'group'}
     assert sorted(groups) == ['0042', '0043']  # no row for the empty group of the veterinary package
     # Group 0042: 012346 and 012348 are alternatives (on the market, not short, not listed); 012349 is not on the market.
@@ -72,7 +79,7 @@ def test_group_alternatives_equal_the_value_the_ledger_writes(tmp_path, monkeypa
     # The ledger takes today's date for the register day; the counts take the day they are written for. They agree on the register's own day.
     day = build.helsinki_today()
     ledger.record(day, folder, register)
-    counts.record(day, folder, register)
+    rec(day, folder, register)
     by_group = {r['group']: r['alternatives'] for r in ledger.read_rows(folder) if r['group']}
     rows = [json.loads(line) for line in (folder / f'counts-{day[:7]}.jsonl').read_text(encoding='utf-8').splitlines()]
     assert {r['group']: r['alternatives'] for r in rows if r['type'] == 'group'} == by_group
@@ -80,33 +87,144 @@ def test_group_alternatives_equal_the_value_the_ledger_writes(tmp_path, monkeypa
 
 def test_the_first_run_of_a_day_writes_and_later_runs_add_nothing(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
-    assert counts.record(DAY, folder, register) > 0
+    assert rec(DAY, folder, register) > 0
     before = (folder / 'counts-2026-11.jsonl').read_bytes()
-    assert counts.record(DAY, folder, register) == 0
+    assert rec(DAY, folder, register) == 0
     register.write_text(REGISTER.replace('Alfa Oy', 'Changed Oy'), encoding='utf-8')
-    assert counts.record(DAY, folder, register) == 0
+    assert rec(DAY, folder, register) == 0
     assert (folder / 'counts-2026-11.jsonl').read_bytes() == before
 
 
 def test_a_new_day_appends_a_new_month_starts_a_new_file_and_the_ledger_files_are_not_touched(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
-    counts.record(DAY, folder, register)
+    rec(DAY, folder, register)
     first = (folder / 'counts-2026-11.jsonl').read_bytes()
-    counts.record('2026-11-24', folder, register)
+    rec('2026-11-24', folder, register)
     assert (folder / 'counts-2026-11.jsonl').read_bytes().startswith(first)
     assert {r['date'] for r in read(folder)} == {DAY, '2026-11-24'}
-    counts.record('2026-12-01', folder, register)
-    assert sorted(p.name for p in folder.iterdir()) == ['counts-2026-11.jsonl', 'counts-2026-12.jsonl']
+    rec('2026-12-01', folder, register)
+    assert sorted(p.name for p in folder.iterdir()) == ['2026-11.jsonl', '2026-12.jsonl', 'counts-2026-11.jsonl', 'counts-2026-12.jsonl']
     # The ledger reader does not read the counts files.
-    assert ledger.read_rows(folder) == []
+    assert all('type' not in r for r in ledger.read_rows(folder)) and {r['date'] for r in ledger.read_rows(folder)} == {DAY, '2026-11-24', '2026-12-01'}
 
 
 def test_rows_are_deterministic_and_small(tmp_path, monkeypatch):
     register, folder = setup(tmp_path, monkeypatch)
-    counts.record(DAY, folder, register)
+    rec(DAY, folder, register)
     again = tmp_path / 'again'
-    counts.record(DAY, again, register)
+    rec(DAY, again, register)
     assert (folder / 'counts-2026-11.jsonl').read_bytes() == (again / 'counts-2026-11.jsonl').read_bytes()
     lines = (folder / 'counts-2026-11.jsonl').read_text(encoding='utf-8').splitlines()
     assert [json.loads(line)['type'] for line in lines] == ['company', 'company', 'group', 'group']  # companies by name, then groups by code
     assert max(len(line) for line in lines) < 300
+
+
+def test_a_day_is_written_atomically_and_an_interrupted_write_changes_nothing(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    rec(DAY, folder, register)
+    before = (folder / 'counts-2026-11.jsonl').read_bytes()
+    ledger.record('2026-11-24', folder, register)
+
+    def crash(source, target):
+        raise OSError('disk full')
+    with monkeypatch.context() as m:
+        m.setattr(counts.os, 'replace', crash)
+        try:
+            counts.record('2026-11-24', folder, register)
+            raise AssertionError('the crash must show')
+        except OSError:
+            pass
+    assert (folder / 'counts-2026-11.jsonl').read_bytes() == before
+    assert [p.name for p in folder.iterdir() if p.name.endswith('.tmp')] == []
+    assert counts.record('2026-11-24', folder, register) > 0
+
+
+def test_a_half_written_last_line_is_repaired_by_a_retry_on_the_same_day_and_the_next_day_works(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    rec(DAY, folder, register)
+    good = (folder / 'counts-2026-11.jsonl').read_text(encoding='utf-8')
+    ledger.record('2026-11-24', folder, register)
+    rows = counts.rows_for('2026-11-24', build.read_snapshot(tmp_path / 'data/snapshots/2026-11-22.txt'), register)
+    lines = [json.dumps(r, sort_keys=True, separators=(',', ':')) for r in rows]
+    # An older writer died after one whole row and part of the next one.
+    (folder / 'counts-2026-11.jsonl').write_text(good + lines[0] + '\n' + lines[1][:40], encoding='utf-8')
+    assert counts.record('2026-11-24', folder, register) == len(rows)  # the same-day retry rewrites the whole day
+    text = (folder / 'counts-2026-11.jsonl').read_text(encoding='utf-8')
+    assert text == good + ''.join(line + '\n' for line in lines)
+    counts.check_file(folder / 'counts-2026-11.jsonl')
+    assert rec('2026-11-25', folder, register) == len(rows)  # the next day is not blocked
+    assert {r['date'] for r in read(folder)} == {DAY, '2026-11-24', '2026-11-25'}
+
+
+def test_a_half_written_line_of_an_earlier_day_is_removed_and_other_days_are_kept(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    rec(DAY, folder, register)
+    good = (folder / 'counts-2026-11.jsonl').read_text(encoding='utf-8')
+    (folder / 'counts-2026-11.jsonl').write_text(good + '{"date":"2026-11-24","ty', encoding='utf-8')
+    assert rec('2026-11-25', folder, register) > 0
+    assert {r['date'] for r in read(folder)} == {DAY, '2026-11-25'}
+    # A bad line in the middle is damage and is not repaired silently.
+    (folder / 'counts-2026-11.jsonl').write_text('{broken\n' + good, encoding='utf-8')
+    try:
+        counts.record('2026-11-26', folder, register)
+        raise AssertionError('damage must show')
+    except ValueError:
+        pass
+
+
+def test_check_file_rejects_a_file_that_does_not_parse(tmp_path):
+    ok = tmp_path / 'counts-2026-11.jsonl'
+    ok.write_text('{"date":"2026-11-23","type":"group"}\n', encoding='utf-8')
+    counts.check_file(ok)
+    assert counts.main(['--check', str(ok)]) == 0
+    for text in ('{"date":"2026-11-23","type":"gr', '{"date":"2026-11-23","type":"group"}', '{"date":"2026-11-23"}\n'):
+        ok.write_text(text, encoding='utf-8')
+        assert counts.main(['--check', str(ok)]) == 1
+
+
+def test_the_workflow_never_stages_a_counts_file_that_does_not_parse():
+    text = (Path(__file__).resolve().parents[1] / '.github/workflows/archive.yml').read_text(encoding='utf-8')
+    assert text.index('python scripts/counts.py --check') < text.index('git add data/ledger')
+    assert 'git checkout -- "$f"' in text
+
+
+def test_counts_use_the_inputs_of_the_ledger_rows_and_refuse_others(tmp_path, monkeypatch, capsys):
+    register, folder = setup(tmp_path, monkeypatch)
+    ledger.record(DAY, folder, register)
+    register.write_text(REGISTER.replace('<Ajopvm>2026-11-23', '<Ajopvm>2026-11-24').replace('Alfa Oy', 'New Oy'), encoding='utf-8')
+    try:
+        counts.record(DAY, folder, register)
+        raise AssertionError('a newer register must be refused')
+    except counts.CountsInputError as error:
+        assert 'register_date 2026-11-23' in str(error) and ledger.read_rows(folder)[0]['register_sha256'] in str(error)
+    assert not (folder / 'counts-2026-11.jsonl').exists()
+    monkeypatch.setattr(counts, 'record', lambda *a, **k: (_ for _ in ()).throw(counts.CountsInputError('x')))
+    assert counts.main([]) == 1 and '::error::Daily counts not written' in capsys.readouterr().out
+    monkeypatch.undo()
+    # The same-day retry also cannot write with a changed shortage file, and a day with no ledger rows has no counts.
+    monkeypatch.setattr(build, 'ROOT', tmp_path)
+    monkeypatch.setattr(counts, 'ROOT', tmp_path)
+    monkeypatch.setattr(ledger, 'ROOT', tmp_path)
+    register.write_text(REGISTER, encoding='utf-8')
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(SNAPSHOT + '012346;K;2026-11-01;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
+    for day in (DAY, '2026-11-30'):
+        try:
+            counts.record(day, folder, register)
+            raise AssertionError('changed inputs must be refused')
+        except counts.CountsInputError:
+            pass
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(SNAPSHOT, encoding='utf-8')
+    assert counts.record(DAY, folder, register) > 0
+    assert {r['register_date'] for r in read(folder)} == {'2026-11-23'}
+
+
+def test_a_register_package_written_twice_counts_once_like_the_ledger(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    twice = '  <Pakkaus Laakevalmiste-ref="p1"><VNR-numero>012346</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>0</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
+    register.write_text(REGISTER.replace('  <Laakevalmiste id="p1">', twice + '  <Laakevalmiste id="p1">', 1), encoding='utf-8')
+    rec(DAY, folder, register)
+    rows = read(folder)
+    group = next(r for r in rows if r['type'] == 'group' and r['group'] == '0042')
+    assert (group['alternatives'], group['on_market']) == (2, 3)
+    assert next(r for r in rows if r.get('company') == 'Alfa Oy')['on_market'] == 4
+    assert {r['group']: r['alternatives'] for r in ledger.read_rows(folder) if r['group']}['0042'] == group['alternatives']

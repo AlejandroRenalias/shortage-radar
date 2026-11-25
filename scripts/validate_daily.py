@@ -28,7 +28,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from build import ROOT, group_key, read_snapshot, register
-from ledger import LEDGER, read_rows, sha256
+from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import STALE_DAYS, iso_day
 from triage import LEVELS
 
@@ -62,6 +62,8 @@ def check_alternatives_per_group(rows):
     """2. All packages of a group have the same `alternatives`, and `alternatives` is null exactly when `group` is empty."""
     by_group, bad = {}, []
     for r in rows:
+        if r['alternatives'] is not None and (not isinstance(r['alternatives'], int) or r['alternatives'] < 0):
+            bad.append(f"{r['vnr']} (alternatives {r['alternatives']!r} is not a count)")
         if bool(r['group']) != (r['alternatives'] is not None):
             bad.append(f"{r['vnr']} (group {r['group']!r}, alternatives {r['alternatives']!r})")
         if r['group']:
@@ -90,7 +92,8 @@ def check_row_count(rows, previous_count, previous_day=None):
 
 def check_other_packages(rows, others):
     """5. `alternatives` is at most the number of other packages of the group in the register. `others` is {vnr: that number}."""
-    bad = [f"{r['vnr']} (alternatives {r['alternatives']}, other packages {others.get(r['vnr'], 0)})" for r in rows if r['group'] and (r['alternatives'] or 0) > others.get(r['vnr'], 0)]
+    bad = [f"{r['vnr']} (alternatives {r['alternatives']}, other packages {others.get(r['vnr'], 0)})" for r in rows
+           if r['group'] and (r['alternatives'] is None or r['alternatives'] < 0 or r['alternatives'] > others.get(r['vnr'], 0))]
     return verdict(5, '`alternatives` at most the other packages of the group', bad, 'FAIL', 'ok', 'too many:')
 
 
@@ -98,11 +101,15 @@ def check_register_date(rows, day, limit=STALE_DAYS):
     """6. The rows' `register_date` equals the ledger `date`, or is at most `limit` days older (WARN when older or unreadable)."""
     dates = {r['register_date'] for r in rows}
     ledger_day = date.fromisoformat(day)
-    old = []
+    old, future = [], []
     for d in sorted(dates):
         parsed = iso_day(d)
-        if not parsed or (ledger_day - parsed).days > limit:
+        if parsed and parsed > ledger_day:
+            future.append(d)
+        elif not parsed or (ledger_day - parsed).days > limit:
             old.append(d or 'none')
+    if future:
+        return Result(6, 'register date current', 'WARN', f'register_date {examples(future)} is after the ledger date {day}')
     if old:
         return Result(6, 'register date current', 'WARN', f'register_date {examples(old)} is older than {limit} days or unreadable for the ledger date {day}')
     lag = max((ledger_day - iso_day(d)).days for d in dates) if dates else 0
@@ -130,28 +137,19 @@ def helsinki_today():
     return datetime.now(ZoneInfo('Europe/Helsinki')).date().isoformat()
 
 
-def snapshot_file(day, folder):
-    """The snapshot the ledger used on `day`: the latest saved capture dated on or before it (own files before imported ones, as build.load_snapshots)."""
-    own = {p.stem: p for p in folder.glob('????-??-??.txt')}
-    earlier = {p.stem: p for p in (folder / 'imported').glob('????-??-??.txt') if p.stem not in own}
-    paths = {**earlier, **own}
-    days = [d for d in paths if d <= day]
-    return paths[max(days)] if days else None
-
-
 def snapshot_for(rows, day, folder):
-    """(VNR set, SHA-256, label) of the file the rows should match: the day's snapshot, or the file a same-day refetch replaced when the
-    ledger was written before it (data/snapshots/superseded/<day>T<time>Z-<hash>.txt; the hash in the rows decides)."""
-    path = snapshot_file(day, folder)
-    if path is None:
+    """(VNR set, SHA-256, label) of the file the rows were made from: the first of ledger.snapshot_candidates whose hash is the one in the rows
+    (the day's snapshot, a file a same-day refetch replaced, or the capture of an earlier day that the first run of the day used). When none matches,
+    the day's snapshot is returned, so check 7 reports the difference. None when there is no snapshot at all."""
+    candidates = snapshot_candidates(day, folder)
+    if not candidates:
         return None
-    digest = sha256(path)
     shas = {r['shortages_sha256'] for r in rows}
-    if digest not in shas:
-        for old in sorted((folder / 'superseded').glob(f'{day}T*.txt')):
-            if sha256(old) in shas:
-                return {r['NordicArticleNumber'] for r in read_snapshot(old)}, sha256(old), f'the superseded file {old.name}'
-    return {r['NordicArticleNumber'] for r in read_snapshot(path)}, digest, f'the snapshot {path.name}'
+    for path in candidates:
+        digest = sha256(path)
+        if digest in shas:
+            return {r['NordicArticleNumber'] for r in read_snapshot(path)}, digest, f'the file {path.name}'
+    return {r['NordicArticleNumber'] for r in read_snapshot(candidates[0])}, sha256(candidates[0]), f'the snapshot {candidates[0].name}'
 
 
 def register_facts(rows, register_path, day):
