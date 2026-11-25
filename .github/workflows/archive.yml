@@ -35,6 +35,7 @@ jobs:
       pages_current: ${{ steps.pages_status.outputs.current }}
       register: ${{ steps.register.outcome }}
       age: ${{ steps.age.outputs.status }}
+      validation: ${{ steps.validate.outputs.status }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -71,6 +72,22 @@ jobs:
         env:
           TZ: Europe/Helsinki
         run: python scripts/ledger.py
+      - name: Record daily counts
+        # Writes the day's company and group counts once, as the whole file data/ledger/counts/YYYY-MM-DD.jsonl (temporary file, then rename); an existing day file is not touched. The day is the newest ledger day. A failure here does not stop the archive; check 9 of the validation reports a missing file.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TZ: Europe/Helsinki
+        run: python scripts/counts.py
+      - name: Validate the daily ledger
+        # Nine checks on the day's ledger rows and counts (scripts/validate_daily.py). It only reads: a failed check changes and deletes no data, writes the message in this log and
+        # lets the alert job open the data-validation entry of the pipeline issue. It runs before the commit and before anything is published.
+        id: validate
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TZ: Europe/Helsinki
+        run: python scripts/validate_daily.py
       - name: Check age of the source files
         # Fails when the shortage file's Last-Modified or the register's run date is more than 2 days old. It does not stop the archive; the alert job opens the pipeline issue (source-stale).
         id: age
@@ -92,6 +109,19 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/snapshots data/source/metadata.json data/triage-counts.json
           # The ledger is optional output: it does not exist when its step failed before writing the first file.
+          # counts guard start
+          # A committed counts day is never changed or deleted: whatever happened to it in this run is undone. A new day file that is not a complete
+          # UTF-8 day is removed, never staged. Temporary files are never staged.
+          rm -f data/ledger/counts/.tmp-*
+          git ls-files data/ledger/counts | while read -r f; do git checkout -- "$f"; done
+          for f in data/ledger/counts/*.jsonl; do
+            [ -e "$f" ] || continue
+            if ! python scripts/counts.py --check "$f"; then
+              echo "::error::$f is not a complete counts day and is not committed"
+              git ls-files --error-unmatch "$f" >/dev/null 2>&1 || rm -f "$f"
+            fi
+          done
+          # counts guard end
           if [ -d data/ledger ]; then git add data/ledger; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update Fimea shortage data'
@@ -155,4 +185,7 @@ jobs:
             # Stale opens the alert, fresh closes it; unknown (a missing or unreadable date, or a step that did not finish) leaves it as it is.
             if [ '${{ needs.archive.outputs.age }}' = stale ]; then PIPELINE=source-stale RESULT=failure python scripts/pipeline_alert.py; fi
             if [ '${{ needs.archive.outputs.age }}' = fresh ]; then PIPELINE=source-stale RESULT=success python scripts/pipeline_alert.py; fi
+            # A failed daily check (or a check that could not run) opens the data-validation entry; passing checks close it; a step that did not finish leaves it as it is.
+            if [ '${{ needs.archive.outputs.validation }}' = fail ] || [ '${{ needs.archive.outputs.validation }}' = error ]; then PIPELINE=data-validation RESULT=failure python scripts/pipeline_alert.py; fi
+            if [ '${{ needs.archive.outputs.validation }}' = pass ]; then PIPELINE=data-validation RESULT=success python scripts/pipeline_alert.py; fi
           fi

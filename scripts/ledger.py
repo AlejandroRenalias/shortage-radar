@@ -13,14 +13,16 @@ dates means the job did not record those days.
 """
 import hashlib
 import json
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from build import ROOT, load_snapshots, register
 from record_triage import register_date
-from triage import level
+from triage import canonical_impact, level
 
 LEDGER = ROOT / 'data/ledger'
+MONTH_FILE = re.compile(r'\d{4}-\d{2}\.jsonl')
 
 
 def sha256(path):
@@ -33,6 +35,40 @@ def has_day(path, day):
         return False
     lines = path.read_text(encoding='utf-8').splitlines()
     return any(json.loads(line)['date'] == day for line in lines)
+
+
+def read_rows(folder=LEDGER, canonical=True):
+    """Every ledger row of the month files `YYYY-MM.jsonl`, oldest first (other files in the folder, such as the counts files, are not read).
+    With `canonical` (the default) `impact` is passed through triage.canonical_impact, so rows written before the rename of `critical`
+    read as `no_alternative`; every history query uses this default. Validation reads the written value (`canonical=False`)."""
+    out = []
+    for path in sorted(folder.glob('????-??.jsonl')):
+        if not MONTH_FILE.fullmatch(path.name):
+            continue
+        for line in path.read_text(encoding='utf-8').splitlines():
+            if line.strip():
+                row = json.loads(line)
+                out.append(dict(row, impact=canonical_impact(row['impact'])) if canonical else row)
+    return out
+
+
+def snapshot_candidates(day, folder):
+    """The files a ledger row of `day` can come from, most likely first: the latest capture dated on or before `day` (own files before imported ones,
+    as build.load_snapshots), the files a same-day refetch replaced (data/snapshots/superseded/<day>T<time>Z-<hash>.txt), and the latest capture dated
+    before `day`. The last one is what the first run of the day used when the file had not changed since an earlier day and a later run of the day
+    saved the day's own capture (archive.py moves nothing to superseded then)."""
+    own = {p.stem: p for p in folder.glob('????-??-??.txt')}
+    earlier = {p.stem: p for p in (folder / 'imported').glob('????-??-??.txt') if p.stem not in own}
+    paths = {**earlier, **own}
+    found = []
+    on_or_before = [d for d in paths if d <= day]
+    if on_or_before:
+        found.append(paths[max(on_or_before)])
+    found += sorted((folder / 'superseded').glob(f'{day}T*.txt'))
+    before = [d for d in paths if d < day]
+    if before and paths[max(before)] not in found:
+        found.append(paths[max(before)])
+    return found
 
 
 def rows_for(day, rows, register_path, shortage_path):

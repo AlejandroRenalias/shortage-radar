@@ -6,6 +6,7 @@ import subprocess
 
 MEANING = {
     'register-source': 'the basic register source: Fimea published the file of next year, or the register is missing or has no run date (see the run log)',
+    'data-validation': 'a daily check of the ledger failed (scripts/validate_daily.py); the run log names the check and the rows; no data was changed or deleted',
     'source-stale': 'a Fimea source file is more than 2 days old: the shortage file (Last-Modified) or the basic register (Ajopvm); the site shows a banner',
 }
 
