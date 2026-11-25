@@ -203,6 +203,43 @@ test('without names.json the shortage cards still show, with a note that name se
   assert.ok(get('pt-results').innerHTML.includes('Nimihaku on nyt rajallinen. Kaikkia nimiä ei ehkä löydy.'));
 });
 
+// ---- Review round 3: strength text is one form whatever the spacing, case or unit; a word from the middle of a name gives names only; a register entry with any strength text is found.
+test('"Buranagel 50mg/g" and "Yasmin 0.03mg/3mg" show their shortage cards and never a "not on the list" card', () => {
+  const [env] = patientEnv();
+  for (const q of ['Buranagel 50mg/g', 'BURANAGEL   50 MG/G', 'buranagel 50 mg / g']) assert.equal(rshow(rans(env, q)), 'shortage:Buranagel 50 mg/g 036934 | shortage:Buranagel 50 mg/g 036945', q);
+  for (const q of ['Yasmin 0.03mg/3mg', 'yasmin 0,03 mg/3 mg', 'YASMIN  0.03  MG / 3  MG']) assert.equal(rshow(rans(env, q)), 'shortage:Yasmin 0.03 mg / 3 mg 022508 | shortage:Yasmin 0.03 mg / 3 mg 022519', q);
+  assert.equal(vm.runInContext("[normalizeStrength('50 mg/g'), normalizeStrength('50MG / G'), normalizeStrength('0,03 mg / 3 mg'), normalizeStrength('0.03mg/3mg'), normalizeStrength('0.3 mg/annos'), normalizeStrength('10 µg'), normalizeStrength('10 mcg'), normalizeStrength('D6, 12, 30'), normalizeStrength('D6,12,30')].join('|')", env), '50mg/g|50mg/g|0.03mg/3mg|0.03mg/3mg|0.3mg/annos|10mikrog|10mikrog|d6.12.30|d6.12.30');
+});
+
+test('a word from the middle of a name gives suggestions only: "Asmin" shows no shortage, past or "not on the list" card', () => {
+  const [env] = patientEnv();
+  const rows = rnow.concat([row('600001', 'Tasminetta', '10 mg')]), gonePast = [Object.assign(row('004000', 'Yasmin', '0.03 mg / 3 mg'), {last_seen: '2024-01-01', removed_on: '2024-02-01'})];
+  const idx = {names: rindex.names.concat(['Tasminetta|10 mg', 'Yasminelle|3 mg']), substances: rindex.substances};
+  for (const q of ['Asmin', 'asmin', 'minetta', 'oscyamine', 'amin']) {
+    const items = plain(vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(rows)}, ${JSON.stringify(gonePast)}, ${JSON.stringify(idx)})`, env));
+    assert.ok(items.every(i => i.state === 'suggest' || i.state === 'notfound'), `${q}: ${items.map(i => i.state)}`);
+  }
+  const asmin = plain(vm.runInContext(`answerFor('Asmin', ${JSON.stringify(rows)}, ${JSON.stringify(gonePast)}, ${JSON.stringify(idx)})`, env));
+  assert.deepEqual(asmin.map(i => i.state), ['suggest']);
+  assert.ok(asmin[0].labels.includes('Yasmin'), 'the near name is offered');
+  // The same package number still finds a package by its number.
+  assert.equal(rans(env, '022508').map(i => i.state).join(), 'shortage');
+});
+
+test('a register entry with any strength text is found: "Epipen Auto-Injector 0.3 mg/annos", a homeopathic "D6, 12, 30"', () => {
+  const [env] = patientEnv();
+  const idx = {names: ['Epipen Auto-Injector|0.15 mg/annos|0.3 mg/annos', 'Aethusa Cynapium Dcg|D6, 12, 30, 200, M, CM, LM I-VI, C6-10000'], substances: []};
+  for (const q of ['Epipen Auto-Injector 0.3 mg/annos', 'Epipen Auto-Injector 0.3mg/annos', 'EPIPEN   AUTO-INJECTOR   0,3   MG/ANNOS']) assert.equal(rshow(rans(env, q, idx)), 'registered:Epipen Auto-Injector 0.3 mg/dose', q);  // the English page writes the Finnish unit word "annos" as "dose"
+  assert.equal(rshow(rans(env, 'Aethusa Cynapium Dcg D6,12,30,200,M,CM,LMI-VI,C6-10000', idx)).startsWith('registered:Aethusa Cynapium Dcg'), true);
+  for (const lang of ['en', 'fi']) {
+    setLanguage(env, lang);
+    const html = vm.runInContext(`answerFor('Epipen Auto-Injector 0.3 mg/annos', [], [], ${JSON.stringify(idx)}).map(cardMarkup).join('')`, env);
+    assert.doesNotMatch(html, /did not find|Emme löytäneet/);
+    assert.match(html, /Epipen Auto-Injector/);
+  }
+  setLanguage(env, 'en');
+});
+
 test('a package on the list now is never also shown as past, and a past package shows once', () => {
   const [env] = patientEnv();
   assert.deepEqual(answer(env, 'buranagel').map(i => i.state), ['shortage']);

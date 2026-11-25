@@ -112,17 +112,21 @@ function editDistance(a, b, max) {
   return prev[b.length];
 }
 // ---- Labels: a typed name with an optional strength ("Panadol 500 mg"), and tolerant matching on names.
-// A strength is the numbers and units of the typed text, written as one key ("500mg", "0.03mg/3mg"). It matches a strength of the register exactly (same numbers, same units)
-// or not at all; a number without a unit ("400") matches the first number of a strength ("400 mg") and nothing longer ("4" does not match "400 mg" or "2.5 mg").
-const UNIT = String.raw`(?:mg|g|ml|mikrog|mcg|µg|ug|iu|ie|u|mmol|l|%)`;
-const UNIT_AFTER_NUMBER = new RegExp(String.raw`(\d)\s+(?=${UNIT}(?![a-zµ]))`, 'g');
-const normalizeStrength = s => foldNumbers(fold(s)).replace(/\s*\/\s*/g, '/').replace(UNIT_AFTER_NUMBER, '$1').replace(/\s+/g, '');
-const STRENGTH_TOKEN = new RegExp(String.raw`^\d[\d.]*(?:${UNIT}(?:/[\d.]*(?:${UNIT}|h))*)?$`);
+// ONE function writes strength text in a single form: normalizeStrength. The register's strengths (the name index and the packages of the lists) and the typed text all pass through it, so
+// "50 mg/g", "50mg/g" and "50 MG / G" are one strength, and so are "0.03 mg / 3 mg" and "0,03mg/3mg" and "0.3 mg/annos" and "0.3MG/ANNOS": case, spaces, decimal comma or point and the micro sign are the only differences it removes.
+// A strength matches exactly (same numbers, same units) or not at all; a number without a unit ("400") matches the first number of a strength ("400 mg") and nothing longer ("4" does not match "400 mg" or "2.5 mg").
+const normalizeStrength = s => foldNumbers(fold(s).replace(/[µμ]g/g, 'mikrog').replace(/(?<![a-z])(?:mcg|microg)(?![a-z])/g, 'mikrog').replace(/\s+/g, ''));
+// A typed text is split into the words of a name and a strength at every word: the first k words are the name and the rest is the strength (the strength of a homeopathic product
+// is text, "D6, 12, 30", and "0.3 mg/annos" has a unit nobody listed, so no list of units or digits is used). An entry matches when one split matches it.
+// `words` and `strength` are the split at the first word that starts with a digit, used to suggest names; the whole text is the name when there is none.
 function parseLabel(query) {
-  const words = [], strength = [];
-  const text = foldNumbers(fold(String(query || '').trim())).replace(/\s*\/\s*/g, '/').replace(UNIT_AFTER_NUMBER, '$1');
-  for (const t of text.split(/\s+/).filter(Boolean)) (STRENGTH_TOKEN.test(t) ? strength : words).push(t);
-  return {words, strength: strength.join('')};
+  const tokens = fold(String(query || '').trim()).split(/\s+/).filter(Boolean);
+  const parts = [];
+  if (tokens.length && /^\d/.test(tokens[0])) parts.push({words: [], strength: normalizeStrength(tokens.join(' '))});
+  for (let k = 1; k <= tokens.length; k++) parts.push({words: tokens.slice(0, k), strength: normalizeStrength(tokens.slice(k).join(' '))});
+  const at = tokens.findIndex((t, i) => i > 0 && /^\d/.test(t));
+  const main = at > 0 ? {words: tokens.slice(0, at), strength: normalizeStrength(tokens.slice(at).join(' '))} : {words: tokens, strength: ''};
+  return {parts, words: main.words, strength: main.strength};
 }
 function strengthMatches(have, key) {
   if (!key) return true;
@@ -137,13 +141,20 @@ function startsWord(hay, term) {
   return false;
 }
 // An exact label: every typed word starts a word of the name or of an active substance (English, or Finnish with the aliases and endings of searchMatches), and the typed strength is one the entry has.
-function labelMatches(e, parsed) {
-  if (!parsed.words.length) return false;
+// Returns null, or {strength} with the entry's own text of the strength that matched ('' when no strength was typed). Nothing else counts: a word from the middle of a name, or a typing mistake, is no match.
+function labelMatch(e, parsed) {
   const fields = [e.name, e.substances, e.substance_fi].map(fold);
   const fiWords = fields[2].split(' ').filter(Boolean);
   const fiStem = word => word.length >= 3 && fiWords.some(w => w.startsWith(word) || (w.endsWith('i') && word.startsWith(w.slice(0, -1)) && FI_ENDINGS.includes(word.slice(w.length - 1))));
-  return parsed.words.every(word => fiStem(word) || termsFor(word).some(term => fields.some(f => startsWord(f, term)))) && (!parsed.strength || !!matchedStrength(e, parsed.strength));
+  for (const part of parsed.parts || [parsed]) {
+    if (!part.words.length || !part.words.every(word => fiStem(word) || termsFor(word).some(term => fields.some(f => startsWord(f, term))))) continue;
+    if (!part.strength) return {strength: ''};
+    const strength = matchedStrength(e, part.strength);
+    if (strength) return {strength};
+  }
+  return null;
 }
+const labelMatches = (e, parsed) => labelMatch(e, parsed) !== null;
 // How many mistakes a typed word may have: none for short words, one for 5-7 letters, two from 8.
 const typoLimit = word => word.length >= 8 ? 2 : word.length >= 5 ? 1 : 0;
 const nameWords = new WeakMap(), closeCache = new Map();

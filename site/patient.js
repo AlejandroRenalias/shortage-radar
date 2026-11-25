@@ -20,13 +20,33 @@ function latestPast(rows, listed) {
 // A trade name is "Name|strength|strength" in the index; its entry has the name and its strengths. A substance is shown only when nothing else was found,
 // because a substance that has packages on or near the list must not read as "not on the list".
 const registerEntryCache = new WeakMap();
+// The first letters of the words of a name: the entries of the index are grouped by them, so a search looks at the names that can start with the typed word and not at all of them.
+function wordStarts(name) {
+  const hay = fold(name), starts = new Set();
+  for (let i = 0; i < hay.length; i++) if (i === 0 || !/[\p{L}\p{N}]/u.test(hay[i - 1])) starts.add(hay[i]);
+  return starts;
+}
+function groupByStart(list) {
+  const groups = new Map();
+  for (const e of list) for (const c of wordStarts(e.name)) { if (!groups.has(c)) groups.set(c, []); groups.get(c).push(e); }
+  return {all: list, groups};
+}
 function registerEntries(names) {
   let entries = registerEntryCache.get(names);
   if (!entries) registerEntryCache.set(names, entries = {
-    trade: (names.names || []).map(row => { const [name, ...strengths] = row.split('|'); return {name, strengths}; }),
-    substances: (names.substances || []).map(name => ({name, strengths: []}))
+    trade: groupByStart((names.names || []).map(row => { const [name, ...strengths] = row.split('|'); return {name, strengths}; })),
+    substances: groupByStart((names.substances || []).map(name => ({name, strengths: []})))
   });
   return entries;
+}
+// The entries of a group that can match the typed label: a name matches only if the first typed word (or one of its aliases) starts one of its words.
+function candidates(group, parsed) {
+  const found = new Set();
+  for (const part of parsed.parts) {
+    if (!part.words.length) continue;
+    for (const term of termsFor(part.words[0])) for (const e of group.groups.get(term[0]) || []) found.add(e);
+  }
+  return [...found];
 }
 const SUGGESTED = 5;
 // The label of a near entry: its name, with the typed strength when the entry has it.
@@ -50,27 +70,26 @@ function suggestionsFor(parsed, rows, entries) {
   return [...out.values()].slice(0, SUGGESTED);
 }
 // What to show for a typed name: the packages on the list now, then the packages that left it, then the register names that were never on the list.
-// A typed label is exact when each word starts a word of a name or substance and the strength, if typed, is exactly one the entry has.
+// A typed label is exact when each word starts a word of a name or substance and the strength, if typed, is exactly one the entry has (normalizeStrength in lib.js).
 // When it is not (a typing mistake, a word from the middle of another name, a strength that does not exist), the answer is "Did you mean" with near names, and no statement about the typed text.
 // `names` is the name index ({names, substances}); without it (it could not load) a name that is not on the lists is neither "not on the list" nor "not in the register": the card says it could not be checked.
 function answerFor(text, now, past, names) {
   const q = String(text || '').trim();
   if (!q) return [];
   const parsed = parseLabel(q), listed = new Set(now.map(e => e.NordicArticleNumber)), ended = latestPast(past, listed);
-  // A typed strength must be one the package has (same numbers, same units); a number found elsewhere in the package (a VNR) does not count. A number alone is searched as before (a VNR).
-  const fits = e => !parsed.strength || !parsed.words.length || !!matchedStrength(e, parsed.strength);
-  const a = now.filter(e => searchMatches(e, q) && fits(e)).sort(byName), b = ended.filter(e => searchMatches(e, q) && fits(e)).sort(byName);
+  // Cards come only from an exact label (see above), or from a typed package number (VNR). A word from the middle of a name ("asmin" in "Yasmin") or a typing mistake gets no card.
+  const exact = /^\d{6}$/.test(q) ? e => e.NordicArticleNumber === q : e => labelMatches(e, parsed);
+  const a = now.filter(exact).sort(byName), b = ended.filter(exact).sort(byName);
   const taken = new Set([...a, ...b].map(e => fold(e.name)));
-  const entries = names ? registerEntries(names) : {trade: [], substances: []};
-  const exactRows = [...now, ...ended].some(e => labelMatches(e, parsed));
-  const trade = entries.trade.filter(e => !taken.has(fold(e.name)) && labelMatches(e, parsed));
+  const entries = names ? registerEntries(names) : {trade: {all: [], groups: new Map()}, substances: {all: [], groups: new Map()}};
+  const match = e => ({e, m: labelMatch(e, parsed)});
+  const trade = candidates(entries.trade, parsed).filter(e => !taken.has(fold(e.name))).map(match).filter(x => x.m).sort((x, y) => x.e.name.localeCompare(y.e.name, language));
   // A substance is shown only when nothing else matched the label exactly.
-  const substances = exactRows || trade.length || a.length || b.length ? [] : entries.substances.filter(e => labelMatches(e, parsed));
-  const registered = [...trade.sort((x, y) => x.name.localeCompare(y.name, language)), ...substances].map(e => ({state: 'registered', e: {name: parsed.strength ? labelOf(e, parsed) : e.name}}));
+  const substances = a.length || b.length || trade.length ? [] : candidates(entries.substances, parsed).map(match).filter(x => x.m);
+  const registered = [...trade, ...substances].map(({e, m}) => ({state: 'registered', e: {name: m.strength ? `${e.name} ${strengthText({strength: m.strength})}`.trim() : e.name, base: e.name, matched: m.strength}}));
   const items = [...a.map(e => ({state: 'shortage', e})), ...b.map(e => ({state: 'notlisted', e})), ...registered];
-  const exact = exactRows || trade.length > 0 || substances.length > 0;
-  if (!exact) {
-    const labels = suggestionsFor(parsed, [...now, ...ended], [...entries.trade, ...(items.length ? [] : entries.substances)]);
+  if (!items.length) {
+    const labels = suggestionsFor(parsed, [...now, ...ended], [...entries.trade.all, ...entries.substances.all]);
     if (labels.length) items.push({state: 'suggest', labels});
   }
   return items.length ? items : [{state: names ? 'notfound' : 'unchecked'}];

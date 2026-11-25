@@ -25,3 +25,4 @@ jobs:
           python-version: '3.12'
       - run: python scripts/fetch_register.py
       - run: python scripts/build.py
+      - run: node --test tests/test_names_exhaustive.cjs
