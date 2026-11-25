@@ -60,12 +60,19 @@ img,svg{max-width:100%}
 .nav a:hover{background:var(--mint);--cut:var(--mint)}
 .nav a:focus-visible{outline:3px solid var(--green);outline-offset:-3px;border-radius:8px}
 .nav a[aria-current="page"]{color:var(--green-ink);font-weight:700;animation:tab-fade .15s ease both}
-.nav a[aria-current="page"]::before{content:"";position:absolute;top:-1px;left:50%;width:32px;margin-left:-16px;height:3px;border-radius:0 0 3px 3px;background:var(--green-ink)}
+.nav-mark{pointer-events:none;position:absolute;top:-1px;left:50%;width:32px;margin-left:-16px;height:3px;border-radius:0 0 3px 3px;background:var(--green-ink)}
 .ic-b{width:24px;height:24px;fill:currentColor;stroke:currentColor;stroke-width:1.2;stroke-linejoin:round;overflow:visible}
 .ic-b .c{fill:none;stroke:var(--cut,var(--surface));stroke-width:2.2;stroke-linecap:round}
 .ic-b .k{fill:var(--cut,var(--surface));stroke:none}
 @media (max-width:389px){.nav a{font-size:.68rem}}
 @media (max-width:339px){.nav a{padding-inline:0;font-size:.65rem}}
+/* Tab motion: on every page load the green mark of the active tab fades and grows in once. CSS only, no knowledge of the previous page. */
+@media (max-width:719px) and (prefers-reduced-motion:no-preference){
+  .nav a[aria-current="page"] .nav-mark{animation:tab-mark .2s ease-out both}
+  /* While Finnish text is loading the page is hidden (see the top of this file). Hold the entrance until the class is removed, so it plays when the bar appears. */
+  html.i18n-pending .nav a[aria-current="page"] .nav-mark{animation:none}
+}
+@keyframes tab-mark{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 @keyframes tab-fade{from{opacity:.4}to{opacity:1}}
 .lang{display:inline-flex;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px}
 .lang button{font:inherit;font-size:.9375rem;font-weight:400;min-height:40px;min-width:44px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
@@ -482,7 +489,7 @@ html:not(.js) .needs-js{display:none}
   .nav a:hover{--cut:var(--mint)}
   .nav a:focus-visible{outline-offset:2px;border-radius:999px}
   .nav a[aria-current="page"]{--cut:var(--mint);background:var(--mint);font-weight:400;animation:none}
-  .nav a[aria-current="page"]::before{display:none}
+  .nav-mark{display:none}
   .ic-b{width:22px;height:22px}
   :root{scroll-padding-bottom:16px}
 }

@@ -20,7 +20,7 @@ def test_every_page_is_built_with_the_same_header_and_footer():
     headers = {between(out[f], '<header', '</header>') for f in PAGE_FILES}
     footers = {between(out[f], '<footer', '</footer>') for f in PAGE_FILES}
     # The header differs only in which link is the current page.
-    normal = {re.sub(r' aria-current="page"', '', h) for h in headers}
+    normal = {re.sub(r' aria-current="page"|<i class="nav-mark" aria-hidden="true"></i>', '', h) for h in headers}
     assert len(normal) == 1 and len(footers) == 1
     for f in PAGE_FILES:
         assert between(out[f], '<header', '</header>') == header(re.search(r'data-page="(\w+)"', out[f]).group(1), '').split('\n')[0]
@@ -164,7 +164,7 @@ def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
 def test_tab_bar_markup_has_five_solid_icon_tabs_and_one_current_page():
     out = render_pages(749)
     nav = between(out['shortages.html'], '<nav class="nav"', '</nav>')
-    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
+    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(?:<i class="nav-mark" aria-hidden="true"></i>)?(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
     assert [t[0] for t in tabs] == ['index.html', 'shortages.html', 'trends.html', 'critical.html', 'about.html']
     assert [t[3] for t in tabs] == ['navHome', 'navShortages', 'navTrends', 'navEuList', 'navAbout']
     assert [t[1] for t in tabs] == ['', ' aria-current="page"', '', '', '']
@@ -221,3 +221,38 @@ def test_home_is_the_patient_page_and_the_old_home_is_the_professional_page():
 def test_patient_search_works_without_scripts_by_going_to_the_list():
     html = render_pages(749)['index.html']
     assert 'action="shortages.html" method="get"' in html and 'name="q"' in html
+
+
+def test_tab_mark_is_one_element_in_the_current_tab_only():
+    out = render_pages(749)
+    for key, meta in PAGES.items():
+        if meta.get('own') or not meta['nav']:
+            continue
+        nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
+        assert nav.count('class="nav-mark"') == 1
+        assert re.search(r'aria-current="page"><i class="nav-mark" aria-hidden="true"></i><svg', nav)
+
+def test_tab_mark_fades_in_by_css_only_below_720px_and_never_takes_pointer_input():
+    css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
+    block = re.search(r'@media \(max-width:719px\) and \(prefers-reduced-motion:no-preference\)\{(.*?)\n\}', css, re.S).group(1)
+    # Entrance is inside the no-preference media query, so reduced motion gets none.
+    assert '.nav a[aria-current="page"] .nav-mark{animation:tab-mark .2s ease-out both}' in block
+    assert re.search(r'@keyframes tab-mark\{from\{opacity:0;transform:scale\(\.6\)\}to\{opacity:1;transform:none\}\}', css)
+    assert css.count('tab-mark') == 2 and 'animation:tab-mark' not in css.replace(block, '')
+    assert re.search(r'\.nav-mark\{pointer-events:none;', css)
+    # The entrance waits while the page is hidden for i18n, and plays once the class is removed; without JavaScript the class never exists.
+    assert 'html.i18n-pending .nav a[aria-current="page"] .nav-mark{animation:none}' in block
+    assert block.index('animation:tab-mark') < block.index('html.i18n-pending')
+    assert 'html.i18n-pending body{' in css
+    assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)
+
+
+def test_no_page_script_or_stored_state_for_the_tab_mark():
+    css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
+    assert 'view-transition' not in css and '--sr-steps' not in css and 'sr-slide' not in css
+    assert not (ROOT / 'site' / 'tabbar.js').exists()
+    out = render_pages(749)
+    for meta in PAGES.values():
+        if meta['file'] not in out:
+            continue
+        assert 'tabbar.js' not in out[meta['file']] and 'referrerpolicy' not in out[meta['file']]
