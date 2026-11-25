@@ -452,7 +452,8 @@ const daysBetween = (from, to) => Math.floor((to - from) / DAY);
 const listedAfterEstimate = e => Boolean(e.EndingDate && e.last_seen && e.last_seen > e.EndingDate);
 const lateText = (e, t) => listedAfterEstimate(e) ? t.late : t.estimatePassed;
 // `medicine` is true for the lists that open a search result: the card then opens the medicine page when there is one.
-function pkgCard(e, now = todayUTC(), level = 3, medicine = false) {
+// `groupLink` adds a link to the group page (group.html) for a package that has a substitution group; the shortage list uses it.
+function pkgCard(e, now = todayUTC(), level = 3, medicine = false, groupLink = false) {
   const t = copy[language], start = parsedDate(e.UnavailableFrom), end = parsedDate(e.EndingDate), status = statusOf(e, now);
   const late = status === 'now' && end && end.valueOf() < now;
   const spec = [strengthShown(e), packText(e)].filter(Boolean), kind = formKind(e.form), formName = formText(e.form), group = groupName(e.atc);
@@ -463,7 +464,8 @@ function pkgCard(e, now = todayUTC(), level = 3, medicine = false) {
     + `<p class="pkg-kind">${[formName, group].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}${isVet(e) ? `<span class="vet">${esc(t.veterinary)}</span>` : ''}</p></div></div>`
     + `<dl class="pkg-dates"><div><dt>${esc(status === 'soon' ? t.startsLabel : t.fromLabel)}</dt><dd>${esc(dateText(e.UnavailableFrom))}${startNote ? `<small>${esc(startNote)}</small>` : ''}</dd></div>`
     + `<div><dt>${esc(t.backLabel)}</dt><dd>${end ? esc(dateText(e.EndingDate)) : esc(t.notKnown)}${late ? `<small class="late">${esc(lateText(e, t))}</small>` : ''}</dd></div></dl>`
-    + (e.removed_on ? '' : impactBadge(e)) + '</article>';
+    + (e.removed_on ? '' : impactBadge(e))
+    + (groupLink && !e.removed_on && e.substitution_group && !isVet(e) ? `<p class="pkg-group"><a href="group.html?g=${encodeURIComponent(e.substitution_group)}">${esc(t.grpPackages)}</a></p>` : '') + '</article>';
 }
 
 // ---- Timeline model for one package: where the reported start, today and the company's estimate fall.

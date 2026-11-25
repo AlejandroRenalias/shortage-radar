@@ -28,6 +28,8 @@ PAGES = {
               'description': 'What a medicine shortage is, what to do about one, and how this site gets and uses Fimea’s open data.', 'form_action': "'none'"},
     'medicine': {'file': 'medicine.html', 'nav': None, 'icon': None, 'title': 'Medicine | Shortage Radar',
                  'description': 'One medicine package on Fimea’s shortage list: status, timeline and what to do.', 'form_action': "'self'"},
+    'group': {'file': 'group.html', 'nav': None, 'icon': None, 'title': 'Packages of one group | Shortage Radar',
+              'description': 'One group of interchangeable packages and which of them are on Fimea’s shortage list.', 'form_action': "'none'"},
     'medicines': {'file': 'medicines.html', 'nav': None, 'icon': None, 'title': 'Medicine and its packages | Shortage Radar',
                   'description': 'One medicine on Fimea’s shortage list, with the notices and history of each package.', 'form_action': "'self'"},
 }
@@ -276,6 +278,11 @@ def medicine():
 <div class="wrap">{load_error()}</div>'''
 
 
+def group():
+    return f'''<div class="wrap needs-js" id="group"><p class="state" id="loading">Loading…</p></div>
+<div class="wrap">{load_error()}</div>'''
+
+
 def medicines():
     return f'''<div class="wrap needs-js" id="medicines"><p class="state" id="loading">Loading…</p></div>
 <div class="wrap">{load_error()}</div>'''
@@ -345,7 +352,7 @@ def render_pages(count, impact=None, critical=None, soon=0, as_of=''):
     for key, meta in PAGES.items():
         if meta.get('own'):
             continue
-        body = {'index': patient_home, 'professionals': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
+        body = {'index': patient_home, 'professionals': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'group': group, 'medicines': medicines}[key]()
         meta = dict(meta, script={'index': 'patient.js', 'professionals': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'

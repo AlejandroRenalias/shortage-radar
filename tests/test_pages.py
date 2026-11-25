@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from pages import PAGES, SITE_URL, footer, header, render_pages
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE_FILES = ['index.html', 'professionals.html', 'shortages.html', 'medicine.html', 'medicines.html', 'trends.html', 'about.html']
+PAGE_FILES = ['index.html', 'professionals.html', 'shortages.html', 'medicine.html', 'group.html', 'medicines.html', 'trends.html', 'about.html']
 
 
 def between(html, start, end):
@@ -44,7 +44,7 @@ def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
     for f in PAGE_FILES:
         html = out[f]
         # The medicine page draws its h1 (the package name) when the data is loaded.
-        assert html.count('<h1') == (0 if f in ('medicine.html', 'medicines.html') else 1), f
+        assert html.count('<h1') == (0 if f in ('medicine.html', 'group.html', 'medicines.html') else 1), f
         assert 'class="skip-link" href="#main"' in html and '<main id="main"' in html
         assert 'name="referrer" content="no-referrer"' in html
         assert "default-src 'self'" in html and 'script-src \'self\'' in html and '<script>' not in html

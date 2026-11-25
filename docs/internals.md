@@ -57,17 +57,28 @@ The history shows saved captures, not daily observations. Capture gaps can be lo
 
 ## Pages and structure
 
-The site is static and has five pages, all under `/shortage-radar/` on GitHub Pages. Text is in Finnish and English; the language follows the browser and the choice is remembered on the device.
+The site is static and has five pages in the main menu (the medicine and group pages are opened from links), all under `/shortage-radar/` on GitHub Pages. Text is in Finnish and English; the language follows the browser and the choice is remembered on the device.
 
 | Page | File | What it does |
 | --- | --- | --- |
 | Home (Etusivu) | `index.html` | One sentence on today's situation, with when Fimea's file changed and when Shortage Radar checked it ("Fimea: N short now, M more expected within 2 weeks."), the impact triage (interchangeable package found in the data, none found in the data, no substitution group), a search, the newest packages, three facts from this week and three paths. The old `?q=` address is sent to the list. |
 | Shortages (Saatavuushäiriöt) | `shortages.html` | The full list with search, filters (impact, status, medicine group, form, company) and sort. The search and filters are in the address, for example `shortages.html?q=burana&status=now` or `shortages.html?impact=critical`, which groups the packages by medicine. |
 | Medicine (Lääke) | `medicine.html?vnr=<VNR>` | One package: label, whether the check found an interchangeable package and the other packages of its group, status, timeline, what to do, details and a link to share. Feed entries link here. |
+| Group (Ryhmä) | `group.html?g=<code>` | One group of interchangeable packages and which of them are on Fimea's shortage list, today only. Not in the main menu: the medicine page and the shortage list link to it. |
 | Trends (Tilastot) | `trends.html` | Count over time, this week, groups, earliest reported starts, groups newly without an interchangeable package in the data, the recorded impact counts, the end dates that changed and a citation. |
 | About (Tietoa) | `about.html` | What a shortage is, what to do, substitution groups, what the impact label means and its limits, how the data works, limits, downloads, privacy and licence. |
 
 The pages are built by `scripts/pages.py`, which writes the shared header and footer once into every page, and `scripts/build.py` runs it with the data. The generated pages are not committed. Browser code is in `site/`: `i18n.js` holds all text, `lib.js` the shared code (search, dates, the package card, filters, the timeline model, page set-up) and one script for each page. Form pictograms are drawn in `lib.js`. The font is Atkinson Hyperlegible Next, hosted in `site/fonts`; its digits are replaced by Public Sans digits (a 3 KB subset under the same family name) because Atkinson's zero is slashed and reads as a letter in dates and doses.
+
+## Group page
+
+`group.html?g=<code>` shows one substitution group: which of its packages are on Fimea's shortage list today. It exists only for groups with at least one package on the list; any other code gets a short neutral page ("No package of this group is on Fimea's shortage list now. This does not show if the pharmacy has it.") with no data of the group. Packages without a group (`nogroup`) never get a page. There is no history: the page says "Today only" with the dates of the shortage list and the register.
+
+**One source of truth.** `classify` in `scripts/group_pages.py` is the only place that decides which packages of a group are on the list and which are interchangeable packages found in the data (it calls `triage.is_available_alternative`, the rule behind `alternatives` and `impact`). The medicine page lists (`group_lists` in `scripts/build.py`) and the group page data (`group_shards`) both read it. The page's alternatives count is the length of that list, so it equals `other_packages_count` in `current.json` for every package of the group. `tests/test_group_pages.py` checks this for every combination of the register fields, and for every group of the real build (it needs a build, so the `pages-build` job runs it).
+
+**Data.** `g/NN.json`, NN being the last two digits of the code (100 files, all written, like `p/NN.json`; about 8 KB each). A group has `heading` (substance, strength and form of the packages on the list, from the register), `counts` (`market`, `listed`, `alternatives`, `companies`), `alt_companies` and `packages`. A row is a register package that is on the market (`Kaupan` 1) or on the list; `listed` is true when its VNR or an old VNR is in the shortage file, `alt` when it counts as an alternative, and `link` is the VNR of its medicine page, empty when the package never had a notice (such a package has no page). Listed rows come first. The page reads this one file and loads nothing else (a code that cannot be a group code loads `source.json` for the dates).
+
+**Words.** The page says "interchangeable", "listed", "not on Fimea's shortage list" and "found in the data". It never says that a pharmacy has a package, and never calls a group fragile, risky or safe. A test (`tests/test_group_page.cjs`) scans every English and Finnish text of the page against a list of banned words; "stock" is allowed only in the fixed line "This is not a stock check. Ask your pharmacy." The Finnish texts are a draft.
 
 ## Critical medicines in Finland
 
