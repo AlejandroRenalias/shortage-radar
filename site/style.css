@@ -69,6 +69,8 @@ img,svg{max-width:100%}
 /* Tab motion: on every page load the green mark of the active tab fades and grows in once. CSS only, no knowledge of the previous page. */
 @media (max-width:719px) and (prefers-reduced-motion:no-preference){
   .nav a[aria-current="page"] .nav-mark{animation:tab-mark .2s ease-out both}
+  /* While Finnish text is loading the page is hidden (see the top of this file). Hold the entrance until the class is removed, so it plays when the bar appears. */
+  html.i18n-pending .nav a[aria-current="page"] .nav-mark{animation:none}
 }
 @keyframes tab-mark{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 @keyframes tab-fade{from{opacity:.4}to{opacity:1}}

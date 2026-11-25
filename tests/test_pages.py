@@ -211,6 +211,10 @@ def test_tab_mark_fades_in_by_css_only_below_720px_and_never_takes_pointer_input
     assert re.search(r'@keyframes tab-mark\{from\{opacity:0;transform:scale\(\.6\)\}to\{opacity:1;transform:none\}\}', css)
     assert css.count('tab-mark') == 2 and 'animation:tab-mark' not in css.replace(block, '')
     assert re.search(r'\.nav-mark\{pointer-events:none;', css)
+    # The entrance waits while the page is hidden for i18n, and plays once the class is removed; without JavaScript the class never exists.
+    assert 'html.i18n-pending .nav a[aria-current="page"] .nav-mark{animation:none}' in block
+    assert block.index('animation:tab-mark') < block.index('html.i18n-pending')
+    assert 'html.i18n-pending body{' in css
     assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)
 
 
