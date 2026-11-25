@@ -71,7 +71,8 @@ def header(current, prefix):
         if not meta['nav']:
             continue
         mark = ' aria-current="page"' if key == current else ''
-        links.append(f'<a href="{prefix}{meta["file"]}"{mark}>{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
+        bar = '<i class="nav-mark" aria-hidden="true"></i>' if key == current else ''
+        links.append(f'<a href="{prefix}{meta["file"]}"{mark}>{bar}{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
     return ('<header class="site-header"><div class="wrap header-bar">'
             f'<a class="brand" href="{prefix}index.html">{MARK}<span data-i18n="brand">Shortage Radar</span></a>'
             f'<nav class="nav" aria-label="Main menu" data-i18n-attr="aria-label=navLabel">{"".join(links)}</nav>'

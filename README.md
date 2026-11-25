@@ -17,7 +17,7 @@ python scripts/import_history.py
 python scripts/fetch_register.py
 python scripts/build.py
 python -m pytest -q
-node --test tests/test_dashboard.cjs
+node --test tests/*.cjs
 python -m http.server 8000 --directory site
 ```
 
