@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from pages import PAGES, SITE_URL, footer, header, render_pages
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE_FILES = ['index.html', 'shortages.html', 'medicine.html', 'medicines.html', 'trends.html', 'about.html']
+PAGE_FILES = ['index.html', 'professionals.html', 'shortages.html', 'medicine.html', 'medicines.html', 'trends.html', 'about.html']
 
 
 def between(html, start, end):
@@ -36,7 +36,7 @@ def test_navigation_marks_the_current_page_and_lists_five_pages():
         assert nav.count('<a ') == 5
         current = re.findall(r'<a href="([^"]+)" aria-current="page"', nav)
         assert current == ([meta['file']] if meta['nav'] else [])
-    assert 'href="about.html#what-to-do"' in out['index.html']
+    assert 'href="about.html#what-to-do"' in out['professionals.html']
 
 
 def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
@@ -53,25 +53,25 @@ def test_each_page_has_one_h1_a_skip_link_main_and_its_own_canonical_and_csp():
         assert f'property="og:url" content="{expected}"' in html
         assert 'og:image:width" content="1200"' in html
     # Only the pages with a search form that sends the visitor elsewhere may submit forms.
-    assert "form-action 'self'" in out['index.html'] and "form-action 'self'" in out['medicine.html'] and "form-action 'self'" in out['medicines.html']
+    assert "form-action 'self'" in out['professionals.html'] and "form-action 'self'" in out['medicine.html'] and "form-action 'self'" in out['medicines.html']
     assert "form-action 'none'" in out['shortages.html'] and "form-action 'none'" in out['about.html']
 
 
 def test_home_headline_carries_the_count_and_search_goes_to_the_list():
-    html = render_pages(749)['index.html']
+    html = render_pages(749)['professionals.html']
     assert 'Fimea’s list: 749 packages in shortage now.' in html
     assert 'data-count="749"' in html
     assert 'action="shortages.html" method="get"' in html and 'name="q"' in html
-    assert 'Fimea’s list: 1 package in shortage now.' in render_pages(1)['index.html']
+    assert 'Fimea’s list: 1 package in shortage now.' in render_pages(1)['professionals.html']
     # Packages expected within two weeks are named apart from the ones short now.
-    html = render_pages(714, soon=43)['index.html']
+    html = render_pages(714, soon=43)['professionals.html']
     assert '>Fimea’s list: 714 packages in shortage now, 43 more expected to start within 2 weeks.</h1>' in html and 'data-soon="43"' in html
     assert html.index('id="hero-label"') < html.index('id="hero-answer"')
     assert 'Our reading of Fimea’s register, not a stock check.' in html
 
 
 def test_home_top_keeps_headline_strip_search_and_one_closed_dropdown_for_the_rest():
-    html = render_pages(714, {'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}, None, 42)['index.html']
+    html = render_pages(714, {'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}, None, 42)['professionals.html']
     top = html[:html.index('id="triage"')]
     # One dropdown at the top, closed, with the notes that used to stand open.
     assert top.count('<details') == 1 and '<details class="eu-fold eu-notes home-notes">' in top
@@ -101,7 +101,7 @@ def test_404_page_uses_absolute_paths_for_the_project_site():
 def test_sitemap_lists_the_indexable_pages():
     root = ET.parse(ROOT / 'site/sitemap.xml').getroot()
     urls = [e.text for e in root.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-    assert urls == [SITE_URL, SITE_URL + 'shortages.html', SITE_URL + 'trends.html', SITE_URL + 'critical.html', SITE_URL + 'critical-methods.html', SITE_URL + 'about.html']
+    assert urls == [SITE_URL, SITE_URL + 'shortages.html', SITE_URL + 'trends.html', SITE_URL + 'critical.html', SITE_URL + 'critical-methods.html', SITE_URL + 'professionals.html', SITE_URL + 'about.html']
 
 
 def test_every_script_and_style_a_page_loads_exists():
@@ -120,16 +120,16 @@ def test_without_scripts_dead_controls_are_hidden_and_the_data_files_are_linked(
         assert 'shortages.csv' in noscript and 'data.json' in noscript and 'fimea.fi' in noscript
     assert 'class="wrap finder needs-js"' in out['shortages.html'] and 'class="wrap results needs-js"' in out['shortages.html']
     assert 'class="wrap needs-js" id="medicine"' in out['medicine.html'] and 'class="wrap needs-js" id="medicines"' in out['medicines.html']
-    assert 'class="lang needs-js"' in out['index.html']
+    assert 'class="lang needs-js"' in out['professionals.html']
     # The home search is a plain form, so it still works without scripts.
-    assert 'action="shortages.html" method="get"' in out['index.html'] and 'class="bigsearch"' in out['index.html']
+    assert 'action="shortages.html" method="get"' in out['professionals.html'] and 'class="bigsearch"' in out['professionals.html']
     css = (ROOT / 'site/style.css').read_text(encoding='utf-8')
     assert 'html:not(.js) .needs-js{display:none}' in css and '[hidden]{display:none!important}' in css
 
 
 def test_home_has_the_form_shelf_before_the_newest_cards_and_about_leads_with_the_answer():
     out = render_pages(749)
-    home = out['index.html']
+    home = out['professionals.html']
     assert home.index('id="shelf"') < home.index('id="newest"') < home.index('id="facts"')
     assert home.index('id="q"') < home.index('id="shelf"')
     about = out['about.html']
@@ -157,7 +157,7 @@ def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
     assert {re.search(r'font-weight:([\d ]+);', f).group(1) for f in faces} == {'200 800'}
     ranges = [re.search(r'unicode-range:([^;}]+)', f).group(1) for f in faces]
     assert any(r == 'U+0030-0039' for r in ranges)
-    html = render_pages(749)['index.html']
+    html = render_pages(749)['professionals.html']
     assert 'fonts/atkinson-latin.woff2' in html and 'fonts/public-sans-digits.woff2' in html
 
 
@@ -192,3 +192,32 @@ def test_tab_bar_blends_in_clears_content_and_respects_motion_and_safe_area():
     assert '.nav a:focus-visible{' in css
     assert re.search(r'@media \(min-width:720px\)\{\s*:root\{--nav-h:0px\}\s*body\{padding-bottom:0\}', css)
     assert re.search(r'prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important', css)
+
+
+def test_home_is_the_patient_page_and_the_old_home_is_the_professional_page():
+    out = render_pages(749, {'substitute': 5, 'no_alternative': 1, 'nogroup': 1, 'vet': 1}, None, 3, '2026-11-24')
+    home, pros = out['index.html'], out['professionals.html']
+    assert 'data-page="index"' in home and 'src="patient.js"' in home and 'data-page="professionals"' in pros and 'src="home.js"' in pros
+    # First screen: the question, the search and the hint, with the one closed dropdown after them; no counts, strip, picture or charts.
+    main = home[home.index('<main'):home.index('</main>')]
+    assert main.index('data-i18n="ptQuestion"') < main.index('role="search"') < main.index('data-i18n="ptHint"') < main.index('<details')
+    assert main.count('<details') == 1 and '<details class="eu-fold eu-notes pt-info">' in main and '<details open' not in main
+    for gone in ('class="strip"', 'id="triage"', 'eu-hero-art', 'id="hero-line"', 'id="facts"', 'id="shelf"'):
+        assert gone not in main
+    # The dropdown links to the professional page and the About page; the footer links to the professional page on every page.
+    box = main[main.index('<details'):]
+    assert 'href="professionals.html"' in box and 'href="about.html"' in box and 'data-i18n="ptInfoStock"' in box
+    for html in out.values():
+        assert 'href="professionals.html" data-i18n="footerPros"' in html or 'href="/shortage-radar/professionals.html" data-i18n="footerPros"' in html
+    # The tab bar is unchanged: five tabs, no sixth, and the professional page is not one of them.
+    for html in (home, pros):
+        assert len(re.findall(r'<a href="[^"]+">?', between(html, '<nav class="nav"', '</nav>'))) == 5
+        assert 'professionals.html' not in between(html, '<nav class="nav"', '</nav>')
+    assert 'aria-current="page"' in between(home, '<nav class="nav"', '</nav>') and 'aria-current' not in between(pros, '<nav class="nav"', '</nav>')
+    # The old home keeps its numbers.
+    assert 'id="hero-line"' in pros and 'class="strip"' in pros and 'id="triage"' in pros
+
+
+def test_patient_search_works_without_scripts_by_going_to_the_list():
+    html = render_pages(749)['index.html']
+    assert 'action="shortages.html" method="get"' in html and 'name="q"' in html

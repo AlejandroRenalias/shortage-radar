@@ -36,11 +36,85 @@ test('initial language is selected without inline scripts', () => {
   }
 });
 
-test('the old address with ?q= on the home page is sent to the shortage list', () => {
+test('the home page no longer redirects ?q=: the patient search reads it itself', () => {
   const calls = [];
   const document = {documentElement: {lang:'en', dataset:{page:'index'}, classList: {add(){}}}};
   vm.runInNewContext(read('language.js'), {document, window:{addEventListener(){}}, navigator:{language:'en'}, localStorage:{getItem:() => null}, URLSearchParams, location:{search:'?q=Burana', replace:url => calls.push(url)}});
-  assert.deepEqual(calls, ['shortages.html?q=Burana']);
+  assert.deepEqual(calls, []);
+  assert.equal(vm.runInContext('queryFromUrl("?q=Burana")', context), 'Burana');
+});
+
+test('language follows the phone language list; a saved choice wins', () => {
+  const detect = langs => vm.runInContext(`detectLanguage(${JSON.stringify({languages: langs, language: langs[0]})})`, context);
+  assert.equal(detect(['fi-FI', 'en-US']), 'fi');
+  assert.equal(detect(['en-US', 'fi']), 'en');
+  assert.equal(detect(['sv-FI', 'fi']), 'fi');
+  assert.equal(detect(['de-DE', 'fr']), 'en');
+  assert.equal(vm.runInContext("detectLanguage({language: 'fi'})", context), 'fi');
+  for (const [langs, saved, expected] of [[['fi-FI'], null, 'fi'], [['en-GB', 'fi'], null, 'en'], [['de', 'fi'], null, 'fi'], [['fi'], 'en', 'en'], [['en-US'], 'fi', 'fi']]) {
+    const document = {documentElement: {lang:'en', dataset:{}, classList: {add(){}}}};
+    vm.runInNewContext(read('language.js'), {document, window:{addEventListener(){}}, navigator:{languages: langs, language: langs[0]}, localStorage:{getItem:() => saved}});
+    assert.equal(document.documentElement.lang, expected);
+  }
+});
+
+const names = [
+  {NordicArticleNumber:'036934', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', substance_fi:'ibuprofeeni', pack_label:{en:'50 g', fi:'50 g'}, UnavailableFrom:'2025-11-17', EndingDate:'2027-02-01'},
+  {NordicArticleNumber:'068937', name:'Galantamin Orion', strength:'16 mg', substances:'Galantamine', substance_fi:'galantamiini', pack_label:{en:'28 capsules', fi:'28 kapselia'}, UnavailableFrom:'2024-06-20', EndingDate:''}
+];
+const gone = [
+  {NordicArticleNumber:'124846', name:'Burana sitruuna', strength:'400 mg', substances:'Ibuprofen sodium dihydrate', substance_fi:'ibuprofeeni', pack_label:{en:'20 sachets', fi:'20 annospussia'}, last_seen:'2024-11-18', removed_on:'2026-09-15'},
+  {NordicArticleNumber:'560833', name:'Elvanse', strength:'40 mg', substances:'Lisdexamfetamine', substance_fi:'lisdeksamfetamiini', pack_label:{en:'30 capsules', fi:'30 kapselia'}, last_seen:'2026-09-15', removed_on:'2026-09-23'},
+  {NordicArticleNumber:'036934', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', last_seen:'2026-01-01', removed_on:'2026-02-01'}
+];
+function patientEnv() {
+  const [env, get] = pageEnv(['patient.js']);
+  vm.runInContext("snapshotDate='2026-11-25'", env);
+  return [env, get];
+}
+const answer = (env, q) => plain(vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)})`, env));
+
+test('the patient search forgives typos and takes brand and substance names, English or Finnish', () => {
+  const [env] = patientEnv();
+  const states = q => answer(env, q).map(i => i.state + ':' + (i.e ? i.e.name : ''));
+  assert.deepEqual(states('Burana'), ['shortage:Buranagel', 'notlisted:Burana sitruuna']);
+  assert.ok(states('buranna').includes('shortage:Buranagel'), 'one extra letter');
+  assert.ok(states('burnaa').some(s => s.includes('Burana')), 'swapped letters');
+  assert.deepEqual(states('galantamiini'), ['shortage:Galantamin Orion']);
+  assert.deepEqual(states('galantamiin'), ['shortage:Galantamin Orion']);
+  assert.deepEqual(states('galantamine'), ['shortage:Galantamin Orion']);
+  assert.deepEqual(states('galantamiinni'), ['shortage:Galantamin Orion']);
+  assert.deepEqual(states('ibuprofeeni').sort(), ['notlisted:Burana sitruuna', 'shortage:Buranagel']);
+  assert.deepEqual(states('xqzvt'), ['notfound:']);
+  assert.deepEqual(states('lantus'), ['notfound:']);
+  assert.equal(vm.runInContext("fuzzyMatches({name:'Burana'}, 'bur')", env), false);
+  assert.equal(vm.runInContext("editDistance('burana', 'buranna', 2)", env), 1);
+  assert.deepEqual(answer(env, '  '), []);
+});
+
+test('a package on the list now is never also shown as past, and a past package shows once', () => {
+  const [env] = patientEnv();
+  assert.deepEqual(answer(env, 'buranagel').map(i => i.state), ['shortage']);
+  assert.equal(answer(env, 'elvanse').length, 1);
+});
+
+test('cards have exactly three states with the agreed sentences, the data date and no stock or substitute claims', () => {
+  const [env] = patientEnv();
+  const card = (q, lang) => { setLanguage(env, lang); return vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)}).map(cardMarkup).join('')`, env); };
+  const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const short = text(card('galantamiini', 'en')), shortFi = text(card('galantamiini', 'fi'));
+  for (const piece of ['Fimea lists a shortage.', 'Galantamin Orion 16 mg', '28 capsules', 'Start date 20 Jun 2024', 'End date (estimate) Not known', 'Ask your pharmacy.', 'Source: Fimea, updated 25 Nov 2026']) assert.ok(short.includes(piece), piece);
+  for (const piece of ['Fimea listaa saatavuushäiriön.', 'Alkamispäivä 20.6.2024', 'Päättymispäivä (arvio)', 'Kysy apteekista.', 'Lähde: Fimea, päivitetty 25.11.2026']) assert.ok(shortFi.includes(piece), piece);
+  assert.ok(text(card('buranagel', 'en')).includes('End date (estimate) 1 Feb 2027'));
+  const past = text(card('elvanse', 'en')), pastFi = text(card('elvanse', 'fi'));
+  for (const piece of ['Not on Fimea’s list now.', 'Elvanse 40 mg', '30 capsules', 'Earlier on the list. Last seen on 15 Sep 2026.', 'This does not show if the pharmacy has it.', 'Source: Fimea, updated 25 Nov 2026']) assert.ok(past.includes(piece), piece);
+  for (const piece of ['Ei Fimean listalla nyt.', 'Tämä ei kerro, onko lääkettä apteekissa.', 'Lähde: Fimea, päivitetty 25.11.2026']) assert.ok(pastFi.includes(piece), piece);
+  const none = text(card('xqzvt', 'en')), noneFi = text(card('xqzvt', 'fi'));
+  assert.ok(none.includes('We could not find this name. Check the name on the box or ask your pharmacy. Source: Fimea, updated 25 Nov 2026'));
+  assert.ok(noneFi.includes('Emme löytäneet tätä nimeä. Katso nimi pakkauksesta tai kysy apteekista. Lähde: Fimea, päivitetty 25.11.2026'));
+  vm.runInContext("snapshotDate='2026-01-02'", env);
+  assert.ok(text(card('xqzvt', 'en')).includes('updated 2 Jan 2026'));
+  for (const html of [short, shortFi, past, pastFi, none, noneFi]) assert.doesNotMatch(html, /interchangeable|vaihtokelp|other package|toinen pakkaus|in stock|supply returned|stop taking|lopeta|change your medicine/i);
 });
 
 test('translations have matching keys and nonempty Finnish values', () => {
@@ -66,7 +140,7 @@ test('the built pages carry the same English text as the copy file, so a string 
     for (const [, pairs] of html.matchAll(/data-i18n-attr="([^"]+)"/g)) for (const pair of pairs.split(';')) assert.equal(typeof en[pair.split('=')[1]], 'string', `${file}: ${pair}`);
   }
   assert.ok(checked > 80);
-  assert.match(pages['index.html'], new RegExp(en.heroLine(749, 0).replace('.', '\\.')));
+  assert.match(pages['professionals.html'], new RegExp(en.heroLine(749, 0).replace('.', '\\.')));
   assert.equal(en.heroLine(714, 43), 'Fimea’s list: 714 packages in shortage now, 43 more expected to start within 2 weeks.');
   assert.equal(en.heroLine(1, 0), 'Fimea’s list: 1 package in shortage now.');
   assert.equal(copy_fi().heroLine(714, 43), 'Fimean listalla: 714 pakkauksella saatavuushäiriö nyt, 43 lisää alkamassa 2 viikon kuluessa.');
@@ -75,7 +149,7 @@ test('the built pages carry the same English text as the copy file, so a string 
   assert.match(copy_fi().impactCaveat1, /kaupan/);
   for (const lang of ['en', 'fi']) assert.doesNotMatch(vm.runInContext(`copy.${lang}`, context).heroAnswer(537), /pharmacy can usually|apteekki voi yleensä|not flagged short/);
   assert.equal(en.heroAnswer(537), 'Of all packages on Fimea’s list, including any that start after 2 weeks: for 537, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list.');
-  assert.match(pages['index.html'], /hero-answer[^>]*><\/p>|not on the shortage list/);
+  assert.match(pages['professionals.html'], /hero-answer[^>]*><\/p>|not on the shortage list/);
   assert.doesNotMatch(copy_fi().impactCaveat1, /markkinoilla/);
 });
 
@@ -316,11 +390,11 @@ test('the home page shows when Fimea’s file changed and when Shortage Radar ch
   env.renderChrome({snapshot_date:'2026-11-23', last_checked:null, generated_at:'2026-11-23T05:00:00Z', source_metadata:{}});
   assert.equal(get('hero-file').textContent, 'Fimean tiedosto muokattu ei tiedossa');
   assert.match(get('hero-checked').textContent, /^Saatavuustutka tarkisti: ei tiedossa\. Sivu koostettu: /);
-  assert.match(pages['index.html'], /id="hero-fresh"[^>]* hidden/);
-  assert.ok(pages['index.html'].indexOf('id="hero-line"') < pages['index.html'].indexOf('id="hero-fresh"') && pages['index.html'].indexOf('id="hero-fresh"') < pages['index.html'].indexOf('id="hero-label"'));
+  assert.match(pages['professionals.html'], /id="hero-fresh"[^>]* hidden/);
+  assert.ok(pages['professionals.html'].indexOf('id="hero-line"') < pages['professionals.html'].indexOf('id="hero-fresh"') && pages['professionals.html'].indexOf('id="hero-fresh"') < pages['professionals.html'].indexOf('id="hero-label"'));
 });
 
-const homeWith = (impact, soon = 42) => JSON.parse(execFileSync('python', ['-c', `import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(714, ${impact}, None, ${soon}, '2026-11-24')['index.html']))`], {encoding: 'utf8'}));
+const homeWith = (impact, soon = 42) => JSON.parse(execFileSync('python', ['-c', `import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(714, ${impact}, None, ${soon}, '2026-11-24')['professionals.html']))`], {encoding: 'utf8'}));
 
 test('the home status strip shows the headline counts and the interchangeable count, each linking to its list view', () => {
   const html = homeWith("{'substitute': 539, 'no_alternative': 61, 'nogroup': 117, 'vet': 39}");
@@ -573,7 +647,7 @@ test('the citation names the data date and the access date', () => {
 });
 
 test('the pages keep the head tags, the one search, the report link and the citation box', () => {
-  const home = pages['index.html'], list = pages['shortages.html'], trends = pages['trends.html'], about = pages['about.html'];
+  const home = pages['professionals.html'], list = pages['shortages.html'], trends = pages['trends.html'], about = pages['about.html'];
   for (const html of Object.values(pages)) assert.doesNotMatch(html, /hreflang/);
   assert.match(home, /<html lang="en"/);
   assert.match(home, /og:locale" content="en_GB"/);
@@ -690,7 +764,7 @@ test('the impact filter is kept in the address and narrows the list', () => {
 });
 
 test('home leads with the triage: words and numbers, each part one tap from the filtered list', () => {
-  const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'no_alternative':60,'nogroup':119,'vet':39})['index.html']))"], {encoding: 'utf8'}));
+  const html = JSON.parse(execFileSync('python', ['-c', "import json,sys;sys.path.insert(0,'scripts');from pages import render_pages;print(json.dumps(render_pages(749, {'substitute':531,'no_alternative':60,'nogroup':119,'vet':39})['professionals.html']))"], {encoding: 'utf8'}));
   assert.ok(html.indexOf('id="q"') < html.indexOf('id="triage"'), 'the search is on the first screen of a phone, ahead of the triage');
   for (const [level, n] of [['substitute', '531'], ['no_alternative', '60'], ['nogroup', '119']]) assert.match(html, new RegExp(`href="shortages\\.html\\?impact=${level}"[^>]*>.*?<span class="tri-num">${n}</span>`));
   assert.match(html, /for 531, the check found another package of the group that the register marks as on the market and not short, and that is not on the shortage list\./);
@@ -1125,7 +1199,7 @@ test('the safety wording: one label for an interchangeable package, no "usually"
   }
   assert.equal(copy.en.impactChip_substitute, 'Interchangeable package found in the data');
   assert.equal(copy.fi.impactChip_substitute, 'Vaihtokelpoinen pakkaus löytyy aineistosta');
-  const home = pages['index.html'], about = pages['about.html'], list = pages['shortages.html'];
+  const home = pages['professionals.html'], about = pages['about.html'], list = pages['shortages.html'];
   for (const html of [home, about, list]) assert.doesNotMatch(html, /Substitute usually|usually offer|usually change|pharmacist or doctor early|short now\./);
   assert.match(home, /data-i18n="impact_substitute">Interchangeable package found in the data</);
   assert.match(list, /data-i18n="impact_substitute">Interchangeable package found in the data</);
@@ -1144,7 +1218,7 @@ test('the safety wording: one label for an interchangeable package, no "usually"
   assert.match(copy.fi.whatUrgent, /ota heti yhteys apteekkiin tai lääkäriin\. Hätätilanteessa soita numeroon 112\.$/);
   assert.equal(copy.en.desc_index, 'Is your medicine on Fimea’s shortage list? See the reported start and the company’s estimated end.');
   assert.match(copy.fi.desc_index, /^Onko lääkkeelläsi saatavuushäiriö\?/);
-  assert.match(home, /name="description" content="Is your medicine on Fimea’s shortage list\?/);
+  assert.match(pages['index.html'], /name="description" content="Is your medicine on Fimea’s shortage list\?/);
   const [env] = pageEnv(['medicine.js']);
   vm.runInContext("language='en'", env);
   assert.match(env.whatMarkup({atc:'N02', NordicArticleNumber:'1'}, 'now'), /In an emergency, call 112\./);
@@ -1174,7 +1248,7 @@ test('the safety wording: one label for an interchangeable package, no "usually"
     assert.match(html, lang === 'en' ? /The other packages in its substitution group are short too/ : /Myös ryhmän muiden pakkausten saatavuudessa on häiriö/, lang);
   }
   vm.runInContext("language='en'", atro);
-  assert.match(pages['index.html'], /<h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data<\/h2>/);
+  assert.match(pages['professionals.html'], /<h2 id="triage-title" data-i18n="impactQuestion">Interchangeable packages in the data<\/h2>/);
 });
 
 test('the phone chip states only what the register shows, in both languages', () => {
@@ -1436,7 +1510,7 @@ for vnr, start in (('900014', '2026-12-08'), ('900015', '2026-12-09'), ('900040'
     current.append({'NordicArticleNumber': vnr, 'UnavailableFrom': start, 'Company': 'X', 'impact': 'substitute'})
 meta = {'archive_start': '2026-11-21', 'snapshot_date': '2026-11-24', 'source_metadata': {}, 'generated_at': 'x', 'last_checked': None}
 s = summary(current, meta)
-html = render_pages(s['short_now'], s['impact'], None, s['expected_soon'], s['snapshot_date'])['index.html']
+html = render_pages(s['short_now'], s['impact'], None, s['expected_soon'], s['snapshot_date'])['professionals.html']
 print(json.dumps({'rows': current, 'summary': {k: s[k] for k in ('total', 'short_now', 'expected_soon', 'expected_later', 'impact')}, 'html': html}))`;
   const out = JSON.parse(execFileSync('python', ['-c', script], {encoding: 'utf8', maxBuffer: 1 << 26}));
   const s = out.summary;

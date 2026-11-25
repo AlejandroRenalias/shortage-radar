@@ -16,6 +16,8 @@ ARCHIVE_NOTE = 'Daily archive since 21 Nov 2026, with earlier captures from the 
 PAGES = {
     'index': {'file': 'index.html', 'nav': 'navHome', 'icon': 'home', 'title': 'Shortage Radar: medicine shortages in Finland',
               'description': 'Is your medicine on Fimea’s shortage list? See the reported start and the company’s estimated end.', 'form_action': "'self'"},
+    'professionals': {'file': 'professionals.html', 'nav': None, 'icon': None, 'title': 'For professionals: shortage numbers in Finland | Shortage Radar',
+                      'description': 'The numbers behind Fimea’s shortage list: counts, status strip, impact levels, forms and the newest packages.', 'form_action': "'self'"},
     'shortages': {'file': 'shortages.html', 'nav': 'navShortages', 'icon': 'list', 'title': 'Medicine shortages in Finland | Shortage Radar',
                   'description': 'Search and filter every medicine package that Fimea lists as short in Finland, with start dates and the company’s estimated end dates.', 'form_action': "'none'"},
     'trends': {'file': 'trends.html', 'nav': 'navTrends', 'icon': 'chart', 'title': 'Shortage trends in Finland | Shortage Radar',
@@ -88,6 +90,7 @@ def footer(prefix):
             '<p><span data-i18n="footerAgency">Finnish Medicines Agency Fimea</span>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. <span data-i18n="footerTransform">Data was selected, joined and transformed.</span></p>'
             '<p data-i18n="footerEma">EU list of critical medicines: European Medicines Agency (EMA).</p>'
             f'<p class="foot-feedback"><a href="{prefix}about.html#feedback" data-i18n="footerFeedback">About and feedback</a></p>'
+            f'<p class="foot-feedback"><a href="{prefix}professionals.html" data-i18n="footerPros">For professionals</a></p>'
             '<p><span data-i18n="archiveCredit">Earlier captures:</span> <a href="https://web.archive.org/">Internet Archive (web.archive.org)</a></p>'
             '<p id="source-times" class="foot-times"></p><p class="foot-times" data-i18n="footerNote">Source times show when the files were last modified; the publisher does not provide release times.</p></div>'
             f'<div><h2 class="foot-title" data-i18n="footerPages">Pages</h2><ul>{pages}</ul></div>'
@@ -155,6 +158,29 @@ def _en_date(iso):
 def strip_href(query, as_of):
     """A tile's list link: the same data date as the tile's count, so the list shows exactly the packages counted."""
     return 'shortages.html?' + query + (f'&asof={as_of}' if as_of else '')
+
+
+def patient_home():
+    """The home page for everyone: one question, one search box and the answer cards (site/patient.js). Nothing else on the first screen."""
+    return f'''<section class="pt wrap">
+<div class="pt-first">
+<h1 id="pt-question" data-i18n="ptQuestion">Is your medicine on the shortage list?</h1>
+<form class="bigsearch pt-search" id="pt-form" action="shortages.html" method="get" role="search">
+<label class="sr-only" for="q" data-i18n="ptLabel">Medicine name</label>
+<div class="searchrow">{search_icon()}<input id="q" name="q" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" maxlength="100" aria-describedby="pt-hint"><button type="submit" class="btn" data-i18n="searchButton">Search</button></div>
+<p class="hint" id="pt-hint" data-i18n="ptHint">E.g. Burana, Panadol, Lantus</p>
+</form>
+<p class="state" id="loading" hidden data-i18n="ptLoading">Loading the list…</p>
+{load_error()}
+<div class="pt-results" id="pt-results" aria-live="polite"></div>
+<p class="pt-more" id="pt-more-row" hidden><button type="button" class="btn-quiet" id="pt-more" data-i18n="more">Show more</button></p>
+</div>
+<details class="eu-fold eu-notes pt-info"><summary data-i18n="ptInfoTitle">More information</summary>
+<p data-i18n="ptInfoStock">This is not a stock check. A listing does not tell whether the medicine is at your pharmacy.</p>
+<p><span data-i18n="ptInfoSource">Source: Fimea, the Finnish Medicines Agency, open data (CC BY 4.0). The company reports the dates.</span> <a href="https://fimea.fi/en/about_us/open-data" data-fimea="data" data-i18n="sourceLink">Source and licence</a></p>
+<p><a href="about.html" data-i18n="footerFeedback">About and feedback</a></p>
+<p><a href="professionals.html" data-i18n="footerPros">For professionals</a></p></details>
+</section>'''
 
 
 def home(count, impact=None, soon=0, as_of=''):
@@ -318,8 +344,8 @@ def render_pages(count, impact=None, critical=None, soon=0, as_of=''):
     for key, meta in PAGES.items():
         if meta.get('own'):
             continue
-        body = {'index': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
-        meta = dict(meta, script={'index': 'home.js'}.get(key, f'{key}.js'))
+        body = {'index': patient_home, 'professionals': lambda: home(count, impact, soon, as_of), 'shortages': shortages, 'trends': trends, 'about': about, 'medicine': medicine, 'medicines': medicines}[key]()
+        meta = dict(meta, script={'index': 'patient.js', 'professionals': 'home.js'}.get(key, f'{key}.js'))
         out[meta['file']] = document(key, body, meta=meta)
     prefix = '/shortage-radar/'
     nf = {'file': '404.html', 'title': 'Page not found | Shortage Radar', 'description': 'The page you requested could not be found.', 'form_action': "'none'", 'script': 'common.js'}

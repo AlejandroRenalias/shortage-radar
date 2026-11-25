@@ -33,7 +33,7 @@ def test_the_about_page_has_the_short_text_in_both_languages_and_the_feedback_li
     assert about.index('id="about-site"') < about.index('id="what-to-do"') and about.count('<details class="fold">') == 3
     assert f'href="{ISSUE}"' in about and 'id="feedback"' in about and 'mailto:' not in about
     js = (ROOT / 'site/i18n.js').read_text(encoding='utf-8')
-    keys = set(re.findall(r'data-i18n="((?:about(?:Short|Purpose|Indep|Not|Src|Shows|Lim)|feedback|footerFeedback)\w*)"', about + render_pages(749)['index.html']))
+    keys = set(re.findall(r'data-i18n="((?:about(?:Short|Purpose|Indep|Not|Src|Shows|Lim)|feedback|footerFeedback)\w*)"', about + render_pages(749)['professionals.html']))
     assert len(keys) >= 33
     for key in keys:
         assert len(re.findall(rf'^    {key}: ', js, re.M)) == 2, key   # once in English and once in Finnish

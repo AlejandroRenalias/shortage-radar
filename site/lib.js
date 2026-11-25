@@ -79,8 +79,47 @@ function searchMatches(e, query) {
   // A number matches whole numbers only, so "5" does not match "2.5" or "50"; a trailing point allows "2," while typing.
   return words.every(word=>NUMBER.test(word) ? new RegExp(String.raw`(?<![\d.])` + word.replace('.', String.raw`\.`) + (word.endsWith('.') ? '' : String.raw`(?!\d|\.\d)`)).test(text) : fiStem(word) || termsFor(word).some(term=>text.includes(term)));
 }
+// The phone's language setting: the first language of the list that the site has (Finnish or English); English when it has none. A saved choice wins over it.
+function detectLanguage(nav) {
+  const list = nav && Array.isArray(nav.languages) && nav.languages.length ? nav.languages : [nav && nav.language];
+  const found = list.map(l => String(l || '').toLowerCase().split('-')[0]).find(l => l === 'fi' || l === 'en');
+  return found || 'en';
+}
+// Typing mistakes: the edit distance (insert, delete, change, or swap of two neighbours) between two words, or max+1 when it is above max.
+function editDistance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2 = null, prev = Array.from({length: b.length + 1}, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) row[j] = Math.min(row[j], prev2[j - 2] + 1);
+    }
+    prev2 = prev; prev = row;
+  }
+  return prev[b.length];
+}
+// How many mistakes a typed word may have: none for short words, one for 5-7 letters, two from 8.
+const typoLimit = word => word.length >= 8 ? 2 : word.length >= 5 ? 1 : 0;
+// A tolerant match on names, for when the exact search finds nothing. Each typed word of 5 or more letters must be close to a word of the
+// package's name, English or Finnish substance, or to the start of such a word (while typing); shorter words and numbers must be in the text as they are.
+function fuzzyMatches(e, query) {
+  const words = foldNumbers(fold(query.trim())).split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 3) return false;
+  const text = [e.name, e.strength, e.substances, e.substance_fi].map(x => foldNumbers(fold(x))).join('\n');
+  const names = [...new Set(fold([e.name, e.substances, e.substance_fi].join(' ')).split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 4))];
+  let fuzzy = false;
+  for (const word of words) {
+    const limit = typoLimit(word);
+    if (!limit || /\d/.test(word)) { if (!text.includes(word)) return false; continue; }
+    if (text.includes(word)) continue;
+    if (!names.some(n => editDistance(word, n, limit) <= limit || [word.length - 1, word.length].some(len => n.length > len && editDistance(word, n.slice(0, len), limit) <= limit))) return false;
+    fuzzy = true;
+  }
+  return fuzzy;
+}
 let language = 'en';
-try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : ((navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en'); } catch (_) { language = (typeof navigator !== 'undefined' && (navigator.language || '').toLowerCase().startsWith('fi')) ? 'fi' : 'en'; }
+try { const saved = localStorage.getItem('language'); language = ['en','fi'].includes(saved) ? saved : detectLanguage(typeof navigator !== 'undefined' ? navigator : null); } catch (_) { language = detectLanguage(typeof navigator !== 'undefined' ? navigator : null); }
 const numberText = n => new Intl.NumberFormat(language === 'fi' ? 'fi-FI' : 'en-GB').format(n);
 // Ordered so specific forms are matched before general ingredients of their names.
 const forms = ["silmätipat", "korvatipat", "nenäsumute", "inhalaatio", "injektio", "infuusio", "emulsiovoide", "purutabletti", "resoribletti", "tabletti", "kapseli", "laastari", "oraaliliuos", "oraalisuspensio", "voide", "geeli", "shampoo", "peräpuikko", "peräruisk"];
