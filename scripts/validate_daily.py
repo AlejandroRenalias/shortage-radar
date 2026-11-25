@@ -140,8 +140,10 @@ def check_counts(rows, counts_rows):
     if counts_rows is None:
         return Result(9, 'counts agree with the ledger', 'FAIL', 'the day has no counts file (the counts step did not write it)')
     ledger_values = {r['group']: r['alternatives'] for r in rows if r['group']}
+    groups = [r['group'] for r in counts_rows if r.get('type') == 'group']
     counts_values = {r['group']: r['alternatives'] for r in counts_rows if r.get('type') == 'group'}
-    bad = [f'group {g}: ledger {ledger_values.get(g)}, counts {counts_values.get(g)}' for g in sorted(set(ledger_values) | set(counts_values)) if ledger_values.get(g, 'none') != counts_values.get(g, 'none')]
+    bad = [f'group {g} has {groups.count(g)} counts rows' for g in sorted(set(groups)) if groups.count(g) > 1]
+    bad += [f'group {g}: ledger {ledger_values.get(g)}, counts {counts_values.get(g)}' for g in sorted(set(ledger_values) | set(counts_values)) if ledger_values.get(g, 'none') != counts_values.get(g, 'none')]
     return verdict(9, 'counts agree with the ledger', bad, 'FAIL', f'{len(counts_values)} groups equal', 'different:')
 
 
@@ -208,13 +210,14 @@ def run(day, ledger_folder=LEDGER, register_path=ROOT / 'data/source/register.xm
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--day', default=None, help='ledger date to check (default: today in Helsinki)')
+    parser.add_argument('--day', default=None, help='ledger date to check (default: the newest ledger day)')
     parser.add_argument('--register', default=str(ROOT / 'data/source/register.xml'))
     parser.add_argument('--force-register', action='store_true', help='run checks 1 and 5 even when the register is not the one the rows were made with')
     args = parser.parse_args(argv)
-    day = args.day or helsinki_today()
+    # The newest ledger day is the day the ledger and counts steps of this run just finished, even when the clock passed midnight since.
+    day = args.day or max((r['date'] for r in read_rows(LEDGER, canonical=False)), default=helsinki_today())
     try:
-        results = run(day, register_path=Path(args.register), force_register=args.force_register)
+        results = run(day, ledger_folder=LEDGER, register_path=Path(args.register), snapshot_folder=ROOT / 'data/snapshots', force_register=args.force_register)
     except Exception as error:  # a validation that cannot run is reported, not hidden
         print(f'::error::Daily validation could not run: {error!r}')
         status = 'error'

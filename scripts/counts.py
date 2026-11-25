@@ -68,8 +68,9 @@ def holder_pass(path, wanted):
     return on_market_by_holder, {v: owners.get(ref, ('', False)) for v, ref in listed.items()}
 
 
-def rows_for(day, rows, register_path):
-    """The count rows of `day` for the shortage rows `rows`, from the register file `register_path`."""
+def rows_for(day, rows, register_path, ledger_rows):
+    """The count rows of `day` for the shortage rows `rows`, from the register file `register_path`. `alternatives` of a group is not calculated here:
+    it is the value in the recorded ledger rows `ledger_rows` of the day."""
     vnrs = {r['NordicArticleNumber'] for r in rows}
     members = {}
     products = register(register_path, vnrs, vnrs, members=members, day=day)
@@ -90,19 +91,20 @@ def rows_for(day, rows, register_path):
         out.append({'date': day, 'type': 'company', 'company': holder, 'listed': c['listed'], 'listed_human': c['listed'] - c['listed_vet'], 'listed_vet': c['listed_vet'],
                     'on_market': m['on_market'], 'on_market_human': m['on_market'] - m['on_market_vet'], 'on_market_vet': m['on_market_vet'], 'register_date': ran})
     shortage_vnrs = set(vnrs)
-    # `alternatives` of a group is the value the ledger writes for its listed packages: `other_packages_count` of build.register, the same number, taken
-    # from the lowest listed VNR of the group (the ledger check 2 requires all of them to be equal). There is no second calculation.
+    # `alternatives` of a group is read from the recorded ledger rows (all rows of a group hold the same value; ledger check 2). It is never calculated
+    # again: the ledger took it with the clock of its own run, and only the recorded value is the ledger's.
     group_alternatives = {}
-    for v in sorted(vnrs):
-        product = products.get(v)
-        key = group_key(product) if product else None
+    for r in sorted(ledger_rows, key=lambda r: r['vnr']):
+        key = group_key({'substitution_group': r['group']}) if r['group'] else None
         if key:
-            group_alternatives.setdefault(key, product['other_packages_count'])
+            group_alternatives.setdefault(key, r['alternatives'])
+    # The package of each listed VNR and its current VNR are not alternatives, as in the ledger (build.register subtracts both).
+    own = set(vnrs) | {p['current_vnr'] for p in products.values()}
     for group in sorted(group_alternatives):
         packs = members.get(group, [])
         listed_vnrs = {p['vnr'] for p in packs if ({p['vnr']} | p['old']) & shortage_vnrs}
-        # Holders: only records that are themselves available alternatives (a short duplicate of a VNR adds no holder).
-        holders = {holder_name(p['company']) for p in packs if is_available_alternative(p, shortage_vnrs, day, True)}
+        # Holders: only records that are themselves alternatives the ledger counted (a short duplicate, or the current package of a listed old VNR, adds no holder).
+        holders = {holder_name(p['company']) for p in packs if p['vnr'] not in own and is_available_alternative(p, shortage_vnrs, day, True)}
         out.append({'date': day, 'type': 'group', 'group': group, 'on_market': len({p['vnr'] for p in packs if on_market(p, day)}), 'listed': len(listed_vnrs),
                     'alternatives': group_alternatives[group], 'distinct_alternative_holders': len(holders), 'register_date': ran})
     return out
@@ -140,7 +142,7 @@ def check_file(path):
 
 
 def inputs_of_the_ledger(day, folder, register_path, snapshot_folder):
-    """The shortage rows of `day` as the ledger rows of that day saw them; CountsInputError when the register on disk or the shortage file are
+    """(The shortage rows of `day` as the ledger rows of that day saw them, those ledger rows); CountsInputError when the register on disk or the shortage file are
     not the ones named by the SHA-256 in those rows. Counts and ledger rows of one day always come from the same two files."""
     rows = [r for r in read_rows(folder, canonical=False) if r['date'] == day]
     if not rows:
@@ -151,7 +153,7 @@ def inputs_of_the_ledger(day, folder, register_path, snapshot_folder):
         raise CountsInputError(f'the register on disk is not the one the ledger rows of {day} were made with (register_date {dates}, SHA-256 {", ".join(sorted(register_hashes))})')
     for path in snapshot_candidates(day, snapshot_folder):
         if {sha256(path)} == shortage_hashes:
-            return read_snapshot(path)
+            return read_snapshot(path), rows
     raise CountsInputError(f'no shortage file has the SHA-256 {", ".join(sorted(shortage_hashes))} of the ledger rows of {day}')
 
 
@@ -177,8 +179,8 @@ def record(day=None, folder=LEDGER, register_path=ROOT / 'data/source/register.x
     target = target_folder / f'{day}.jsonl'
     if target.exists():
         return 0
-    rows = inputs_of_the_ledger(day, folder, register_path, snapshot_folder or ROOT / 'data/snapshots')
-    new = rows_for(day, rows, register_path)
+    rows, ledger_rows = inputs_of_the_ledger(day, folder, register_path, snapshot_folder or ROOT / 'data/snapshots')
+    new = rows_for(day, rows, register_path, ledger_rows)
     temporary = target_folder / f'{TEMP_PREFIX}{day}'
     with temporary.open('w', encoding='utf-8', newline='\n') as f:
         f.write(''.join(json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n' for r in new))

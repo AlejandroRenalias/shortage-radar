@@ -332,3 +332,30 @@ def test_counts_use_the_newest_ledger_day_not_the_clock(tmp_path, monkeypatch):
         raise AssertionError('no ledger, no counts')
     except counts.CountsInputError:
         pass
+
+
+def test_counts_take_alternatives_from_the_ledger_rows_even_when_the_ledger_clock_passed_midnight(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    # 012346 enters the market on 26 Nov. The ledger of 25 Nov joins the register after midnight (clock: 26 Nov), so it counts 012346; the counts of
+    # 25 Nov must not count again with the date 25 Nov.
+    register.write_text(REGISTER.replace('<VNR-numero>012346</VNR-numero><Kaupanolo><Kaupan>1</Kaupan>', '<VNR-numero>012346</VNR-numero><Kaupanolo><Kaupan>1</Kaupan><Kauppaantulopaiva>2026-11-26</Kauppaantulopaiva>', 1), encoding='utf-8')
+    monkeypatch.setattr(build, 'helsinki_today', lambda: '2026-11-26')
+    ledger.record('2026-11-25', folder, register)
+    assert counts.record(None, folder, register) > 0
+    ledger_values, counts_values = group_alternatives(folder, '2026-11-25')
+    assert ledger_values == counts_values and counts_values['0042'] == 2  # counting again with the date 25 Nov would give 1
+
+
+def test_a_current_package_of_a_listed_old_vnr_adds_no_holder(tmp_path, monkeypatch):
+    register, folder = setup(tmp_path, monkeypatch)
+    # The reviewer's fixture with the available duplicate of 012345 assigned to another holder.
+    delta = ('  <Pakkaus Laakevalmiste-ref="p5"><VNR-numero>012345</VNR-numero><Kaupanolo><Kaupan>1</Kaupan></Kaupanolo><SaatavuushairioTiedot><Saatavuushairio>0</Saatavuushairio></SaatavuushairioTiedot></Pakkaus>\n'
+             '  <Laakevalmiste id="p5"><Kauppanimi>Five</Kauppanimi><ATC-koodi id="N02" value="x"/><Myyntilupa><Haltija>Delta Oy</Haltija></Myyntilupa><Substituutioryhma id="0042" value="0042"/></Laakevalmiste>\n')
+    register.write_text(old_vnr_register(delta), encoding='utf-8')
+    (tmp_path / 'data/snapshots/2026-11-22.txt').write_text(HEADER + '099998;K;2026-11-01;2026-12-01;2026-10-01;2026-11-01;Company\n', encoding='utf-8')
+    day = build.helsinki_today()
+    rec(day, folder, register)
+    row = next(r for r in read(folder, day) if r['type'] == 'group' and r['group'] == '0042')
+    assert (row['alternatives'], row['distinct_alternative_holders']) == (2, 2)
+    ledger_values, counts_values = group_alternatives(folder, day)
+    assert ledger_values == counts_values

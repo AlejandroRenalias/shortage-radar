@@ -246,3 +246,21 @@ def test_run_fails_check_9_when_the_counts_file_is_missing_or_different(tmp_path
     assert results(register, folder, snaps)[9].status == 'FAIL'
     path.write_text(text, encoding='utf-8')
     assert results(register, folder, snaps)[9].status == 'PASS'
+
+
+def test_check_9_fails_on_two_counts_rows_for_one_group():
+    rows = [row('1', group='0042', alternatives=2)]
+    two = [{'type': 'group', 'group': '0042', 'alternatives': 3}, {'type': 'group', 'group': '0042', 'alternatives': 2}]
+    failing = v.check_counts(rows, two)
+    assert status(failing) == 'FAIL' and 'group 0042 has 2 counts rows' in failing.message
+
+
+def test_validation_after_midnight_checks_the_newest_ledger_day(tmp_path, monkeypatch, capsys):
+    register, folder, snaps = setup(tmp_path, monkeypatch)  # ledger and counts finished for DAY (23 Nov)
+    monkeypatch.setattr(v, 'LEDGER', folder)
+    monkeypatch.setattr(v, 'ROOT', tmp_path)
+    monkeypatch.setattr(v, 'helsinki_today', lambda: '2026-11-24')  # the clock has passed midnight since the two steps
+    assert v.main(['--register', str(register)]) == 0
+    assert f'Daily validation for {DAY}: 0 failed' in capsys.readouterr().out
+    # An explicit day with no rows still fails.
+    assert v.main(['--day', '2026-11-24', '--register', str(register)]) == 1
