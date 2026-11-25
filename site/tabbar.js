@@ -53,6 +53,9 @@
   var stored = null;
   try { stored = JSON.parse(raw); } catch (e) { return; }
   if (!stored || typeof stored.path !== 'string' || stored.path !== location.pathname) return;
+  // A tab-bar tap sends this site as referrer (the links have referrerpolicy="same-origin"). A direct visit has none,
+  // so it never uses a saved tap that did not arrive.
+  try { if (!document.referrer || new URL(document.referrer).origin !== location.origin) return; } catch (e) { return; }
   var nt = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] || {}).type;
   var steps = slideSteps(stored, stored.to, nt, Date.now(), false, 5);
   if (!steps) return;

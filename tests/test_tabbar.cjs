@@ -33,3 +33,7 @@ test('the saved tap carries the target path and clears itself if the page stays'
   assert.match(src, /setTimeout\(function \(\) \{ try \{ store\.removeItem\(KEY\)/);
   assert.doesNotMatch(src, /startViewTransition|pagereveal/);
 });
+test('a direct visit (no same-origin referrer) never uses a saved tap', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../site/tabbar.js'), 'utf8');
+  assert.match(src, /!document\.referrer \|\| new URL\(document\.referrer\)\.origin !== location\.origin/);
+});
