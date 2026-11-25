@@ -66,11 +66,11 @@ img,svg{max-width:100%}
 .ic-b .k{fill:var(--cut,var(--surface));stroke:none}
 @media (max-width:389px){.nav a{font-size:.68rem}}
 @media (max-width:339px){.nav a{padding-inline:0;font-size:.65rem}}
-/* Tab motion: the green mark slides from the old tab to the new one. tabbar.js sets .sr-slide and --sr-steps on <html> before the first paint. Only the real mark moves, so the bar stays tappable the whole time. */
+/* Tab motion: on every page load the green mark of the active tab fades and grows in once. CSS only, no knowledge of the previous page. */
 @media (max-width:719px) and (prefers-reduced-motion:no-preference){
-  .sr-slide .nav a[aria-current="page"] .nav-mark{animation:tab-slide .25s cubic-bezier(.3,0,.2,1) both}
+  .nav a[aria-current="page"] .nav-mark{animation:tab-mark .2s ease-out both}
 }
-@keyframes tab-slide{from{transform:translateX(calc(var(--sr-steps,0)*(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px))/5))}to{transform:none}}
+@keyframes tab-mark{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 @keyframes tab-fade{from{opacity:.4}to{opacity:1}}
 .lang{display:inline-flex;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px}
 .lang button{font:inherit;font-size:.9375rem;font-weight:400;min-height:40px;min-width:44px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}

@@ -34,7 +34,7 @@ def test_navigation_marks_the_current_page_and_lists_five_pages():
             continue
         nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
         assert nav.count('<a ') == 5
-        current = re.findall(r'<a href="([^"]+)" referrerpolicy="same-origin" aria-current="page"', nav)
+        current = re.findall(r'<a href="([^"]+)" aria-current="page"', nav)
         assert current == ([meta['file']] if meta['nav'] else [])
     assert 'href="about.html#what-to-do"' in out['index.html']
 
@@ -164,7 +164,7 @@ def test_every_face_of_the_site_font_family_declares_the_same_weight_range():
 def test_tab_bar_markup_has_five_solid_icon_tabs_and_one_current_page():
     out = render_pages(749)
     nav = between(out['shortages.html'], '<nav class="nav"', '</nav>')
-    tabs = re.findall(r'<a href="([^"]+)" referrerpolicy="same-origin"( aria-current="page")?>(?:<i class="nav-mark" aria-hidden="true"></i>)?(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
+    tabs = re.findall(r'<a href="([^"]+)"( aria-current="page")?>(?:<i class="nav-mark" aria-hidden="true"></i>)?(<svg.*?</svg>)<span data-i18n="(\w+)">([^<]+)</span></a>', nav)
     assert [t[0] for t in tabs] == ['index.html', 'shortages.html', 'trends.html', 'critical.html', 'about.html']
     assert [t[3] for t in tabs] == ['navHome', 'navShortages', 'navTrends', 'navEuList', 'navAbout']
     assert [t[1] for t in tabs] == ['', ' aria-current="page"', '', '', '']
@@ -202,26 +202,24 @@ def test_tab_mark_is_one_element_in_the_current_tab_only():
         nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
         assert nav.count('class="nav-mark"') == 1
         assert re.search(r'aria-current="page"><i class="nav-mark" aria-hidden="true"></i><svg', nav)
-        # The script sits in the head, so it reads the saved tap before the first paint.
-        assert between(out[meta['file']], '<head>', '</head>').count('<script src="tabbar.js"></script>') == 1
-        assert out[meta['file']].count('<script src="tabbar.js">') == 1
 
-def test_tab_mark_slides_by_css_only_below_720px_without_reduced_motion_and_never_covers_the_bar():
+def test_tab_mark_fades_in_by_css_only_below_720px_and_never_takes_pointer_input():
     css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
     block = re.search(r'@media \(max-width:719px\) and \(prefers-reduced-motion:no-preference\)\{(.*?)\n\}', css, re.S).group(1)
-    assert '.sr-slide .nav a[aria-current="page"] .nav-mark{animation:tab-slide .25s' in block
-    assert 'translateX(calc(var(--sr-steps' in css
-    # No native page transition: its layer would sit over the bar and drop taps.
-    assert 'view-transition' not in css
+    # Entrance is inside the no-preference media query, so reduced motion gets none.
+    assert '.nav a[aria-current="page"] .nav-mark{animation:tab-mark .2s ease-out both}' in block
+    assert re.search(r'@keyframes tab-mark\{from\{opacity:0;transform:scale\(\.6\)\}to\{opacity:1;transform:none\}\}', css)
+    assert css.count('tab-mark') == 2 and 'animation:tab-mark' not in css.replace(block, '')
+    assert re.search(r'\.nav-mark\{pointer-events:none;', css)
     assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)
 
 
-def test_tab_mark_never_takes_pointer_input_and_tab_links_send_a_same_origin_referrer():
+def test_no_page_script_or_stored_state_for_the_tab_mark():
     css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
-    assert re.search(r'\.nav-mark\{pointer-events:none;', css)
+    assert 'view-transition' not in css and '--sr-steps' not in css and 'sr-slide' not in css
+    assert not (ROOT / 'site' / 'tabbar.js').exists()
     out = render_pages(749)
-    for key, meta in PAGES.items():
-        if meta.get('own') or not meta['nav']:
+    for meta in PAGES.values():
+        if meta['file'] not in out:
             continue
-        nav = between(out[meta['file']], '<nav class="nav"', '</nav>')
-        assert nav.count('referrerpolicy="same-origin"') == 5
+        assert 'tabbar.js' not in out[meta['file']] and 'referrerpolicy' not in out[meta['file']]

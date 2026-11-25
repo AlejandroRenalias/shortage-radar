@@ -49,7 +49,7 @@ def head(page, prefix, meta):
     url = SITE_URL + ('' if page == 'index' else meta['file'])
     csp = f"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action {meta['form_action']}"
     title, desc = escape(meta['title'], quote=True), escape(meta['description'], quote=True)
-    scripts = f'<script src="{prefix}tabbar.js"></script><script src="{prefix}language.js"></script><script src="{prefix}i18n.js" defer></script><script src="{prefix}lib.js" defer></script>'
+    scripts = f'<script src="{prefix}language.js"></script><script src="{prefix}i18n.js" defer></script><script src="{prefix}lib.js" defer></script>'
     if meta.get('script'):
         scripts += f'<script src="{prefix}{meta["script"]}" defer></script>'
     canonical = f'<link rel="canonical" href="{url}">' if page != '404' else ''
@@ -72,7 +72,7 @@ def header(current, prefix):
             continue
         mark = ' aria-current="page"' if key == current else ''
         bar = '<i class="nav-mark" aria-hidden="true"></i>' if key == current else ''
-        links.append(f'<a href="{prefix}{meta["file"]}" referrerpolicy="same-origin"{mark}>{bar}{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
+        links.append(f'<a href="{prefix}{meta["file"]}"{mark}>{bar}{icon(meta["icon"])}<span data-i18n="{meta["nav"]}">{NAV_LABELS[meta["nav"]]}</span></a>')
     return ('<header class="site-header"><div class="wrap header-bar">'
             f'<a class="brand" href="{prefix}index.html">{MARK}<span data-i18n="brand">Shortage Radar</span></a>'
             f'<nav class="nav" aria-label="Main menu" data-i18n-attr="aria-label=navLabel">{"".join(links)}</nav>'
