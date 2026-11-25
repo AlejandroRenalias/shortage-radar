@@ -67,17 +67,19 @@ const gone = [
   {NordicArticleNumber:'560833', name:'Elvanse', strength:'40 mg', substances:'Lisdexamfetamine', substance_fi:'lisdeksamfetamiini', pack_label:{en:'30 capsules', fi:'30 kapselia'}, last_seen:'2026-09-15', removed_on:'2026-09-23'},
   {NordicArticleNumber:'036934', name:'Buranagel', strength:'50 mg/g', substances:'Ibuprofen', last_seen:'2026-01-01', removed_on:'2026-02-01'}
 ];
+// The name index of the register: names that were never on the list, and one name that is also on it.
+const index = {names: ['Burana', 'Burana Comp', 'Buranagel', 'Lantus', 'Panadol', 'Panadol Forte', 'Äkkiä'], substances: ['Ibuprofen', 'Insulin glargine', 'Paracetamol', 'Galantamine', 'parasetamoli']};
 function patientEnv() {
   const [env, get] = pageEnv(['patient.js']);
   vm.runInContext("snapshotDate='2026-11-25'", env);
   return [env, get];
 }
-const answer = (env, q) => plain(vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)})`, env));
+const answer = (env, q, idx = index) => plain(vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)}, ${JSON.stringify(idx)})`, env));
 
 test('the patient search forgives typos and takes brand and substance names, English or Finnish', () => {
   const [env] = patientEnv();
   const states = q => answer(env, q).map(i => i.state + ':' + (i.e ? i.e.name : ''));
-  assert.deepEqual(states('Burana'), ['shortage:Buranagel', 'notlisted:Burana sitruuna']);
+  assert.deepEqual(states('Burana'), ['shortage:Buranagel', 'notlisted:Burana sitruuna', 'registered:Burana', 'registered:Burana Comp']);
   assert.ok(states('buranna').includes('shortage:Buranagel'), 'one extra letter');
   assert.ok(states('burnaa').some(s => s.includes('Burana')), 'swapped letters');
   assert.deepEqual(states('galantamiini'), ['shortage:Galantamin Orion']);
@@ -86,10 +88,34 @@ test('the patient search forgives typos and takes brand and substance names, Eng
   assert.deepEqual(states('galantamiinni'), ['shortage:Galantamin Orion']);
   assert.deepEqual(states('ibuprofeeni').sort(), ['notlisted:Burana sitruuna', 'shortage:Buranagel']);
   assert.deepEqual(states('xqzvt'), ['notfound:']);
-  assert.deepEqual(states('lantus'), ['notfound:']);
   assert.equal(vm.runInContext("fuzzyMatches({name:'Burana'}, 'bur')", env), false);
   assert.equal(vm.runInContext("editDistance('burana', 'buranna', 2)", env), 1);
   assert.deepEqual(answer(env, '  '), []);
+});
+
+test('a name that is in the register but never was short gets the "not on the list" answer, and only a name outside the register is "not found"', () => {
+  const [env] = patientEnv();
+  const states = (q, idx) => answer(env, q, idx).map(i => i.state + ':' + (i.e ? i.e.name : ''));
+  assert.deepEqual(states('Panadol'), ['registered:Panadol', 'registered:Panadol Forte']);
+  assert.deepEqual(states('lantus'), ['registered:Lantus']);
+  assert.deepEqual(states('LANTUS'), ['registered:Lantus'], 'case');
+  assert.deepEqual(states('akkia'), ['registered:Äkkiä'], 'accents');
+  assert.deepEqual(states('lantas'), ['registered:Lantus'], 'a typing mistake finds a register name');
+  assert.deepEqual(states('panadool'), ['registered:Panadol', 'registered:Panadol Forte']);
+  assert.deepEqual(states('Paracetamol'), ['registered:Paracetamol'], 'a substance of the register');
+  assert.deepEqual(states('parasetamoli'), ['registered:Paracetamol', 'registered:parasetamoli']);
+  assert.deepEqual(states('Nonexistium'), ['notfound:']);
+  assert.deepEqual(states('Lantus', {names: [], substances: []}), ['notfound:'], 'an empty index finds nothing');
+  // A name that has a card on the lists is not shown a second time as a register name.
+  assert.deepEqual(states('buranagel'), ['shortage:Buranagel']);
+  // A substance that has packages on the lists is never shown as "not on the list".
+  assert.deepEqual(states('ibuprofen').filter(s => s.startsWith('registered')), []);
+  assert.ok(states('ibuprofen').some(s => s.startsWith('shortage')));
+  assert.deepEqual(states('galantamine'), ['shortage:Galantamin Orion']);
+  // The index is compact and the search over the whole of it is fast.
+  const big = {names: Array.from({length: 14000}, (_, i) => 'Name' + i + ' Pharma'), substances: Array.from({length: 6000}, (_, i) => 'Substance' + i)};
+  const t0 = Date.now(); answer(env, 'Lantus', big); answer(env, 'nonexistium', big);
+  assert.ok(Date.now() - t0 < 1500, 'two searches over 20 000 names took ' + (Date.now() - t0) + ' ms');
 });
 
 test('a package on the list now is never also shown as past, and a past package shows once', () => {
@@ -100,7 +126,7 @@ test('a package on the list now is never also shown as past, and a past package 
 
 test('cards have exactly three states with the agreed sentences, the data date and no stock or substitute claims', () => {
   const [env] = patientEnv();
-  const card = (q, lang) => { setLanguage(env, lang); return vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)}).map(cardMarkup).join('')`, env); };
+  const card = (q, lang) => { setLanguage(env, lang); return vm.runInContext(`answerFor(${JSON.stringify(q)}, ${JSON.stringify(names)}, ${JSON.stringify(gone)}, ${JSON.stringify(index)}).map(cardMarkup).join('')`, env); };
   const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const short = text(card('galantamiini', 'en')), shortFi = text(card('galantamiini', 'fi'));
   for (const piece of ['Fimea lists a shortage.', 'Galantamin Orion 16 mg', '28 capsules', 'Start date 20 Jun 2024', 'End date (estimate) Not known', 'Ask your pharmacy.', 'Source: Fimea, updated 25 Nov 2026']) assert.ok(short.includes(piece), piece);
@@ -110,11 +136,16 @@ test('cards have exactly three states with the agreed sentences, the data date a
   for (const piece of ['Not on Fimea’s list now.', 'Elvanse 40 mg', '30 capsules', 'Earlier on the list. Last seen on 15 Sep 2026.', 'This does not show if the pharmacy has it.', 'Source: Fimea, updated 25 Nov 2026']) assert.ok(past.includes(piece), piece);
   for (const piece of ['Ei Fimean listalla nyt.', 'Tämä ei kerro, onko lääkettä apteekissa.', 'Lähde: Fimea, päivitetty 25.11.2026']) assert.ok(pastFi.includes(piece), piece);
   const none = text(card('xqzvt', 'en')), noneFi = text(card('xqzvt', 'fi'));
-  assert.ok(none.includes('We could not find this name. Check the name on the box or ask your pharmacy. Source: Fimea, updated 25 Nov 2026'));
-  assert.ok(noneFi.includes('Emme löytäneet tätä nimeä. Katso nimi pakkauksesta tai kysy apteekista. Lähde: Fimea, päivitetty 25.11.2026'));
+  assert.ok(none.includes('This name is not in Fimea’s medicine register. This does not show if the medicine is available. Check the name on the box or ask your pharmacy. Source: Fimea, updated 25 Nov 2026'));
+  assert.ok(noneFi.includes('Tätä nimeä ei ole Fimean lääkerekisterissä. Tämä ei kerro, onko lääke saatavilla. Katso nimi pakkauksesta tai kysy apteekista. Lähde: Fimea, päivitetty 25.11.2026'));
+  // A name that is in the register but has no shortage: the "not on the list" card, never "not found" or "unavailable".
+  const never = text(card('panadol', 'en')), neverFi = text(card('panadol', 'fi'));
+  assert.ok(never.includes('Not on Fimea’s list now. Panadol This does not show if the pharmacy has it. Source: Fimea, updated 25 Nov 2026'));
+  assert.ok(neverFi.includes('Ei Fimean listalla nyt. Panadol Tämä ei kerro, onko lääkettä apteekissa. Lähde: Fimea, päivitetty 25.11.2026'));
+  for (const html of [never, neverFi]) assert.doesNotMatch(html, /not in Fimea|ei ole Fimean|Earlier on the list|Oli aiemmin/);
   vm.runInContext("snapshotDate='2026-01-02'", env);
   assert.ok(text(card('xqzvt', 'en')).includes('updated 2 Jan 2026'));
-  for (const html of [short, shortFi, past, pastFi, none, noneFi]) assert.doesNotMatch(html, /interchangeable|vaihtokelp|other package|toinen pakkaus|in stock|supply returned|stop taking|lopeta|change your medicine/i);
+  for (const html of [short, shortFi, past, pastFi, none, noneFi, never, neverFi]) assert.doesNotMatch(html, /interchangeable|vaihtokelp|other package|toinen pakkaus|in stock|supply returned|stop taking|lopeta|change your medicine/i);
 });
 
 test('translations have matching keys and nonempty Finnish values', () => {

@@ -20,6 +20,7 @@ site/p/
 site/summary.json
 site/source.json
 site/removed.json
+site/names.json
 data/source/*.xlsx
 data/source/*.csv
 data/source/*.xml
