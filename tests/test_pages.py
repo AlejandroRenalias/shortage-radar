@@ -206,17 +206,11 @@ def test_tab_mark_is_one_element_in_the_current_tab_only():
         assert between(out[meta['file']], '<head>', '</head>').count('<script src="tabbar.js"></script>') == 1
         assert out[meta['file']].count('<script src="tabbar.js">') == 1
 
-def test_tab_mark_slides_with_view_transitions_and_only_below_720px_without_reduced_motion():
+def test_tab_mark_slides_by_css_only_below_720px_without_reduced_motion_and_never_covers_the_bar():
     css = (ROOT / 'site' / 'style.css').read_text(encoding='utf-8')
     block = re.search(r'@media \(max-width:719px\) and \(prefers-reduced-motion:no-preference\)\{(.*?)\n\}', css, re.S).group(1)
-    assert '@view-transition{navigation:auto}' in block
-    assert '.nav{view-transition-name:tabbar}' in block and '.nav-mark{view-transition-name:tabmark}' in block
-    # The page and the bar stay still: no fade, no slide, old picture hidden.
-    assert '::view-transition-group(root),::view-transition-group(tabbar){animation:none}' in block
-    assert '::view-transition-old(root),::view-transition-old(tabbar){display:none}' in block
-    assert '::view-transition-new(root),::view-transition-new(tabbar){animation:none' in block
-    assert re.search(r'::view-transition-group\(tabmark\)\{animation-duration:\.25s', block)
-    # The animation layer never catches taps, so the bar stays usable during the slide.
-    assert re.search(r'::view-transition,::view-transition-group\(\*\),[^{]*\{pointer-events:none\}', block)
-    assert css.count('@view-transition') == 1
+    assert '.sr-slide .nav a[aria-current="page"] .nav-mark{animation:tab-slide .25s' in block
+    assert 'translateX(calc(var(--sr-steps' in css
+    # No native page transition: its layer would sit over the bar and drop taps.
+    assert 'view-transition' not in css
     assert re.search(r'@media \(min-width:720px\)\{[^@]*\.nav-mark\{display:none\}', css, re.S)

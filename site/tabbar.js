@@ -1,9 +1,11 @@
 // Tab bar motion. The green mark slides from the old tab to the new one.
-// Browsers with cross-document View Transitions do it in CSS (see style.css).
-// Other browsers use the fallback here: a tap stores the old tab in sessionStorage and the next page animates the mark (transform only).
+// A tap stores the old and new tab in sessionStorage. The next page reads it in the head, before the first paint,
+// and sets --sr-steps on <html>. The slide itself is a CSS animation on the real mark (see style.css), so the bar
+// is never covered by a transition layer and every tap during the slide navigates.
 (function () {
   var KEY = 'sr-tab-from';
-  var MAX_AGE = 5000;
+  var MAX_AGE = 5000;   // a saved tap older than this is ignored
+  var CLEAR_AFTER = 1500; // the tapping page drops its own saved tap if it is still alive after this: the navigation did not happen
 
   // Pure: returns the tab-width steps to start from (old index minus new index), or 0 for no slide.
   // The stored tap must name this page as its target, so a tap that never arrived cannot colour a later visit.
@@ -21,6 +23,7 @@
   var store = null;
   try { store = window.sessionStorage; } catch (e) { store = null; }
   if (!store) return;
+  var root = document.documentElement;
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function tabs() {
@@ -32,36 +35,32 @@
   var raw = null;
   try { raw = store.getItem(KEY); store.removeItem(KEY); } catch (e) { return; }
 
-  // Tap: remember the tab we leave and the tab we go to. Plain left clicks only. One listener on the document, so it works from the head.
+  // Tap: remember the tab we leave, the tab we go to and its path. Plain left clicks only.
   document.addEventListener('click', function (ev) {
     if (ev.defaultPrevented || ev.button || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
     var a = ev.target.closest && ev.target.closest('nav.nav a');
     if (!a) return;
     var t = tabs(), i = t.links.indexOf(a);
     if (t.current < 0 || i < 0 || i === t.current) return;
-    try { store.setItem(KEY, JSON.stringify({ from: t.current, to: i, at: Date.now() })); } catch (e) { /* storage full or blocked: no motion */ }
+    try {
+      store.setItem(KEY, JSON.stringify({ from: t.current, to: i, path: a.pathname, at: Date.now() }));
+      // If this page is still here a moment later, the tap never became a navigation: forget it.
+      setTimeout(function () { try { store.removeItem(KEY); } catch (e) { /* ignore */ } }, CLEAR_AFTER);
+    } catch (e) { /* storage full or blocked: no motion */ }
   });
 
-  var done = false;
-  function slide() {
-    if (done) return;
-    var t = tabs();
-    if (!t.links.length) return;
-    done = true;
-    var stored = null;
-    try { stored = JSON.parse(raw); } catch (e) { return; }
-    var nt = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] || {}).type;
-    var steps = slideSteps(stored, t.current, nt, Date.now(), reduced, t.links.length);
-    var mark = t.current >= 0 && t.links[t.current].querySelector('.nav-mark');
-    if (!steps || !mark || !mark.animate || getComputedStyle(mark).display === 'none') return;
-    var dx = steps * t.links[t.current].getBoundingClientRect().width;
-    mark.animate([{ transform: 'translateX(' + dx + 'px)' }, { transform: 'translateX(0)' }], { duration: 250, easing: 'cubic-bezier(.3,0,.2,1)' });
-  }
-
   if (reduced || !raw) return;
-  // Ask the real navigation: if the browser runs a view transition, the CSS does the slide. Otherwise slide here.
-  // This script sits in the head, so it hears pagereveal before the first paint and the mark never shows in the wrong place.
-  var revealed = false;
-  if ('onpagereveal' in window) window.addEventListener('pagereveal', function (ev) { if (ev.viewTransition) { done = true; return; } revealed = true; slide(); });
-  document.addEventListener('DOMContentLoaded', function () { if (!('onpagereveal' in window) || revealed) slide(); });
+  var stored = null;
+  try { stored = JSON.parse(raw); } catch (e) { return; }
+  if (!stored || typeof stored.path !== 'string' || stored.path !== location.pathname) return;
+  var nt = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] || {}).type;
+  var steps = slideSteps(stored, stored.to, nt, Date.now(), false, 5);
+  if (!steps) return;
+  // Set before the first paint, so the mark starts at the old tab and never shows in the wrong place.
+  root.style.setProperty('--sr-steps', String(steps));
+  root.classList.add('sr-slide');
+  // Once the bar exists, check that this page really is the target tab. If not, drop the slide.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (tabs().current !== stored.to) root.classList.remove('sr-slide');
+  });
 })();

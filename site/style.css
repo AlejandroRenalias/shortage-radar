@@ -66,20 +66,11 @@ img,svg{max-width:100%}
 .ic-b .k{fill:var(--cut,var(--surface));stroke:none}
 @media (max-width:389px){.nav a{font-size:.68rem}}
 @media (max-width:339px){.nav a{padding-inline:0;font-size:.65rem}}
-/* Tab motion: the green mark slides between pages (cross-document View Transitions). The bar and the page stay still; only the mark moves. */
+/* Tab motion: the green mark slides from the old tab to the new one. tabbar.js sets .sr-slide and --sr-steps on <html> before the first paint. Only the real mark moves, so the bar stays tappable the whole time. */
 @media (max-width:719px) and (prefers-reduced-motion:no-preference){
-  @view-transition{navigation:auto}
-  .nav{view-transition-name:tabbar}
-  .nav-mark{view-transition-name:tabmark}
-  /* The animation layer must not catch taps: the real bar underneath stays usable during the slide. */
-  ::view-transition,::view-transition-group(*),::view-transition-image-pair(*),::view-transition-old(*),::view-transition-new(*){pointer-events:none}
-  ::view-transition-group(root),::view-transition-group(tabbar){animation:none}
-  ::view-transition-old(root),::view-transition-old(tabbar){display:none}
-  ::view-transition-new(root),::view-transition-new(tabbar){animation:none;mix-blend-mode:normal}
-  ::view-transition-group(tabmark){animation-duration:.25s;animation-timing-function:cubic-bezier(.3,0,.2,1)}
-  ::view-transition-old(tabmark),::view-transition-new(tabmark){animation:none;mix-blend-mode:normal;height:100%}
-  ::view-transition-old(tabmark){display:none}
+  .sr-slide .nav a[aria-current="page"] .nav-mark{animation:tab-slide .25s cubic-bezier(.3,0,.2,1) both}
 }
+@keyframes tab-slide{from{transform:translateX(calc(var(--sr-steps,0)*(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px))/5))}to{transform:none}}
 @keyframes tab-fade{from{opacity:.4}to{opacity:1}}
 .lang{display:inline-flex;border:1.5px solid var(--line-strong);border-radius:999px;padding:2px}
 .lang button{font:inherit;font-size:.9375rem;font-weight:400;min-height:40px;min-width:44px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}

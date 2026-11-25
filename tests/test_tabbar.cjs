@@ -27,3 +27,9 @@ test('a tap that never arrived cannot colour a later visit to another tab', () =
   assert.equal(slideSteps({from: 1, to: 3, at: NOW - 300}, 4, 'navigate', NOW, false, 5), 0);
   assert.equal(slideSteps({from: 1, at: NOW - 300}, 3, 'navigate', NOW, false, 5), 0);
 });
+test('the saved tap carries the target path and clears itself if the page stays', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../site/tabbar.js'), 'utf8');
+  assert.match(src, /path: a\.pathname/);
+  assert.match(src, /setTimeout\(function \(\) \{ try \{ store\.removeItem\(KEY\)/);
+  assert.doesNotMatch(src, /startViewTransition|pagereveal/);
+});
