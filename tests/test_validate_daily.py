@@ -120,7 +120,9 @@ def results(register, folder, snaps, **kw):
 def test_run_passes_on_a_ledger_written_by_the_ledger_script(tmp_path, monkeypatch):
     register, folder, snaps = setup(tmp_path, monkeypatch)
     found = results(register, folder, snaps)
-    assert {n: r.status for n, r in found.items()} == dict.fromkeys(range(1, 10), 'PASS')
+    # The fixture register has no holder, so the counts list no company; check 12 warns about it (and only warns). Check 10 runs only when `today` is given.
+    assert {n: r.status for n, r in found.items()} == {**dict.fromkeys([*range(1, 10), 11], 'PASS'), 12: 'WARN'}
+    assert {n: r.status for n, r in results(register, folder, snaps, today=DAY).items()} == {**dict.fromkeys(range(1, 12), 'PASS'), 12: 'WARN'}
 
 
 def test_run_reports_without_changing_any_file(tmp_path, monkeypatch):
@@ -225,15 +227,56 @@ def test_read_rows_reads_only_files_named_yyyy_mm(tmp_path):
 
 
 # 9 counts agree with the ledger
+def good_counts(rows, company='A'):
+    """Complete counts rows for `rows`: a group row for each group and one company that lists every row."""
+    groups = {r['group']: r['alternatives'] for r in rows if r['group']}
+    out = [{'type': 'company', 'company': company, 'listed': len(rows), 'listed_human': len(rows), 'listed_vet': 0, 'on_market': 9, 'on_market_human': 9, 'on_market_vet': 0}]
+    return out + [{'type': 'group', 'group': g, 'alternatives': a, 'listed': sum(r['group'] == g for r in rows), 'on_market': a + 1} for g, a in groups.items()]
+
+
 def test_check_9_counts_agree_with_the_ledger():
     rows = [row('1', group='0042', alternatives=2), row('2', group='0042', alternatives=2), row('3', group='', alternatives=None, impact='nogroup')]
-    same = [{'type': 'company', 'company': 'A'}, {'type': 'group', 'group': '0042', 'alternatives': 2}]
+    same = good_counts(rows)
     assert status(v.check_counts(rows, same)) == 'PASS'
-    failing = v.check_counts(rows, [{'type': 'group', 'group': '0042', 'alternatives': 3}])
+    different = [dict(r, alternatives=3, on_market=4) if r['type'] == 'group' else r for r in same]
+    failing = v.check_counts(rows, different)
     assert status(failing) == 'FAIL' and 'group 0042: ledger 2, counts 3' in failing.message
     assert status(v.check_counts(rows, [])) == 'FAIL'  # a group of the ledger is missing in the counts
-    assert status(v.check_counts(rows, same + [{'type': 'group', 'group': '0099', 'alternatives': 0}])) == 'FAIL'  # an extra group
+    assert status(v.check_counts(rows, same + [{'type': 'group', 'group': '0099', 'alternatives': 0, 'listed': 0, 'on_market': 1}])) == 'FAIL'  # an extra group
     assert status(v.check_counts(rows, None)) == 'FAIL'  # no counts file for the day
+
+
+def test_check_9_compares_alternatives_with_on_market_and_the_company_parts():
+    rows = [row('1', group='0042', alternatives=2), row('2', group='0042', alternatives=2), row('3', group='', alternatives=None, impact='nogroup')]
+    same = good_counts(rows)
+
+    def change(index, **fields):
+        return [dict(r, **fields) if i == index else r for i, r in enumerate(same)]
+    group = 1  # same[0] is the company
+    too_many = v.check_counts(rows, change(group, on_market=1))  # 2 alternatives cannot be more than the 1 package on the market
+    assert status(too_many) == 'FAIL' and 'alternatives 2 against on_market 1' in too_many.message
+    assert status(v.check_counts(rows, change(group, on_market=None))) == 'FAIL'
+    assert status(v.check_counts(rows, change(group, listed=1))) == 'PASS'  # `listed` is check 12's, a warning only
+    assert status(v.check_counts(rows, change(0, listed_vet=1))) == 'FAIL'  # 3 listed is not 3 human + 1 vet
+    assert status(v.check_counts(rows, change(0, on_market_human=8))) == 'FAIL'
+    assert status(v.check_counts(rows, change(0, listed_human=None))) == 'FAIL'
+    assert status(v.check_counts(rows, same + [dict(same[0], company='B', listed=0, listed_human=0)])) == 'PASS'
+
+
+# 12 the counts list what the ledger lists (WARN only)
+def test_check_12_warns_and_never_fails():
+    rows = [row('1', group='0042', alternatives=2), row('2', group='0042', alternatives=2), row('3', group='', alternatives=None, impact='nogroup')]
+    same = good_counts(rows)
+    assert status(v.check_counts_listed(rows, same)) == 'PASS'
+    assert status(v.check_counts_listed(rows, None)) == 'SKIP'
+    fewer_in_group = v.check_counts_listed(rows, [dict(r, listed=1) if r['type'] == 'group' else r for r in same])
+    assert status(fewer_in_group) == 'WARN' and 'group 0042: ledger 2, counts 1' in fewer_in_group.message
+    assert status(v.check_counts_listed(rows, [dict(r, listed=None) if r['type'] == 'group' else r for r in same])) == 'WARN'
+    # A holder-less VNR is left out of the companies: 3 rows, 2 listed by companies.
+    no_holder = v.check_counts_listed(rows, [dict(r, listed=2, listed_human=2) if r['type'] == 'company' else r for r in same])
+    assert status(no_holder) == 'WARN' and 'the companies list 2 packages, the ledger has 3 rows' in no_holder.message
+    # Two companies that list the same rows twice are also a difference.
+    assert status(v.check_counts_listed(rows, same + [dict(same[0], company='B')])) == 'WARN'
 
 
 def test_run_fails_check_9_when_the_counts_file_is_missing_or_different(tmp_path, monkeypatch):
@@ -250,7 +293,7 @@ def test_run_fails_check_9_when_the_counts_file_is_missing_or_different(tmp_path
 
 def test_check_9_fails_on_two_counts_rows_for_one_group():
     rows = [row('1', group='0042', alternatives=2)]
-    two = [{'type': 'group', 'group': '0042', 'alternatives': 3}, {'type': 'group', 'group': '0042', 'alternatives': 2}]
+    two = good_counts(rows) + [{'type': 'group', 'group': '0042', 'alternatives': 3, 'listed': 1, 'on_market': 4}]
     failing = v.check_counts(rows, two)
     assert status(failing) == 'FAIL' and 'group 0042 has 2 counts rows' in failing.message
 
@@ -264,3 +307,73 @@ def test_validation_after_midnight_checks_the_newest_ledger_day(tmp_path, monkey
     assert f'Daily validation for {DAY}: 0 failed' in capsys.readouterr().out
     # An explicit day with no rows still fails.
     assert v.main(['--day', '2026-11-24', '--register', str(register)]) == 1
+
+
+# 10 the newest ledger day is today
+def test_check_10_newest_ledger_day_is_today():
+    assert status(v.check_ledger_current('2026-11-23', '2026-11-23')) == 'PASS'
+    one = v.check_ledger_current('2026-11-22', '2026-11-23')
+    assert status(one) == 'WARN' and '1 day before today' in one.message  # a later run of the day writes the rows; a run past midnight looks the same
+    two = v.check_ledger_current('2026-11-21', '2026-11-23')
+    assert status(two) == 'FAIL' and '2 days before today' in two.message and 'did not write' in two.message
+    assert status(v.check_ledger_current('2026-11-01', '2026-11-23')) == 'FAIL'
+    assert status(v.check_ledger_current('2026-11-24', '2026-11-23')) == 'WARN'  # a newest day in the future is a clock problem, not a missing day
+
+
+def test_run_adds_check_10_only_when_today_is_given(tmp_path, monkeypatch):
+    register, folder, snaps = setup(tmp_path, monkeypatch)
+    assert 10 not in results(register, folder, snaps)  # an explicit --day is a deliberate look at one day
+    assert results(register, folder, snaps, today=DAY)[10].status == 'PASS'
+    assert results(register, folder, snaps, today='2026-11-24')[10].status == 'WARN'
+    assert results(register, folder, snaps, today='2026-11-25')[10].status == 'FAIL'
+
+
+def test_main_passes_today_only_without_an_explicit_day(monkeypatch):
+    seen = []
+    monkeypatch.setattr(v, 'run', lambda day, **kw: seen.append(kw.get('today')) or [v.Result(1, 'x', 'PASS', 'ok')])
+    monkeypatch.setattr(v, 'helsinki_today', lambda: '2026-11-24')
+    monkeypatch.setattr(v, 'read_rows', lambda *a, **k: [row()])
+    v.main([])
+    v.main(['--day', DAY])
+    assert seen == ['2026-11-24', None]
+
+
+def test_a_ledger_step_that_failed_two_days_ago_is_reported_by_main(tmp_path, monkeypatch, capsys):
+    register, folder, snaps = setup(tmp_path, monkeypatch)  # the ledger has only DAY (23 Nov)
+    monkeypatch.setattr(v, 'LEDGER', folder)
+    monkeypatch.setattr(v, 'ROOT', tmp_path)
+    monkeypatch.setattr(v, 'helsinki_today', lambda: '2026-11-25')  # the ledger steps of 24 and 25 Nov wrote nothing
+    assert v.main(['--register', str(register)]) == 1
+    assert '::error::check 10 FAIL' in capsys.readouterr().out
+
+
+# 11 impact follows from group and alternatives
+def test_check_11_impact_follows_from_group_and_alternatives():
+    good = [row('1', group='0042', alternatives=2, impact='substitute'), row('2', group='0043', alternatives=0, impact='no_alternative'),
+            row('3', group='', alternatives=None, impact='nogroup'), row('4', group='', alternatives=None, impact='vet'),
+            row('5', group='0044', alternatives=3, impact='vet'), row('6', group='0043', alternatives=0, impact='critical', date='2026-11-24')]
+    assert status(v.check_impact_matches_group(good)) == 'PASS'  # vet holds whatever the group; the old name critical is no_alternative
+    for bad in (row('1', group='0042', alternatives=0, impact='substitute'), row('1', group='0042', alternatives=2, impact='no_alternative'),
+                row('1', group='0042', alternatives=2, impact='nogroup'), row('1', group='', alternatives=None, impact='substitute'),
+                row('1', group='', alternatives=None, impact='no_alternative'), row('1', group='0042', alternatives=1, impact='critical')):
+        assert status(v.check_impact_matches_group([bad])) == 'FAIL', bad
+    wrong = v.check_impact_matches_group([row('7', group='0042', alternatives=0, impact='substitute')])
+    assert '7 (impact substitute' in wrong.message and 'expected no_alternative' in wrong.message
+    # What checks 2 and 8 report is not reported twice.
+    assert status(v.check_impact_matches_group([row('1', group='0042', alternatives=None, impact='substitute'), row('2', impact='unknown')])) == 'PASS'
+
+
+def test_the_checks_pass_on_every_real_ledger_day_in_the_repository():
+    folder = Path(__file__).resolve().parents[1] / 'data/ledger'
+    rows = ledger.read_rows(folder, canonical=False)
+    # Pinned to the days that existed when the checks were written. A later bad day is the job of the daily alert; it must not turn the CI of an unrelated change red.
+    days = sorted(d for d in {r['date'] for r in rows} if d <= '2026-11-26')
+    assert days
+    for day in days:
+        day_rows = [r for r in rows if r['date'] == day]
+        assert status(v.check_impact_matches_group(day_rows)) == 'PASS', day
+        assert status(v.check_alternatives_per_group(day_rows)) == 'PASS', day
+        counts_path = folder / 'counts' / f'{day}.jsonl'
+        if counts_path.exists():  # counts exist from 25 Nov 2026
+            counts_rows = [json.loads(line) for line in counts_path.read_text(encoding='utf-8').splitlines()]
+            assert status(v.check_counts(day_rows, counts_rows)) == 'PASS', day

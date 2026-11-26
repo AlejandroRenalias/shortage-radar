@@ -1,6 +1,6 @@
 """Daily validation of the ledger, run by the archive job right after the ledger step and before anything is published.
 
-Nine checks read the day's ledger rows (and the month file, the register and the snapshot they came from). A check is FAIL, WARN or
+Twelve checks read the day's ledger rows (and the month file, the register and the snapshot they came from). A check is FAIL, WARN or
 PASS; SKIP means it could not be judged (see check 1 and 5). A failed check never deletes or changes data: this script only reads,
 prints one line for each check (`::error::` for FAIL, `::warning::` for WARN) and exits 1 when a check failed. The archive job then opens or
 updates the `data-validation` entry of the data-pipeline issue (scripts/pipeline_alert.py) and closes it when the checks pass again.
@@ -14,7 +14,12 @@ A WARN is written to the run log and does not open the issue.
 6. `register_date` of the day's rows equals the ledger `date`, or is at most STALE_DAYS old. WARN when older.
 7. The ledger VNR set equals the snapshot's VNR set and `shortages_sha256` is the snapshot's hash. FAIL
 8. `impact` is one of the allowed values (`critical` only in rows of days up to LAST_CRITICAL_DAY). FAIL
-9. The day's counts file (scripts/counts.py) exists and its group `alternatives` equal the ledger's for every group. FAIL
+9. The day's counts file (scripts/counts.py) exists and agrees with the ledger: group `alternatives` equal the ledger's for every group,
+   `alternatives` is at most `on_market`, and the human and vet parts of a company add up.     FAIL
+10. The newest ledger day is today (Helsinki). One day behind is WARN, because a later run of the day writes the rows and a run that
+    crossed midnight looks the same; two or more days behind is FAIL. Only when no `--day` is given.
+11. `impact` follows from `group` and `alternatives`, the rule of triage.level.                  FAIL
+12. The counts' `listed` equal the ledger's: for every group, and for all companies together.      WARN
 
 The register changes about once a day. A later run of the same day may have downloaded a newer register than the one the ledger rows
 were made with (their `register_sha256`); checks 1 and 5 compare with the register, so they are SKIP then (`--force-register` runs them anyway).
@@ -23,7 +28,7 @@ import argparse
 import json
 import os
 import sys
-from collections import namedtuple
+from collections import Counter, namedtuple
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -32,7 +37,7 @@ import counts as daily_counts
 from build import ROOT, group_key, read_snapshot, register
 from ledger import LEDGER, read_rows, sha256, snapshot_candidates
 from source_age import STALE_DAYS, iso_day
-from triage import LEVELS
+from triage import LEVELS, canonical_impact
 
 ROW_CHANGE_LIMIT = 0.10
 # The last day whose ledger rows carry the old level name `critical` (the rename to `no_alternative` first shows on 25 Nov 2026).
@@ -135,16 +140,87 @@ def check_impact_values(month_rows):
     return verdict(8, 'impact values allowed', bad, 'FAIL', 'ok', 'not allowed:')
 
 
+def whole(row, key):
+    """`row[key]` when it is a whole number, else None (a missing or wrongly typed field is a problem the checks report)."""
+    value = row.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def check_counts(rows, counts_rows):
-    """9. The counts of the day give the same `alternatives` for every group as the ledger rows (`counts_rows` is None when the day has no counts file)."""
+    """9. The counts of the day agree with the ledger rows (`counts_rows` is None when the day has no counts file): for every group the same
+    `alternatives` and `alternatives` at most `on_market` (both count packages with triage.on_market); for every company the human and
+    vet parts add up to `listed` and `on_market`. The `listed` counts are compared with the ledger by check 12, which only warns."""
     if counts_rows is None:
         return Result(9, 'counts agree with the ledger', 'FAIL', 'the day has no counts file (the counts step did not write it)')
     ledger_values = {r['group']: r['alternatives'] for r in rows if r['group']}
-    groups = [r['group'] for r in counts_rows if r.get('type') == 'group']
-    counts_values = {r['group']: r['alternatives'] for r in counts_rows if r.get('type') == 'group'}
+    group_rows = [r for r in counts_rows if r.get('type') == 'group']
+    groups = [r['group'] for r in group_rows]
+    by_group = {r['group']: r for r in group_rows}
+    counts_values = {g: r.get('alternatives') for g, r in by_group.items()}
     bad = [f'group {g} has {groups.count(g)} counts rows' for g in sorted(set(groups)) if groups.count(g) > 1]
     bad += [f'group {g}: ledger {ledger_values.get(g)}, counts {counts_values.get(g)}' for g in sorted(set(ledger_values) | set(counts_values)) if ledger_values.get(g, 'none') != counts_values.get(g, 'none')]
-    return verdict(9, 'counts agree with the ledger', bad, 'FAIL', f'{len(counts_values)} groups equal', 'different:')
+    for g, r in sorted(by_group.items()):
+        alternatives, on_market = whole(r, 'alternatives'), whole(r, 'on_market')
+        if on_market is None or (alternatives is not None and alternatives > on_market):
+            bad.append(f'group {g}: alternatives {r.get("alternatives")!r} against on_market {r.get("on_market")!r}')
+    company_rows = [r for r in counts_rows if r.get('type') == 'company']
+    for r in company_rows:
+        for total, human, vet in (('listed', 'listed_human', 'listed_vet'), ('on_market', 'on_market_human', 'on_market_vet')):
+            parts = [whole(r, k) for k in (total, human, vet)]
+            if None in parts or parts[0] != parts[1] + parts[2]:
+                bad.append(f'company {r.get("company")!r}: {total} {r.get(total)!r} is not {human} {r.get(human)!r} + {vet} {r.get(vet)!r}')
+    return verdict(9, 'counts agree with the ledger', bad, 'FAIL', f'{len(counts_values)} groups and {len(company_rows)} companies agree', 'different:')
+
+
+def check_counts_listed(rows, counts_rows):
+    """12. The counts' `listed` equal the ledger's: for each group, the ledger rows of the group; for the companies together, all ledger rows.
+    Only a WARN: the two are made by different code from the register, and they can differ without a mistake. The counts leave out a VNR that
+    the register does not know or that has no holder (check 1 reports the first), and the ledger has a row for each VNR of the file, so a
+    package that the file lists under both its old and its new VNR is two rows there and one package in the counts. A ledger day is never
+    rewritten, so a failure that nobody can repair must not open the alert."""
+    if counts_rows is None:
+        return Result(12, 'counts list what the ledger lists', 'SKIP', 'no counts file (check 9 reports it)')
+    ledger_listed = Counter(r['group'] for r in rows if r['group'])
+    by_group = {r['group']: r for r in counts_rows if r.get('type') == 'group'}
+    bad = [f'group {g}: ledger {n}, counts {by_group[g].get("listed")!r}' for g, n in sorted(ledger_listed.items()) if g in by_group and whole(by_group[g], 'listed') != n]
+    total = sum(whole(r, 'listed') or 0 for r in counts_rows if r.get('type') == 'company')
+    if total != len(rows):
+        bad.append(f'the companies list {total} packages, the ledger has {len(rows)} rows')
+    return verdict(12, 'counts list what the ledger lists', bad, 'WARN', f'{len(rows)} packages in the ledger and the counts', 'different:')
+
+
+def check_ledger_current(newest_day, today):
+    """10. The newest ledger day is `today` (Helsinki). The ledger step does not stop the archive when it fails, and the other checks read the
+    newest day, so a failed step would leave them checking yesterday's rows. One day behind is a WARN: a later run of the day writes the rows,
+    and a run that crossed midnight looks the same. Two or more days behind means a whole day was not recorded: FAIL."""
+    lag = (date.fromisoformat(today) - date.fromisoformat(newest_day)).days
+    name = 'newest ledger day is today'
+    if lag < 0:
+        return Result(10, name, 'WARN', f'the newest ledger day {newest_day} is after today ({today}): check the clock of the run')
+    if lag == 0:
+        return Result(10, name, 'PASS', f'the newest ledger day is {today}')
+    text = f'the newest ledger day is {newest_day}, {lag} day{"s" if lag > 1 else ""} before today ({today}): the ledger step did not write today\'s rows'
+    return Result(10, name, 'WARN' if lag == 1 else 'FAIL', text)
+
+
+def check_impact_matches_group(rows):
+    """11. `impact` follows from `group` and `alternatives`, as triage.level sets it: `vet` whatever the group; otherwise no group is `nogroup`,
+    a group with other packages is `substitute` and a group with none is `no_alternative` (`critical` before the rename). A value that is not a
+    level, and a group without a count, are reported by checks 8 and 2."""
+    bad = []
+    for r in rows:
+        impact = canonical_impact(r['impact'])
+        if impact == 'vet' or impact not in ALLOWED_IMPACT:
+            continue
+        if not r['group']:
+            expected = 'nogroup'
+        elif isinstance(r['alternatives'], int) and not isinstance(r['alternatives'], bool):
+            expected = 'substitute' if r['alternatives'] > 0 else 'no_alternative'
+        else:
+            continue
+        if impact != expected:
+            bad.append(f"{r['vnr']} (impact {impact}, group {r['group']!r}, alternatives {r['alternatives']!r}: expected {expected})")
+    return verdict(11, '`impact` follows from group and alternatives', bad, 'FAIL', 'ok', 'wrong level:')
 
 
 def helsinki_today():
@@ -178,8 +254,9 @@ def register_facts(rows, register_path, day):
     return set(products), others
 
 
-def run(day, ledger_folder=LEDGER, register_path=ROOT / 'data/source/register.xml', snapshot_folder=ROOT / 'data/snapshots', force_register=False):
-    """The results of the eight checks for the ledger rows of `day`. Reads only; changes nothing."""
+def run(day, ledger_folder=LEDGER, register_path=ROOT / 'data/source/register.xml', snapshot_folder=ROOT / 'data/snapshots', force_register=False, today=None):
+    """The results of the checks for the ledger rows of `day`. Reads only; changes nothing. `today` (Helsinki date) is given when `day` is the newest
+    ledger day of this run, and adds check 10: that this newest day is today."""
     month_rows = read_rows(ledger_folder, canonical=False)
     rows = [r for r in month_rows if r['date'] == day]
     if not rows:
@@ -187,14 +264,17 @@ def run(day, ledger_folder=LEDGER, register_path=ROOT / 'data/source/register.xm
     month = [r for r in month_rows if r['date'][:7] == day[:7]]
     earlier = sorted({r['date'] for r in month_rows if r['date'] < day})
     previous = earlier[-1] if earlier else None
-    results = [check_alternatives_per_group(rows), check_duplicates(month)]
+    results = [check_alternatives_per_group(rows), check_duplicates(month), check_impact_matches_group(rows)]
+    if today:
+        results.append(check_ledger_current(max(r['date'] for r in month_rows), today))
     results.append(check_row_count(rows, sum(1 for r in month_rows if r['date'] == previous), previous))
     results.append(check_register_date(rows, day))
     snap = snapshot_for(rows, day, snapshot_folder)
     results.append(check_snapshot(rows, *snap) if snap else Result(7, 'ledger matches the snapshot', 'FAIL', f'no snapshot dated on or before {day}'))
     results.append(check_impact_values(month))
     counts_path = daily_counts.counts_folder(ledger_folder) / f'{day}.jsonl'
-    results.append(check_counts(rows, [json.loads(line) for line in counts_path.read_text(encoding='utf-8').splitlines()] if counts_path.exists() else None))
+    counts_rows = [json.loads(line) for line in counts_path.read_text(encoding='utf-8').splitlines()] if counts_path.exists() else None
+    results += [check_counts(rows, counts_rows), check_counts_listed(rows, counts_rows)]
     hashes = {r['register_sha256'] for r in rows}
     if not register_path.exists():
         for n, name in ((1, 'ledger VNRs join to the register'), (5, '`alternatives` at most the other packages of the group')):
@@ -217,7 +297,8 @@ def main(argv=None):
     # The newest ledger day is the day the ledger and counts steps of this run just finished, even when the clock passed midnight since.
     day = args.day or max((r['date'] for r in read_rows(LEDGER, canonical=False)), default=helsinki_today())
     try:
-        results = run(day, ledger_folder=LEDGER, register_path=Path(args.register), snapshot_folder=ROOT / 'data/snapshots', force_register=args.force_register)
+        results = run(day, ledger_folder=LEDGER, register_path=Path(args.register), snapshot_folder=ROOT / 'data/snapshots', force_register=args.force_register,
+                      today=None if args.day else helsinki_today())
     except Exception as error:  # a validation that cannot run is reported, not hidden
         print(f'::error::Daily validation could not run: {error!r}')
         status = 'error'

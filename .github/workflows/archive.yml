@@ -80,7 +80,7 @@ jobs:
           TZ: Europe/Helsinki
         run: python scripts/counts.py
       - name: Validate the daily ledger
-        # Nine checks on the day's ledger rows and counts (scripts/validate_daily.py). It only reads: a failed check changes and deletes no data, writes the message in this log and
+        # Twelve checks on the day's ledger rows and counts (scripts/validate_daily.py). It only reads: a failed check changes and deletes no data, writes the message in this log and
         # lets the alert job open the data-validation entry of the pipeline issue. It runs before the commit and before anything is published.
         id: validate
         continue-on-error: true
