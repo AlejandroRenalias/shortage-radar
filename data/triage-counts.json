@@ -60,6 +60,16 @@
    "nogroup": 119,
    "vet": 40,
    "critical": 68
+  },
+  {
+   "date": "2026-11-28",
+   "register_date": "2026-11-27",
+   "total": 762,
+   "substitute": 539,
+   "no_alternative": 68,
+   "nogroup": 114,
+   "vet": 41,
+   "critical": 68
   }
  ]
 }
