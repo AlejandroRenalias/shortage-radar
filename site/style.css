@@ -718,3 +718,36 @@ html:not([lang="fi"]) .l-fi-only{display:none}
 .pt-info{max-width:640px;font-size:1.125rem}
 .pt-info>summary{font-size:1.125rem;min-height:52px}
 .pt-info a{display:inline-block;min-height:44px;padding-top:8px}
+
+/* Group page: one group of interchangeable packages. Facts only, in neutral colours: no level is coloured as good or bad. */
+.grp-page{max-width:760px;padding-bottom:var(--s5)}
+.grp-title{margin:var(--s2) 0 var(--s1);overflow-wrap:anywhere}
+.grp-code{margin:0 0 var(--s4);color:var(--muted);font-size:.9375rem}
+.grp-summary{font-size:1.125rem;max-width:62ch}
+.grp-alt{margin:var(--s4) 0 var(--s5);padding:var(--s4);border-left:4px solid var(--line-strong)}
+.grp-alt p{margin:0}
+.grp-alt-label{font-size:1.25rem;line-height:1.3;color:var(--ink)}
+.grp-from{margin-top:var(--s1)!important;color:var(--muted)}
+.grp-page h2{margin-bottom:var(--s3)}
+.grp-list{list-style:none;margin:0 0 var(--s3);padding:0;display:grid;gap:var(--s3)}
+.grp-more .grp-list{margin-top:var(--s3)}
+.grp-row{background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:var(--s3) var(--s4) var(--s3);min-width:0}
+.grp-row.is-listed{border-color:var(--line-strong)}
+.grp-row p{margin:0;overflow-wrap:anywhere}
+.grp-mark{display:flex;align-items:center;gap:6px;font-size:.875rem;line-height:1.3;margin-bottom:var(--s1)!important}
+.grp-on{color:var(--red)}
+.grp-off{color:var(--muted)}
+.grp-name{font-size:1.125rem;line-height:1.25;color:var(--ink)}
+.grp-spec{display:flex;flex-wrap:wrap;gap:0 var(--s3);margin-top:2px!important;color:var(--muted);font-size:.9375rem}
+.grp-vnr{margin-top:var(--s1)!important;font-size:.9375rem;font-variant-numeric:tabular-nums}
+.grp-vnr span{color:var(--muted)}
+.grp-vnr a{display:inline-block;min-height:24px}
+.grp-foot{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line)}
+.grp-stock{font-size:1.0625rem;color:var(--ink);margin-bottom:var(--s1)}
+.grp-foot .source-note{padding:0;margin:0}
+@media (min-width:720px){.grp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--s4)}.grp-mark{grid-column:1/-1}.grp-vnr{grid-column:2;grid-row:2/4;align-self:center;margin:0!important}}
+.pkg-group{position:relative;z-index:1;margin:0;padding:0 var(--s4) var(--s3);font-size:.9375rem}
+.pkg-group a{display:inline-flex;align-items:center;min-height:44px}
+.group-link{margin:12px 0 0}
+.group-link a{display:inline-flex;align-items:center;min-height:44px;font-weight:400}
+@media (max-width:719px){html[data-searching] #list>.pkg>.pkg-group{display:none}}

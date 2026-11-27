@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import critical as eu_list
 from changes import _shift, feeds, week_summary
 from gaps import MAX_GAP_DAYS, add_capture, days_between, gaps_of, is_gap
+from group_pages import classify, group_shards
 from medicine_pages import build_pages
 from packs import pack_label
 from pages import render_pages
@@ -163,7 +164,7 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
             old_vnrs = {x.text for x in el.findall('VanhaVNR') if x.text}
             pack_refs.add((el.get('Laakevalmiste-ref'), tuple(package[1])))
             candidates.append((el.get('Laakevalmiste-ref'), vnr, old_vnrs, el.findtext('Kaupanolo/Kaupan'), el.findtext('SaatavuushairioTiedot/Saatavuushairio'),
-                               el.findtext('Kaupanolo/Kauppaantulopaiva'), el.findtext('Kaupanolo/Kaupastapoistumispaiva'), package[2], package[4]))
+                               el.findtext('Kaupanolo/Kauppaantulopaiva'), el.findtext('Kaupanolo/Kaupastapoistumispaiva'), package[2], package[4], package[1]))
             if vnr in wanted:
                 packages[vnr] = package
                 exact.add(vnr)
@@ -194,13 +195,14 @@ def register(path, wanted, current_shortages=(), members=None, details=None, day
     if names is not None:
         names['substances'].update(set(dictionary.values()))
     available = {}
-    for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit in candidates:
+    for ref, vnr, old_vnrs, market, shortage, entry, exit_, pack, unit, refs in candidates:
         product = products.get(ref, {})
         key = group_key(product)
         if not (key and vnr):
             continue
         member = {'vnr': vnr, 'old': old_vnrs, 'market': market, 'short': shortage == '1', 'shortage_flag': shortage, 'entry': entry, 'exit': exit_,
-                  'name': product['name'], 'strength': product['strength'], 'pack': pack, 'pack_label': pack_label(pack, unit, product['form']), 'company': product['holder']}
+                  'name': product['name'], 'strength': product['strength'], 'form': product['form'], 'pack': pack, 'pack_label': pack_label(pack, unit, product['form']), 'company': product['holder'],
+                  'substances': ', '.join(dict.fromkeys(s for r in refs for s in substances.get(r, []) if s))}
         # The same rule as the history of newly critical groups (triage.is_available_alternative); today's register reads the flags.
         if is_available_alternative(member, current_shortages, day, True):
             available.setdefault(key, set()).add(vnr)
@@ -323,17 +325,15 @@ def read_triage_counts():
 def group_lists(current, members, current_vnrs, day=None):
     """{group: {'available': [...], 'short': [...]}} for the groups of current shortages: the other packages on the market,
     split into those a pharmacy can usually give (triage.is_available_alternative, the rule that sets the impact level) and those that are short too.
-    Small, so it goes with the medicine pages."""
+    Small, so it goes with the medicine pages. The split is made by group_pages.classify, which the group pages use too."""
     day = day or helsinki_today()
     def item(p):
         return {k: p[k] for k in ('vnr', 'name', 'strength', 'pack_label', 'company')}
-    def listed(p):
-        return bool(({p['vnr']} | p['old']) & current_vnrs)
     out = {}
     for g in sorted({e['substitution_group'] for e in current if e.get('substitution_group')}):
-        packs = sorted((p for p in members.get(g, []) if p['market'] == '1'), key=lambda p: (p['name'].casefold(), p['strength'], p['pack']))
-        out[g] = {'available': [item(p) for p in packs if is_available_alternative(p, current_vnrs, day, True)],
-                  'short': [dict(item(p), listed=listed(p)) for p in packs if listed(p) or p['short']]}
+        rows = [(p, listed, alt) for p, listed, alt in classify(members.get(g, []), current_vnrs, day) if p['market'] == '1']
+        out[g] = {'available': [item(p) for p, _, alt in rows if alt],
+                  'short': [dict(item(p), listed=listed) for p, listed, _ in rows if listed or p['short']]}
     return out
 
 
@@ -363,8 +363,9 @@ def build():
     current_vnrs = {e['NordicArticleNumber'] for e in es if e['removed_on'] is None}
     members = {}
     details = {}
+    day = helsinki_today()  # one register day for the impact levels, the medicine pages and the group pages
     names = {'trade': Counter(), 'substances': Counter(), 'strengths': {}}
-    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details, None, names)
+    products = register(ROOT / 'data/source/register.xml', {e['NordicArticleNumber'] for e in es}, current_vnrs, members, details, day, names)
     search_words = {}
     for e in es:
         e.update(products.get(e['NordicArticleNumber'], {}))
@@ -421,8 +422,13 @@ def build():
     (ROOT / 'site/source.json').write_text(json.dumps(meta, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     shard_dir = ROOT / 'site/p'
     shard_dir.mkdir(exist_ok=True)
-    for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs)).items():
+    for name, shard in package_shards(es, meta, group_lists(current, members, current_vnrs, day)).items():
         (shard_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    # The group pages (group.html?g=<code>): only groups with a package on the shortage list today, from the same classification as the impact level.
+    group_dir = ROOT / 'site/g'
+    group_dir.mkdir(exist_ok=True)
+    for name, shard in group_shards({e['substitution_group'] for e in current if e.get('substitution_group')}, members, current_vnrs, day, {e['NordicArticleNumber'] for e in es}, meta).items():
+        (group_dir / f'{name}.json').write_text(json.dumps(shard, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     (ROOT / 'site/removed.json').write_text(json.dumps(dict(meta, events=[dict(r, substance_fi=search_words[r['NordicArticleNumber']]) if search_words.get(r['NordicArticleNumber']) else r for r in removed_index(es)]), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     home = summary(current, meta)
     (ROOT / 'site/summary.json').write_text(json.dumps(home, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')

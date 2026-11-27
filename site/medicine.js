@@ -40,7 +40,8 @@ function impactMarkup(e, groups) {
   const text = t['impactText_' + level];
   const reason = level === 'no_alternative' ? `<p>${esc(short.length ? t.impactCriticalShort : t.impactCriticalAlone)}</p>` : '';
   const lists = (level === 'substitute' && available.length ? `<h3>${esc(t.altTitle)}</h3>${altList(available, 6)}` : '') + (short.length && level !== 'vet' ? `<h3>${esc(t.altShort)}</h3>${altList(short, 6)}` : '');
-  return `<section class="panel impact-panel" aria-labelledby="impact-title"><h2 id="impact-title">${esc(t.impactQuestion)}</h2>${impactBadge(e)}<p>${esc(text)}</p>${reason}${lists}`
+  const groupLink = code && level !== 'vet' ? `<p class="group-link"><a href="group.html?g=${encodeURIComponent(code)}">${esc(t.grpPackages)}</a></p>` : '';
+  return `<section class="panel impact-panel" aria-labelledby="impact-title"><h2 id="impact-title">${esc(t.impactQuestion)}</h2>${impactBadge(e)}<p>${esc(text)}</p>${reason}${lists}${groupLink}`
     + `<p class="note">${code && level !== 'vet' ? `${esc(t.groupCode(code))}. ` : ''}${esc(t.altNote)} <a href="about.html#impact">${esc(t.impactLink)}</a></p></section>`;
 }
 // "Ask your pharmacy" is said once: by the impact panel for a current package, else by the opening sentence of the advice.
